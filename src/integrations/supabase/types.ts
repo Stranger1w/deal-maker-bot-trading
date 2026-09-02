@@ -419,36 +419,7 @@ export type Database = {
       }
     }
     Views: {
-      binance_credentials_public: {
-        Row: {
-          api_key_last4: string | null
-          api_secret_last4: string | null
-          connection_status: string | null
-          id: string | null
-          last_tested_at: string | null
-          market_mode: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          api_key_last4?: string | null
-          api_secret_last4?: string | null
-          connection_status?: string | null
-          id?: string | null
-          last_tested_at?: string | null
-          market_mode?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          api_key_last4?: string | null
-          api_secret_last4?: string | null
-          connection_status?: string | null
-          id?: string | null
-          last_tested_at?: string | null
-          market_mode?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       [_ in never]: never
