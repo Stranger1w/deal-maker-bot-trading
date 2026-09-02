@@ -86,7 +86,10 @@ function FondosPage() {
 
   const submitDeposit = async () => {
     const amount = Number(depositAmount);
-    if (!amount || amount <= 0) return toast.error("Introduce un monto válido");
+    if (!amount || amount <= 0) {
+      toast.error("Introduce un monto válido");
+      return;
+    }
     setBusy(true);
     try {
       await deposit({ data: { amount, method: depositMethod } });
@@ -119,8 +122,14 @@ function FondosPage() {
 
   const openConfirm = () => {
     const amount = Number(withdrawAmount);
-    if (!amount || amount <= 0) return toast.error("Introduce un monto válido");
-    if (amount > available) return toast.error("El monto supera el saldo disponible");
+    if (!amount || amount <= 0) {
+      toast.error("Introduce un monto válido");
+      return;
+    }
+    if (amount > available) {
+      toast.error("El monto supera el saldo disponible");
+      return;
+    }
     setConfirmOpen(true);
   };
 

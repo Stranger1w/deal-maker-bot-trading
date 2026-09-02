@@ -57,7 +57,10 @@ function BinancePage() {
 
   const runTest = async () => {
     if (apiKey.length < 8 || apiSecret.length < 8)
-      return toast.error("Introduce una API Key y un API Secret válidos");
+      {
+      toast.error("Introduce una API Key y un API Secret válidos");
+      return;
+    }
     setBusy(true);
     try {
       const result = await test({ data: { apiKey, apiSecret } });
@@ -72,7 +75,10 @@ function BinancePage() {
 
   const runSave = async () => {
     if (apiKey.length < 8 || apiSecret.length < 8)
-      return toast.error("Introduce una API Key y un API Secret válidos");
+      {
+      toast.error("Introduce una API Key y un API Secret válidos");
+      return;
+    }
     setBusy(true);
     try {
       const result = await save({ data: { apiKey, apiSecret, marketMode: market } });

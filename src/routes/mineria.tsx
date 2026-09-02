@@ -65,7 +65,10 @@ function MiningPage() {
 
   const addWorker = async () => {
     if (form.name.trim().length < 2 || !form.pool || !form.rigId)
-      return toast.error("Completa nombre, pool e ID de hardware");
+      {
+      toast.error("Completa nombre, pool e ID de hardware");
+      return;
+    }
     try {
       await create({ data: { ...form, name: form.name.trim() } });
       toast.success("Worker añadido al enjambre");

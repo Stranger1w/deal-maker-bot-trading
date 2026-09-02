@@ -153,7 +153,10 @@ function SquadTab() {
   };
 
   const submitNew = async () => {
-    if (form.name.trim().length < 2) return toast.error("Nombre demasiado corto");
+    if (form.name.trim().length < 2) {
+      toast.error("Nombre demasiado corto");
+      return;
+    }
     try {
       await create({
         data: {
@@ -457,7 +460,10 @@ function TrainingTab() {
   };
 
   const submit = async () => {
-    if (form.name.trim().length < 2) return toast.error("Ponle un nombre al sandbox");
+    if (form.name.trim().length < 2) {
+      toast.error("Ponle un nombre al sandbox");
+      return;
+    }
     try {
       await create({
         data: {
