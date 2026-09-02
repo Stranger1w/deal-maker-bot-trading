@@ -10,33 +10,73 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BinanceRouteImport } from './routes/binance'
+import { Route as EscuadronRouteImport } from './routes/escuadron'
+import { Route as FondosRouteImport } from './routes/fondos'
+import { Route as MineriaRouteImport } from './routes/mineria'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BinanceRoute = BinanceRouteImport.update({
+  id: '/binance',
+  path: '/binance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EscuadronRoute = EscuadronRouteImport.update({
+  id: '/escuadron',
+  path: '/escuadron',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FondosRoute = FondosRouteImport.update({
+  id: '/fondos',
+  path: '/fondos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MineriaRoute = MineriaRouteImport.update({
+  id: '/mineria',
+  path: '/mineria',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/binance': typeof BinanceRoute
+  '/escuadron': typeof EscuadronRoute
+  '/fondos': typeof FondosRoute
+  '/mineria': typeof MineriaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/binance': typeof BinanceRoute
+  '/escuadron': typeof EscuadronRoute
+  '/fondos': typeof FondosRoute
+  '/mineria': typeof MineriaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/binance': typeof BinanceRoute
+  '/escuadron': typeof EscuadronRoute
+  '/fondos': typeof FondosRoute
+  '/mineria': typeof MineriaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/binance' | '/escuadron' | '/fondos' | '/mineria'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/binance' | '/escuadron' | '/fondos' | '/mineria'
+  id: '__root__' | '/' | '/binance' | '/escuadron' | '/fondos' | '/mineria'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BinanceRoute: typeof BinanceRoute
+  EscuadronRoute: typeof EscuadronRoute
+  FondosRoute: typeof FondosRoute
+  MineriaRoute: typeof MineriaRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +88,43 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/binance': {
+      id: '/binance'
+      path: '/binance'
+      fullPath: '/binance'
+      preLoaderRoute: typeof BinanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/escuadron': {
+      id: '/escuadron'
+      path: '/escuadron'
+      fullPath: '/escuadron'
+      preLoaderRoute: typeof EscuadronRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fondos': {
+      id: '/fondos'
+      path: '/fondos'
+      fullPath: '/fondos'
+      preLoaderRoute: typeof FondosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mineria': {
+      id: '/mineria'
+      path: '/mineria'
+      fullPath: '/mineria'
+      preLoaderRoute: typeof MineriaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BinanceRoute: BinanceRoute,
+  EscuadronRoute: EscuadronRoute,
+  FondosRoute: FondosRoute,
+  MineriaRoute: MineriaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
