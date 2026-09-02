@@ -14,10 +14,441 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      audit_events: {
+        Row: {
+          action: string
+          actor: string
+          created_at: string
+          details: Json
+          entity: string
+          entity_id: string | null
+          id: string
+        }
+        Insert: {
+          action: string
+          actor?: string
+          created_at?: string
+          details?: Json
+          entity: string
+          entity_id?: string | null
+          id?: string
+        }
+        Update: {
+          action?: string
+          actor?: string
+          created_at?: string
+          details?: Json
+          entity?: string
+          entity_id?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
+      binance_credentials: {
+        Row: {
+          api_key_cipher: string
+          api_key_last4: string
+          api_secret_cipher: string
+          api_secret_last4: string
+          connection_status: string
+          created_at: string
+          id: string
+          last_tested_at: string | null
+          market_mode: string
+          updated_at: string
+        }
+        Insert: {
+          api_key_cipher: string
+          api_key_last4: string
+          api_secret_cipher: string
+          api_secret_last4: string
+          connection_status?: string
+          created_at?: string
+          id?: string
+          last_tested_at?: string | null
+          market_mode?: string
+          updated_at?: string
+        }
+        Update: {
+          api_key_cipher?: string
+          api_key_last4?: string
+          api_secret_cipher?: string
+          api_secret_last4?: string
+          connection_status?: string
+          created_at?: string
+          id?: string
+          last_tested_at?: string | null
+          market_mode?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      bot_logs: {
+        Row: {
+          bot_id: string
+          created_at: string
+          id: string
+          level: string
+          message: string
+        }
+        Insert: {
+          bot_id: string
+          created_at?: string
+          id?: string
+          level?: string
+          message: string
+        }
+        Update: {
+          bot_id?: string
+          created_at?: string
+          id?: string
+          level?: string
+          message?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_logs_bot_id_fkey"
+            columns: ["bot_id"]
+            isOneToOne: false
+            referencedRelation: "bots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bots: {
+        Row: {
+          capital: number
+          created_at: string
+          demo_engine: string
+          exchange: string
+          id: string
+          mode: string
+          name: string
+          pair: string
+          pnl: number
+          status: string
+          strategy: string
+          updated_at: string
+          win_rate: number
+        }
+        Insert: {
+          capital?: number
+          created_at?: string
+          demo_engine?: string
+          exchange?: string
+          id?: string
+          mode?: string
+          name: string
+          pair: string
+          pnl?: number
+          status?: string
+          strategy: string
+          updated_at?: string
+          win_rate?: number
+        }
+        Update: {
+          capital?: number
+          created_at?: string
+          demo_engine?: string
+          exchange?: string
+          id?: string
+          mode?: string
+          name?: string
+          pair?: string
+          pnl?: number
+          status?: string
+          strategy?: string
+          updated_at?: string
+          win_rate?: number
+        }
+        Relationships: []
+      }
+      fund_accounts: {
+        Row: {
+          available_balance: number
+          created_at: string
+          currency: string
+          id: string
+          in_use_balance: number
+          label: string
+          updated_at: string
+        }
+        Insert: {
+          available_balance?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          in_use_balance?: number
+          label?: string
+          updated_at?: string
+        }
+        Update: {
+          available_balance?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          in_use_balance?: number
+          label?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      fund_transactions: {
+        Row: {
+          account_id: string
+          amount: number
+          created_at: string
+          id: string
+          kind: string
+          method: string
+          reference: string | null
+          status: string
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          created_at?: string
+          id?: string
+          kind: string
+          method: string
+          reference?: string | null
+          status?: string
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          created_at?: string
+          id?: string
+          kind?: string
+          method?: string
+          reference?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fund_transactions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "fund_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mining_payouts: {
+        Row: {
+          amount: number
+          coin: string
+          id: string
+          paid_at: string
+          pool: string
+          usd_value: number
+        }
+        Insert: {
+          amount: number
+          coin: string
+          id?: string
+          paid_at?: string
+          pool: string
+          usd_value?: number
+        }
+        Update: {
+          amount?: number
+          coin?: string
+          id?: string
+          paid_at?: string
+          pool?: string
+          usd_value?: number
+        }
+        Relationships: []
+      }
+      mining_workers: {
+        Row: {
+          coin: string
+          created_at: string
+          estimated_daily_earnings: number
+          hash_rate: number
+          hash_unit: string
+          id: string
+          name: string
+          pool: string
+          rig_id: string
+          status: string
+          updated_at: string
+          uptime_seconds: number
+        }
+        Insert: {
+          coin: string
+          created_at?: string
+          estimated_daily_earnings?: number
+          hash_rate?: number
+          hash_unit?: string
+          id?: string
+          name: string
+          pool: string
+          rig_id: string
+          status?: string
+          updated_at?: string
+          uptime_seconds?: number
+        }
+        Update: {
+          coin?: string
+          created_at?: string
+          estimated_daily_earnings?: number
+          hash_rate?: number
+          hash_unit?: string
+          id?: string
+          name?: string
+          pool?: string
+          rig_id?: string
+          status?: string
+          updated_at?: string
+          uptime_seconds?: number
+        }
+        Relationships: []
+      }
+      training_runs: {
+        Row: {
+          bot_id: string | null
+          bot_name: string
+          created_at: string
+          drawdown_pct: number
+          id: string
+          promoted: boolean
+          return_pct: number
+          sandbox_id: string
+          suggested_params: Json
+          win_rate: number
+        }
+        Insert: {
+          bot_id?: string | null
+          bot_name: string
+          created_at?: string
+          drawdown_pct?: number
+          id?: string
+          promoted?: boolean
+          return_pct?: number
+          sandbox_id: string
+          suggested_params?: Json
+          win_rate?: number
+        }
+        Update: {
+          bot_id?: string | null
+          bot_name?: string
+          created_at?: string
+          drawdown_pct?: number
+          id?: string
+          promoted?: boolean
+          return_pct?: number
+          sandbox_id?: string
+          suggested_params?: Json
+          win_rate?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_runs_bot_id_fkey"
+            columns: ["bot_id"]
+            isOneToOne: false
+            referencedRelation: "bots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_runs_sandbox_id_fkey"
+            columns: ["sandbox_id"]
+            isOneToOne: false
+            referencedRelation: "training_sandboxes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_sandboxes: {
+        Row: {
+          ai_notes: string | null
+          ai_sources: Json
+          created_at: string
+          dataset: string
+          date_from: string
+          date_to: string
+          drawdown_pct: number | null
+          id: string
+          name: string
+          pairs: string[]
+          return_pct: number | null
+          simulated_capital: number
+          speed: number
+          status: string
+          updated_at: string
+          win_rate: number | null
+        }
+        Insert: {
+          ai_notes?: string | null
+          ai_sources?: Json
+          created_at?: string
+          dataset?: string
+          date_from: string
+          date_to: string
+          drawdown_pct?: number | null
+          id?: string
+          name: string
+          pairs?: string[]
+          return_pct?: number | null
+          simulated_capital?: number
+          speed?: number
+          status?: string
+          updated_at?: string
+          win_rate?: number | null
+        }
+        Update: {
+          ai_notes?: string | null
+          ai_sources?: Json
+          created_at?: string
+          dataset?: string
+          date_from?: string
+          date_to?: string
+          drawdown_pct?: number | null
+          id?: string
+          name?: string
+          pairs?: string[]
+          return_pct?: number | null
+          simulated_capital?: number
+          speed?: number
+          status?: string
+          updated_at?: string
+          win_rate?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
-      [_ in never]: never
+      binance_credentials_public: {
+        Row: {
+          api_key_last4: string | null
+          api_secret_last4: string | null
+          connection_status: string | null
+          id: string | null
+          last_tested_at: string | null
+          market_mode: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          api_key_last4?: string | null
+          api_secret_last4?: string | null
+          connection_status?: string | null
+          id?: string | null
+          last_tested_at?: string | null
+          market_mode?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          api_key_last4?: string | null
+          api_secret_last4?: string | null
+          connection_status?: string | null
+          id?: string | null
+          last_tested_at?: string | null
+          market_mode?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never
