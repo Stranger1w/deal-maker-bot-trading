@@ -10,33 +10,53 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BinanceRouteImport } from './routes/binance'
+import { Route as FondosRouteImport } from './routes/fondos'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BinanceRoute = BinanceRouteImport.update({
+  id: '/binance',
+  path: '/binance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FondosRoute = FondosRouteImport.update({
+  id: '/fondos',
+  path: '/fondos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/binance': typeof BinanceRoute
+  '/fondos': typeof FondosRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/binance': typeof BinanceRoute
+  '/fondos': typeof FondosRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/binance': typeof BinanceRoute
+  '/fondos': typeof FondosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/binance' | '/fondos'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/binance' | '/fondos'
+  id: '__root__' | '/' | '/binance' | '/fondos'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BinanceRoute: typeof BinanceRoute
+  FondosRoute: typeof FondosRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +68,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/binance': {
+      id: '/binance'
+      path: '/binance'
+      fullPath: '/binance'
+      preLoaderRoute: typeof BinanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fondos': {
+      id: '/fondos'
+      path: '/fondos'
+      fullPath: '/fondos'
+      preLoaderRoute: typeof FondosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BinanceRoute: BinanceRoute,
+  FondosRoute: FondosRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
