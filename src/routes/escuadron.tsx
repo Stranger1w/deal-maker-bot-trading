@@ -62,7 +62,7 @@ export const Route = createFileRoute("/escuadron")({
       },
     ],
   }),
-  component: SquadPage;
+  component: SquadPage,
 });
 
 function SquadPage() {
