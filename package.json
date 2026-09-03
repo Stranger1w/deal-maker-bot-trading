@@ -9,7 +9,13 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "build:desktop": "DESKTOP=1 vite build",
+    "build:desktop:win": "set DESKTOP=1&& vite build",
+    "electron:dev": "electron electron/main.cjs",
+    "dist:win": "npm run build:desktop && electron-builder --win --config electron-builder.yml",
+    "dist:mac": "npm run build:desktop && electron-builder --mac --config electron-builder.yml",
+    "dist:linux": "npm run build:desktop && electron-builder --linux --config electron-builder.yml"
   },
   "overrides": {
     "rolldown": "1.2.1"
@@ -76,6 +82,8 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^44.1.1",
+    "electron-builder": "^26.15.3",
     "eslint": "^9.32.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.6",
@@ -87,5 +95,8 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
     "vite": "8.1.5"
-  }
+  },
+  "version": "1.0.0",
+  "description": "Deal Maker desktop",
+  "main": "electron/main.cjs"
 }

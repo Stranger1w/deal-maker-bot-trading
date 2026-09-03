@@ -6,10 +6,15 @@
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
+// DESKTOP=1 builds the Node server bundle that the Electron app boots locally.
+// Without it the build stays identical to the web/cloud build.
+const isDesktop = process.env["DESKTOP"] === "1";
+
 export default defineConfig({
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  ...(isDesktop ? { nitro: { preset: "node-server" as const } } : {}),
 });
