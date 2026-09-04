@@ -83,3 +83,30 @@ Icono de la app: `build/icon.png` (1024×1024). electron-builder deriva `.ico` y
 ## Stack
 
 TanStack Start · React · TypeScript · Tailwind CSS · Electron
+
+## Ejecución 24/7 (motor de automatización)
+
+Los bots se ejecutan mediante un worker durable en la nube, **no** en tu PC ni en la app Electron:
+
+1. Publica el proyecto (despliegue Cloud activo).
+2. Programa un cron que llame cada minuto a:
+   `POST https://<tu-dominio>/api/public/automation-tick`
+   con la cabecera `Authorization: Bearer $LOVABLE_CRON_SECRET`.
+3. Activa el motor en **Automatización** (por defecto está apagado).
+
+El motor aplica en cada ciclo: kill switch global, límite global de pérdida diaria,
+y por bot: pérdida diaria máxima, stop-loss por operación, drawdown máximo, límite de
+capital asignado y máximo de operaciones diarias. Al alcanzarse un límite el bot se detiene
+automáticamente, se registra auditoría y se muestra alerta. Las órdenes usan clave de
+idempotencia por bot y ciclo para evitar duplicados, con reintentos y logs de ejecución.
+
+## Advertencias de seguridad (trading real)
+
+El trading real está **desactivado por defecto** y requiere, antes de habilitarlo:
+
+- Autenticación de usuarios y 2FA reales (aún no implementados en este MVP).
+- Claves de Binance con permisos mínimos y **sin permiso de retiro**.
+- Despliegue Cloud activo con el cron del motor funcionando y monitorizado.
+- Revisión humana de los límites de riesgo y del kill switch.
+
+Deal Maker no promete rentabilidad. No uses fondos reales sin estas salvaguardas.

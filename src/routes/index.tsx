@@ -1,11 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
+import { ComparisonCharts } from "@/components/ComparisonCharts";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusPill, statusTone } from "@/components/StatusPill";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { dateTime, money } from "@/lib/format";
-import { auditQuery, binanceQuery, botsQuery, fundsQuery, workersQuery } from "@/lib/queries";
+import {
+  auditQuery,
+  automationQuery,
+  binanceQuery,
+  botsQuery,
+  fundsQuery,
+  workersQuery,
+} from "@/lib/queries";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -32,6 +40,7 @@ function Dashboard() {
   const workers = useQuery(workersQuery);
   const audit = useQuery(auditQuery);
   const binance = useQuery(binanceQuery);
+  const engine = useQuery(automationQuery);
 
   const botList = bots.data ?? [];
   const workerList = workers.data ?? [];
@@ -82,6 +91,43 @@ function Dashboard() {
           tone={binance.data?.connection_status === "ok" ? "success" : "warning"}
         />
       </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
+            Motor de automatización 24/7
+            <Link to="/automatizacion" className="text-xs text-primary hover:underline">
+              Gestionar
+            </Link>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-3 text-sm">
+          <StatusPill
+            tone={
+              engine.data?.kill_switch
+                ? "danger"
+                : engine.data?.engine_enabled
+                  ? "success"
+                  : "warning"
+            }
+          >
+            {engine.data?.kill_switch
+              ? "kill switch activo"
+              : engine.data?.engine_enabled
+                ? (engine.data.engine_status ?? "running")
+                : "motor detenido"}
+          </StatusPill>
+          <span className="text-xs text-muted-foreground">
+            Trading real: {engine.data?.allow_real_trading ? "autorizado" : "bloqueado por defecto"}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            Último heartbeat:{" "}
+            {engine.data?.last_heartbeat_at ? dateTime(engine.data.last_heartbeat_at) : "sin datos"}
+          </span>
+        </CardContent>
+      </Card>
+
+      <ComparisonCharts />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>

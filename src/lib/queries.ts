@@ -229,3 +229,160 @@ export const binanceQuery = queryOptions({
         .limit(1),
     ).at(0) ?? null,
 });
+
+/* ------------------- MOTOR DE AUTOMATIZACIÓN Y GRÁFICAS ------------------ */
+
+export type AutomationSettings = {
+  id: string;
+  engine_enabled: boolean;
+  kill_switch: boolean;
+  allow_real_trading: boolean;
+  tick_interval_seconds: number;
+  global_max_daily_loss: number;
+  global_max_drawdown_pct: number;
+  engine_status: "stopped" | "running" | "halted" | "error";
+  last_heartbeat_at: string | null;
+  last_error: string | null;
+};
+
+export type BotRisk = {
+  id: string;
+  automation_enabled: boolean;
+  max_daily_loss: number;
+  stop_loss_pct: number;
+  max_drawdown_pct: number;
+  max_capital: number;
+  max_trades_per_day: number;
+  trades_today: number;
+  daily_loss: number;
+  auto_stop_reason: string | null;
+  last_tick_at: string | null;
+};
+
+export type Execution = {
+  id: string;
+  bot_name: string;
+  mode: string;
+  side: string;
+  symbol: string;
+  quantity: number;
+  pnl: number;
+  status: string;
+  attempts: number;
+  error: string | null;
+  created_at: string;
+};
+
+export type EngineRun = {
+  id: string;
+  started_at: string;
+  finished_at: string | null;
+  status: string;
+  trigger: string;
+  bots_processed: number;
+  orders_created: number;
+  errors: number;
+  retries: number;
+  duration_ms: number;
+  notes: string | null;
+};
+
+export type HashratePoint = {
+  worker_name: string;
+  coin: string;
+  recorded_on: string;
+  hash_rate: number;
+  hash_unit: string;
+};
+
+export type PricePoint = { symbol: string; recorded_on: string; price: number };
+
+export type BotPerfPoint = {
+  bot_name: string;
+  recorded_on: string;
+  pnl: number;
+  return_pct: number;
+  capital: number;
+};
+
+export const automationQuery = queryOptions({
+  queryKey: ["automation_settings"],
+  refetchInterval: 15000,
+  queryFn: async () =>
+    unwrap<AutomationSettings[]>(
+      await supabase.from("automation_settings").select("*").limit(1),
+    ).at(0) ?? null,
+});
+
+export const botRiskQuery = queryOptions({
+  queryKey: ["bots_risk"],
+  queryFn: async () =>
+    unwrap<BotRisk[]>(
+      await supabase
+        .from("bots")
+        .select(
+          "id,automation_enabled,max_daily_loss,stop_loss_pct,max_drawdown_pct,max_capital,max_trades_per_day,trades_today,daily_loss,auto_stop_reason,last_tick_at",
+        ),
+    ),
+});
+
+export const executionsQuery = queryOptions({
+  queryKey: ["bot_executions"],
+  refetchInterval: 20000,
+  queryFn: async () =>
+    unwrap<Execution[]>(
+      await supabase
+        .from("bot_executions")
+        .select("id,bot_name,mode,side,symbol,quantity,pnl,status,attempts,error,created_at")
+        .order("created_at", { ascending: false })
+        .limit(60),
+    ),
+});
+
+export const engineRunsQuery = queryOptions({
+  queryKey: ["engine_runs"],
+  refetchInterval: 15000,
+  queryFn: async () =>
+    unwrap<EngineRun[]>(
+      await supabase
+        .from("engine_runs")
+        .select(
+          "id,started_at,finished_at,status,trigger,bots_processed,orders_created,errors,retries,duration_ms,notes",
+        )
+        .order("started_at", { ascending: false })
+        .limit(30),
+    ),
+});
+
+export const hashrateHistoryQuery = queryOptions({
+  queryKey: ["mining_hashrate_history"],
+  queryFn: async () =>
+    unwrap<HashratePoint[]>(
+      await supabase
+        .from("mining_hashrate_history")
+        .select("worker_name,coin,recorded_on,hash_rate,hash_unit")
+        .order("recorded_on", { ascending: true }),
+    ),
+});
+
+export const marketPricesQuery = queryOptions({
+  queryKey: ["market_prices"],
+  queryFn: async () =>
+    unwrap<PricePoint[]>(
+      await supabase
+        .from("market_prices")
+        .select("symbol,recorded_on,price")
+        .order("recorded_on", { ascending: true }),
+    ),
+});
+
+export const botPerformanceQuery = queryOptions({
+  queryKey: ["bot_performance_history"],
+  queryFn: async () =>
+    unwrap<BotPerfPoint[]>(
+      await supabase
+        .from("bot_performance_history")
+        .select("bot_name,recorded_on,pnl,return_pct,capital")
+        .order("recorded_on", { ascending: true }),
+    ),
+});

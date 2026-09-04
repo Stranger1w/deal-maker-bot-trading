@@ -7,7 +7,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { Bot, KeyRound, LayoutDashboard, Pickaxe, Wallet } from "lucide-react";
+import { Bot, Cpu, KeyRound, LayoutDashboard, Pickaxe, Wallet } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
@@ -120,6 +120,7 @@ const navItems = [
   { to: "/fondos", label: "Fondos", icon: Wallet },
   { to: "/binance", label: "Binance / API", icon: KeyRound },
   { to: "/escuadron", label: "Escuadrón", icon: Bot },
+  { to: "/automatizacion", label: "Automatización", icon: Cpu },
   { to: "/mineria", label: "Enjambre", icon: Pickaxe },
 ] as const;
 
