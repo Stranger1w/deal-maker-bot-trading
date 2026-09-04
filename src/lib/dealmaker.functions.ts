@@ -436,3 +436,98 @@ export const setWorkerStatus = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+/* --------------------- MOTOR DE AUTOMATIZACIÓN 24/7 ------------------- */
+
+export const updateBotRisk = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        botId: z.string().uuid(),
+        automationEnabled: z.boolean(),
+        maxDailyLoss: z.number().nonnegative(),
+        stopLossPct: z.number().min(0).max(100),
+        maxDrawdownPct: z.number().min(0).max(100),
+        maxCapital: z.number().nonnegative(),
+        maxTradesPerDay: z.number().int().min(0).max(1000),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const db = await admin();
+    const { error } = await db
+      .from("bots")
+      .update({
+        automation_enabled: data.automationEnabled,
+        max_daily_loss: data.maxDailyLoss,
+        stop_loss_pct: data.stopLossPct,
+        max_drawdown_pct: data.maxDrawdownPct,
+        max_capital: data.maxCapital,
+        max_trades_per_day: data.maxTradesPerDay,
+        auto_stop_reason: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.botId);
+    if (error) throw new Error(error.message);
+    await audit("risk.limits_updated", "bot", data.botId, { ...data });
+    return { ok: true };
+  });
+
+export const updateAutomationSettings = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        engineEnabled: z.boolean().optional(),
+        killSwitch: z.boolean().optional(),
+        allowRealTrading: z.boolean().optional(),
+        tickIntervalSeconds: z.number().int().min(30).max(3600).optional(),
+        globalMaxDailyLoss: z.number().nonnegative().optional(),
+        globalMaxDrawdownPct: z.number().min(0).max(100).optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const db = await admin();
+    const { data: settings } = await db.from("automation_settings").select("*").limit(1).maybeSingle();
+    if (!settings) throw new Error("No hay configuración del motor");
+
+    if (data.allowRealTrading === true) {
+      const { data: creds } = await db.from("binance_credentials").select("connection_status");
+      if (!(creds ?? []).some((c) => c.connection_status === "ok")) {
+        throw new Error("Configura y verifica tus API Keys de Binance antes de autorizar trading real");
+      }
+    }
+
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (data.engineEnabled !== undefined) patch['engine_enabled'] = data.engineEnabled;
+    if (data.killSwitch !== undefined) patch['kill_switch'] = data.killSwitch;
+    if (data.allowRealTrading !== undefined) patch['allow_real_trading'] = data.allowRealTrading;
+    if (data.tickIntervalSeconds !== undefined) patch['tick_interval_seconds'] = data.tickIntervalSeconds;
+    if (data.globalMaxDailyLoss !== undefined) patch['global_max_daily_loss'] = data.globalMaxDailyLoss;
+    if (data.globalMaxDrawdownPct !== undefined) patch['global_max_drawdown_pct'] = data.globalMaxDrawdownPct;
+    if (data.engineEnabled === false || data.killSwitch === true) patch['engine_status'] = "stopped";
+
+    const { error } = await db.from("automation_settings").update(patch).eq("id", settings.id);
+    if (error) throw new Error(error.message);
+
+    if (data.killSwitch === true) {
+      const { data: bots } = await db.from("bots").select("id").eq("status", "running");
+      for (const bot of bots ?? []) {
+        await db.from("bots").update({ status: "stopped", auto_stop_reason: "kill_switch_manual" }).eq("id", bot.id);
+        await db.from("bot_logs").insert({
+          bot_id: bot.id,
+          level: "error",
+          message: "Detenido por kill switch global",
+        });
+      }
+    }
+
+    await audit("automation.settings_updated", "automation_settings", settings.id, { ...data });
+    return { ok: true };
+  });
+
+// Ejecuta un ciclo manual del mismo motor que corre en el cron 24/7.
+export const runEngineNow = createServerFn({ method: "POST" }).handler(async () => {
+  const { runEngineTick } = await import("./automation.server");
+  return runEngineTick("manual");
+});
