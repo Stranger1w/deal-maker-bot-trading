@@ -120,6 +120,7 @@ const navItems = [
   { to: "/fondos", label: "Fondos", icon: Wallet },
   { to: "/binance", label: "Binance / API", icon: KeyRound },
   { to: "/escuadron", label: "Escuadrón", icon: Bot },
+  { to: "/automatizacion", label: "Automatización", icon: Cpu },
   { to: "/mineria", label: "Enjambre", icon: Pickaxe },
 ] as const;
 
