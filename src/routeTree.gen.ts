@@ -14,6 +14,7 @@ import { Route as BinanceRouteImport } from './routes/binance'
 import { Route as EscuadronRouteImport } from './routes/escuadron'
 import { Route as FondosRouteImport } from './routes/fondos'
 import { Route as MineriaRouteImport } from './routes/mineria'
+import { Route as ApiPublicAutomationTickRouteImport } from './routes/api/public/automation-tick'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,6 +41,11 @@ const MineriaRoute = MineriaRouteImport.update({
   path: '/mineria',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicAutomationTickRoute = ApiPublicAutomationTickRouteImport.update({
+  id: '/api/public/automation-tick',
+  path: '/api/public/automation-tick',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -47,6 +53,7 @@ export interface FileRoutesByFullPath {
   '/escuadron': typeof EscuadronRoute
   '/fondos': typeof FondosRoute
   '/mineria': typeof MineriaRoute
+  '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +61,7 @@ export interface FileRoutesByTo {
   '/escuadron': typeof EscuadronRoute
   '/fondos': typeof FondosRoute
   '/mineria': typeof MineriaRoute
+  '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,13 +70,33 @@ export interface FileRoutesById {
   '/escuadron': typeof EscuadronRoute
   '/fondos': typeof FondosRoute
   '/mineria': typeof MineriaRoute
+  '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/binance' | '/escuadron' | '/fondos' | '/mineria'
+  fullPaths:
+    | '/'
+    | '/binance'
+    | '/escuadron'
+    | '/fondos'
+    | '/mineria'
+    | '/api/public/automation-tick'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/binance' | '/escuadron' | '/fondos' | '/mineria'
-  id: '__root__' | '/' | '/binance' | '/escuadron' | '/fondos' | '/mineria'
+  to:
+    | '/'
+    | '/binance'
+    | '/escuadron'
+    | '/fondos'
+    | '/mineria'
+    | '/api/public/automation-tick'
+  id:
+    | '__root__'
+    | '/'
+    | '/binance'
+    | '/escuadron'
+    | '/fondos'
+    | '/mineria'
+    | '/api/public/automation-tick'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -77,6 +105,7 @@ export interface RootRouteChildren {
   EscuadronRoute: typeof EscuadronRoute
   FondosRoute: typeof FondosRoute
   MineriaRoute: typeof MineriaRoute
+  ApiPublicAutomationTickRoute: typeof ApiPublicAutomationTickRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -116,6 +145,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MineriaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/automation-tick': {
+      id: '/api/public/automation-tick'
+      path: '/api/public/automation-tick'
+      fullPath: '/api/public/automation-tick'
+      preLoaderRoute: typeof ApiPublicAutomationTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -125,6 +161,7 @@ const rootRouteChildren: RootRouteChildren = {
   EscuadronRoute: EscuadronRoute,
   FondosRoute: FondosRoute,
   MineriaRoute: MineriaRoute,
+  ApiPublicAutomationTickRoute: ApiPublicAutomationTickRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
