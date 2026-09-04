@@ -44,6 +44,48 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_settings: {
+        Row: {
+          allow_real_trading: boolean
+          engine_enabled: boolean
+          engine_status: string
+          global_max_daily_loss: number
+          global_max_drawdown_pct: number
+          id: string
+          kill_switch: boolean
+          last_error: string | null
+          last_heartbeat_at: string | null
+          tick_interval_seconds: number
+          updated_at: string
+        }
+        Insert: {
+          allow_real_trading?: boolean
+          engine_enabled?: boolean
+          engine_status?: string
+          global_max_daily_loss?: number
+          global_max_drawdown_pct?: number
+          id?: string
+          kill_switch?: boolean
+          last_error?: string | null
+          last_heartbeat_at?: string | null
+          tick_interval_seconds?: number
+          updated_at?: string
+        }
+        Update: {
+          allow_real_trading?: boolean
+          engine_enabled?: boolean
+          engine_status?: string
+          global_max_daily_loss?: number
+          global_max_drawdown_pct?: number
+          id?: string
+          kill_switch?: boolean
+          last_error?: string | null
+          last_heartbeat_at?: string | null
+          tick_interval_seconds?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       binance_credentials: {
         Row: {
           api_key_cipher: string
@@ -83,6 +125,65 @@ export type Database = {
         }
         Relationships: []
       }
+      bot_executions: {
+        Row: {
+          attempts: number
+          bot_id: string | null
+          bot_name: string
+          created_at: string
+          error: string | null
+          id: string
+          idempotency_key: string
+          mode: string
+          pnl: number
+          price: number
+          quantity: number
+          side: string
+          status: string
+          symbol: string
+        }
+        Insert: {
+          attempts?: number
+          bot_id?: string | null
+          bot_name: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          idempotency_key: string
+          mode?: string
+          pnl?: number
+          price?: number
+          quantity?: number
+          side: string
+          status?: string
+          symbol: string
+        }
+        Update: {
+          attempts?: number
+          bot_id?: string | null
+          bot_name?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          idempotency_key?: string
+          mode?: string
+          pnl?: number
+          price?: number
+          quantity?: number
+          side?: string
+          status?: string
+          symbol?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_executions_bot_id_fkey"
+            columns: ["bot_id"]
+            isOneToOne: false
+            referencedRelation: "bots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bot_logs: {
         Row: {
           bot_id: string
@@ -115,51 +216,170 @@ export type Database = {
           },
         ]
       }
+      bot_performance_history: {
+        Row: {
+          bot_id: string | null
+          bot_name: string
+          capital: number
+          id: string
+          is_demo: boolean
+          pnl: number
+          recorded_on: string
+          return_pct: number
+        }
+        Insert: {
+          bot_id?: string | null
+          bot_name: string
+          capital: number
+          id?: string
+          is_demo?: boolean
+          pnl: number
+          recorded_on: string
+          return_pct: number
+        }
+        Update: {
+          bot_id?: string | null
+          bot_name?: string
+          capital?: number
+          id?: string
+          is_demo?: boolean
+          pnl?: number
+          recorded_on?: string
+          return_pct?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_performance_history_bot_id_fkey"
+            columns: ["bot_id"]
+            isOneToOne: false
+            referencedRelation: "bots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bots: {
         Row: {
+          auto_stop_reason: string | null
+          automation_enabled: boolean
           capital: number
           created_at: string
+          daily_loss: number
           demo_engine: string
           exchange: string
           id: string
+          last_tick_at: string | null
+          max_capital: number
+          max_daily_loss: number
+          max_drawdown_pct: number
+          max_trades_per_day: number
           mode: string
           name: string
           pair: string
+          peak_pnl: number
           pnl: number
+          risk_day: string
           status: string
+          stop_loss_pct: number
           strategy: string
+          trades_today: number
           updated_at: string
           win_rate: number
         }
         Insert: {
+          auto_stop_reason?: string | null
+          automation_enabled?: boolean
           capital?: number
           created_at?: string
+          daily_loss?: number
           demo_engine?: string
           exchange?: string
           id?: string
+          last_tick_at?: string | null
+          max_capital?: number
+          max_daily_loss?: number
+          max_drawdown_pct?: number
+          max_trades_per_day?: number
           mode?: string
           name: string
           pair: string
+          peak_pnl?: number
           pnl?: number
+          risk_day?: string
           status?: string
+          stop_loss_pct?: number
           strategy: string
+          trades_today?: number
           updated_at?: string
           win_rate?: number
         }
         Update: {
+          auto_stop_reason?: string | null
+          automation_enabled?: boolean
           capital?: number
           created_at?: string
+          daily_loss?: number
           demo_engine?: string
           exchange?: string
           id?: string
+          last_tick_at?: string | null
+          max_capital?: number
+          max_daily_loss?: number
+          max_drawdown_pct?: number
+          max_trades_per_day?: number
           mode?: string
           name?: string
           pair?: string
+          peak_pnl?: number
           pnl?: number
+          risk_day?: string
           status?: string
+          stop_loss_pct?: number
           strategy?: string
+          trades_today?: number
           updated_at?: string
           win_rate?: number
+        }
+        Relationships: []
+      }
+      engine_runs: {
+        Row: {
+          bots_processed: number
+          duration_ms: number
+          errors: number
+          finished_at: string | null
+          id: string
+          notes: string | null
+          orders_created: number
+          retries: number
+          started_at: string
+          status: string
+          trigger: string
+        }
+        Insert: {
+          bots_processed?: number
+          duration_ms?: number
+          errors?: number
+          finished_at?: string | null
+          id?: string
+          notes?: string | null
+          orders_created?: number
+          retries?: number
+          started_at?: string
+          status?: string
+          trigger?: string
+        }
+        Update: {
+          bots_processed?: number
+          duration_ms?: number
+          errors?: number
+          finished_at?: string | null
+          id?: string
+          notes?: string | null
+          orders_created?: number
+          retries?: number
+          started_at?: string
+          status?: string
+          trigger?: string
         }
         Relationships: []
       }
@@ -230,6 +450,74 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "fund_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      market_prices: {
+        Row: {
+          id: string
+          is_demo: boolean
+          price: number
+          recorded_on: string
+          source: string
+          symbol: string
+        }
+        Insert: {
+          id?: string
+          is_demo?: boolean
+          price: number
+          recorded_on: string
+          source?: string
+          symbol: string
+        }
+        Update: {
+          id?: string
+          is_demo?: boolean
+          price?: number
+          recorded_on?: string
+          source?: string
+          symbol?: string
+        }
+        Relationships: []
+      }
+      mining_hashrate_history: {
+        Row: {
+          coin: string
+          hash_rate: number
+          hash_unit: string
+          id: string
+          is_demo: boolean
+          recorded_on: string
+          worker_id: string | null
+          worker_name: string
+        }
+        Insert: {
+          coin: string
+          hash_rate: number
+          hash_unit?: string
+          id?: string
+          is_demo?: boolean
+          recorded_on: string
+          worker_id?: string | null
+          worker_name: string
+        }
+        Update: {
+          coin?: string
+          hash_rate?: number
+          hash_unit?: string
+          id?: string
+          is_demo?: boolean
+          recorded_on?: string
+          worker_id?: string | null
+          worker_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mining_hashrate_history_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "mining_workers"
             referencedColumns: ["id"]
           },
         ]
