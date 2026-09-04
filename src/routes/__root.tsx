@@ -7,7 +7,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { Bot, KeyRound, LayoutDashboard, Pickaxe, Wallet } from "lucide-react";
+import { Bot, Cpu, KeyRound, LayoutDashboard, Pickaxe, Wallet } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 
 import { Toaster } from "@/components/ui/sonner";

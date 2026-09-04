@@ -1,11 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
+import { ComparisonCharts } from "@/components/ComparisonCharts";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusPill, statusTone } from "@/components/StatusPill";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { dateTime, money } from "@/lib/format";
-import { auditQuery, binanceQuery, botsQuery, fundsQuery, workersQuery } from "@/lib/queries";
+import {
+  auditQuery,
+  automationQuery,
+  binanceQuery,
+  botsQuery,
+  fundsQuery,
+  workersQuery,
+} from "@/lib/queries";
 
 export const Route = createFileRoute("/")({
   head: () => ({
