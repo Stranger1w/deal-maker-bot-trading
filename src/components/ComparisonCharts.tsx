@@ -120,7 +120,7 @@ function ChartShell({
           <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
             <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="recorded_on" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} width={56} unit={unit} />
+            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} width={56} unit={unit ?? ""} />
             <Tooltip
               contentStyle={{
                 background: "hsl(var(--card))",

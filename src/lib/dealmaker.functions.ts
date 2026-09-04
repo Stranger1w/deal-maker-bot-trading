@@ -499,6 +499,7 @@ export const updateAutomationSettings = createServerFn({ method: "POST" })
     }
 
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (data.engineEnabled !== undefined) patch['engine_enabled'] = data.engineEnabled;
     if (data.killSwitch !== undefined) patch['kill_switch'] = data.killSwitch;
     if (data.allowRealTrading !== undefined) patch['allow_real_trading'] = data.allowRealTrading;
@@ -507,7 +508,10 @@ export const updateAutomationSettings = createServerFn({ method: "POST" })
     if (data.globalMaxDrawdownPct !== undefined) patch['global_max_drawdown_pct'] = data.globalMaxDrawdownPct;
     if (data.engineEnabled === false || data.killSwitch === true) patch['engine_status'] = "stopped";
 
-    const { error } = await db.from("automation_settings").update(patch).eq("id", settings.id);
+    const { error } = await db
+      .from("automation_settings")
+      .update(patch as never)
+      .eq("id", settings.id);
     if (error) throw new Error(error.message);
 
     if (data.killSwitch === true) {

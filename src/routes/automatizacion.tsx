@@ -57,7 +57,13 @@ function AutomationPage() {
   };
 
   const update = useMutation({
-    mutationFn: (data: Parameters<typeof updateAutomationSettings>[0]["data"]) => updateFn({ data }),
+    mutationFn: (data: {
+      engineEnabled?: boolean;
+      killSwitch?: boolean;
+      allowRealTrading?: boolean;
+      tickIntervalSeconds?: number;
+      globalMaxDailyLoss?: number;
+    }) => updateFn({ data }),
     onSuccess: () => {
       toast.success("Configuración del motor actualizada");
       invalidate();
