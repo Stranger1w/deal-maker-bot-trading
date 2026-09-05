@@ -417,3 +417,61 @@ export const botPerformanceQuery = queryOptions({
         .order("recorded_on", { ascending: true }),
     ),
 });
+
+/* --------------------- ALERTAS Y REPORTES DE PERFORMANCE -------------------- */
+
+export type Alert = {
+  id: string;
+  category: string;
+  severity: "info" | "warning" | "critical";
+  title: string;
+  message: string;
+  entity: string | null;
+  entity_id: string | null;
+  acknowledged: boolean;
+  is_demo: boolean;
+  delivery_status: string;
+  created_at: string;
+};
+
+export type PerformanceReport = {
+  id: string;
+  period: "daily" | "weekly";
+  scope: "squad" | "mining";
+  period_start: string;
+  period_end: string;
+  metrics: Record<string, number>;
+  summary: string;
+  email_status: string;
+  is_demo: boolean;
+  created_at: string;
+};
+
+export const alertsQuery = queryOptions({
+  queryKey: ["alerts"],
+  refetchInterval: 20000,
+  queryFn: async () =>
+    unwrap<Alert[]>(
+      await supabase
+        .from("alerts")
+        .select(
+          "id,category,severity,title,message,entity,entity_id,acknowledged,is_demo,delivery_status,created_at",
+        )
+        .order("created_at", { ascending: false })
+        .limit(50),
+    ),
+});
+
+export const reportsQuery = queryOptions({
+  queryKey: ["performance_reports"],
+  queryFn: async () =>
+    unwrap<PerformanceReport[]>(
+      await supabase
+        .from("performance_reports")
+        .select(
+          "id,period,scope,period_start,period_end,metrics,summary,email_status,is_demo,created_at",
+        )
+        .order("period_end", { ascending: false })
+        .limit(20),
+    ),
+});
