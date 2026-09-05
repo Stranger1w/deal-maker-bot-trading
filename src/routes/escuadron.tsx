@@ -99,6 +99,18 @@ function SquadPage() {
   );
 }
 
+function Criterion({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span
+      className={`rounded-md border px-2 py-1 ${
+        ok ? "border-success/40 bg-success/10 text-success" : "border-destructive/40 bg-destructive/10 text-destructive"
+      }`}
+    >
+      {ok ? "✓" : "✕"} {label}
+    </span>
+  );
+}
+
 /* ------------------------------ BOTS ------------------------------ */
 
 function SquadTab() {
@@ -554,21 +566,123 @@ function SquadTab() {
         );
       })}
 
-      <Dialog open={!!realTarget} onOpenChange={(open) => !open && setRealTarget(null)}>
+      <Dialog
+        open={!!realTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRealTarget(null);
+            setCheck(null);
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Cambiar a modo REAL</DialogTitle>
             <DialogDescription>
-              {realTarget?.name} pasará a operar con fondos reales de tu cuenta a través de Binance,
-              usando las API Keys verificadas. El cambio queda registrado en la auditoría y el bot se
-              deja en pausa para que revises la estrategia antes de iniciarlo.
+              {realTarget?.name} pasaría a operar con fondos reales vía Binance. Se validan los
+              criterios demo, el benchmark buy-and-hold del mismo activo y la 2FA de tu sesión.
             </DialogDescription>
           </DialogHeader>
+
+          <div className="space-y-2 text-sm">
+            {!check && <p className="text-muted-foreground">Validando criterios…</p>}
+            {check && (
+              <>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <Criterion ok={check.hasStopLoss} label="Stop-loss configurado" />
+                  <Criterion ok={check.hasTakeProfit} label="Take-profit configurado" />
+                  <Criterion
+                    ok={check.demoDays >= check.minDemoDays}
+                    label={`Días en demo ${check.demoDays}/${check.minDemoDays}`}
+                  />
+                  <Criterion
+                    ok={check.demoTrades >= check.minDemoTrades}
+                    label={`Operaciones demo ${check.demoTrades}/${check.minDemoTrades}`}
+                  />
+                  <Criterion
+                    ok={!check.benchmarkRequired || check.botReturnPct > check.benchmarkReturnPct}
+                    label={`Bot ${check.botReturnPct}% vs buy-and-hold ${check.benchmarkReturnPct}%`}
+                  />
+                  <Criterion ok={check.binanceVerified} label="Binance verificado" />
+                  <Criterion ok={session.twoFactorVerified} label="2FA verificada en la sesión" />
+                </div>
+                {check.reasons.length > 0 && (
+                  <ul className="list-disc space-y-1 pl-5 text-xs text-destructive">
+                    {check.reasons.map((r) => (
+                      <li key={r}>{r}</li>
+                    ))}
+                  </ul>
+                )}
+                {!session.twoFactorVerified && (
+                  <p className="text-xs text-warning">
+                    Verifica tu segundo factor en “Acceso y 2FA”: sin ello el backend rechaza el
+                    cambio a Real.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+
           <DialogFooter>
             <Button variant="secondary" onClick={() => setRealTarget(null)}>
               Cancelar
             </Button>
-            <Button onClick={confirmReal}>Sí, usar fondos reales</Button>
+            <Button
+              onClick={confirmReal}
+              disabled={!check?.ok || !session.twoFactorVerified}
+              variant="destructive"
+            >
+              Sí, usar fondos reales
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!riskFor} onOpenChange={(open) => !open && setRiskFor(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Riesgo · {riskFor?.name}</DialogTitle>
+            <DialogDescription>
+              Stop-loss y take-profit son obligatorios para operar en Real. Al superar cualquier
+              límite el bot se pausa automáticamente, se cancela el ciclo antes de abrir órdenes y se
+              registra auditoría y alerta.
+            </DialogDescription>
+          </DialogHeader>
+          {riskFor && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {([
+                ["stop_loss_pct", "Stop-loss por operación (%)"],
+                ["take_profit_pct", "Take-profit por operación (%)"],
+                ["max_daily_loss", "Pérdida diaria máx. (USDT)"],
+                ["max_drawdown_pct", "Drawdown diario máx. (%)"],
+                ["max_weekly_drawdown_pct", "Drawdown semanal máx. (%)"],
+                ["max_capital", "Tope de capital (USDT)"],
+                ["max_trades_per_day", "Máx. operaciones/día"],
+              ] as const).map(([key, label]) => (
+                <div key={key} className="space-y-1.5">
+                  <Label>{label}</Label>
+                  <Input
+                    inputMode="decimal"
+                    value={String(riskFor[key] ?? "")}
+                    onChange={(e) => setRiskFor({ ...riskFor, [key]: Number(e.target.value) })}
+                  />
+                </div>
+              ))}
+              <div className="flex items-center justify-between rounded-md border border-border px-3 py-2 sm:col-span-2">
+                <span className="text-sm">Automatización 24/7 para este bot</span>
+                <Switch
+                  checked={riskFor.automation_enabled}
+                  onCheckedChange={(v) => setRiskFor({ ...riskFor, automation_enabled: v })}
+                  aria-label="Activar automatización del bot"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setRiskFor(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={submitRisk}>Guardar riesgo</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
