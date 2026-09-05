@@ -7,9 +7,10 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { Bot, Cpu, KeyRound, LayoutDashboard, Pickaxe, Wallet } from "lucide-react";
+import { Bot, Cpu, KeyRound, LayoutDashboard, Pickaxe, ShieldCheck, Wallet } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 
+import { KillSwitchButton } from "@/components/KillSwitchButton";
 import { Toaster } from "@/components/ui/sonner";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -122,6 +123,7 @@ const navItems = [
   { to: "/escuadron", label: "Escuadrón", icon: Bot },
   { to: "/automatizacion", label: "Automatización", icon: Cpu },
   { to: "/mineria", label: "Enjambre", icon: Pickaxe },
+  { to: "/acceso", label: "Acceso y 2FA", icon: ShieldCheck },
 ] as const;
 
 function RootComponent() {
@@ -152,6 +154,10 @@ function RootComponent() {
                 </Link>
               ))}
             </nav>
+            {/* Parada de emergencia siempre accesible, también en móvil. */}
+            <div className="ml-auto">
+              <KillSwitchButton />
+            </div>
           </div>
         </header>
         <main className="mx-auto max-w-7xl px-4 py-8">

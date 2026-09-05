@@ -42,6 +42,20 @@ export type Bot = {
   status: "running" | "paused" | "training" | "stopped";
   mode: "demo" | "real";
   demo_engine: string;
+  automation_enabled: boolean;
+  stop_loss_pct: number;
+  take_profit_pct: number;
+  max_daily_loss: number;
+  max_drawdown_pct: number;
+  max_weekly_drawdown_pct: number;
+  max_capital: number;
+  max_trades_per_day: number;
+  trades_today: number;
+  daily_loss: number;
+  weekly_loss: number;
+  demo_since: string | null;
+  demo_trades: number;
+  auto_stop_reason: string | null;
   exchange: string;
   pnl: number;
   win_rate: number;
@@ -155,7 +169,9 @@ export const botsQuery = queryOptions({
     unwrap<Bot[]>(
       await supabase
         .from("bots")
-        .select("id,name,strategy,pair,capital,status,mode,demo_engine,exchange,pnl,win_rate")
+        .select(
+          "id,name,strategy,pair,capital,status,mode,demo_engine,exchange,pnl,win_rate,automation_enabled,stop_loss_pct,take_profit_pct,max_daily_loss,max_drawdown_pct,max_weekly_drawdown_pct,max_capital,max_trades_per_day,trades_today,daily_loss,weekly_loss,demo_since,demo_trades,auto_stop_reason",
+        )
         .order("created_at", { ascending: true }),
     ),
 });
@@ -243,6 +259,21 @@ export type AutomationSettings = {
   engine_status: "stopped" | "running" | "halted" | "error";
   last_heartbeat_at: string | null;
   last_error: string | null;
+  global_max_capital: number;
+  max_pair_concentration_pct: number;
+  global_max_weekly_drawdown_pct: number;
+  global_weekly_loss: number;
+  min_demo_days: number;
+  min_demo_trades: number;
+  require_benchmark_outperformance: boolean;
+  profit_policy: "reinvest" | "reserve";
+  profit_reserve_pct: number;
+  last_profit_sweep_on: string | null;
+  notify_email: string | null;
+  notify_email_enabled: boolean;
+  kill_switch_reason: string | null;
+  kill_switch_actor: string | null;
+  kill_switch_at: string | null;
 };
 
 export type BotRisk = {
@@ -384,5 +415,63 @@ export const botPerformanceQuery = queryOptions({
         .from("bot_performance_history")
         .select("bot_name,recorded_on,pnl,return_pct,capital")
         .order("recorded_on", { ascending: true }),
+    ),
+});
+
+/* --------------------- ALERTAS Y REPORTES DE PERFORMANCE -------------------- */
+
+export type Alert = {
+  id: string;
+  category: string;
+  severity: "info" | "warning" | "critical";
+  title: string;
+  message: string;
+  entity: string | null;
+  entity_id: string | null;
+  acknowledged: boolean;
+  is_demo: boolean;
+  delivery_status: string;
+  created_at: string;
+};
+
+export type PerformanceReport = {
+  id: string;
+  period: "daily" | "weekly";
+  scope: "squad" | "mining";
+  period_start: string;
+  period_end: string;
+  metrics: Record<string, number>;
+  summary: string;
+  email_status: string;
+  is_demo: boolean;
+  created_at: string;
+};
+
+export const alertsQuery = queryOptions({
+  queryKey: ["alerts"],
+  refetchInterval: 20000,
+  queryFn: async () =>
+    unwrap<Alert[]>(
+      await supabase
+        .from("alerts")
+        .select(
+          "id,category,severity,title,message,entity,entity_id,acknowledged,is_demo,delivery_status,created_at",
+        )
+        .order("created_at", { ascending: false })
+        .limit(50),
+    ),
+});
+
+export const reportsQuery = queryOptions({
+  queryKey: ["performance_reports"],
+  queryFn: async () =>
+    unwrap<PerformanceReport[]>(
+      await supabase
+        .from("performance_reports")
+        .select(
+          "id,period,scope,period_start,period_end,metrics,summary,email_status,is_demo,created_at",
+        )
+        .order("period_end", { ascending: false })
+        .limit(20),
     ),
 });

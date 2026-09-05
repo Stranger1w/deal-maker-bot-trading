@@ -54,50 +54,20 @@ export const createDeposit = createServerFn({ method: "POST" })
     return { ok: true, reference };
   });
 
+// Flujo antiguo sin 2FA: deshabilitado. Usa createSecureWithdrawal (risk.functions.ts).
 export const createWithdrawal = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
     z
       .object({
         amount: z.number().positive(),
         method: z.enum(["transfer", "wallet", "onchain"]),
-        twoFactorCode: z.string().optional(),
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
-    const db = await admin();
-    const { data: account, error: accErr } = await db
-      .from("fund_accounts")
-      .select("available_balance")
-      .eq("id", ACCOUNT_ID)
-      .single();
-    if (accErr || !account) throw new Error("No se pudo leer la cuenta de fondos");
-    if (data.amount > Number(account.available_balance)) {
-      throw new Error("Saldo disponible insuficiente para este retiro");
-    }
-    const reference = `WD-${Date.now().toString().slice(-6)}`;
-    const { error } = await db.from("fund_transactions").insert({
-      account_id: ACCOUNT_ID,
-      kind: "withdrawal",
-      method: data.method,
-      amount: data.amount,
-      status: "pending",
-      reference,
-    });
-    if (error) throw new Error(error.message);
-    await db
-      .from("fund_accounts")
-      .update({
-        available_balance: Number(account.available_balance) - data.amount,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", ACCOUNT_ID);
-    await audit("withdrawal.created", "fund_transaction", reference, {
-      amount: data.amount,
-      method: data.method,
-      two_factor: data.twoFactorCode ? "provided" : "pending_setup",
-    });
-    return { ok: true, reference };
+  .handler(async () => {
+    throw new Error(
+      "Los retiros exigen sesión autenticada con 2FA verificada. Usa el flujo protegido de Fondos.",
+    );
   });
 
 /* ------------------------------- BINANCE ------------------------------ */
@@ -246,14 +216,14 @@ export const setBotMode = createServerFn({ method: "POST" })
     z
       .object({
         botId: z.string().uuid(),
-        mode: z.enum(["demo", "real"]),
+        mode: z.literal("demo"),
         confirmed: z.boolean(),
       })
       .parse(input),
   )
   .handler(async ({ data }) => {
-    if (data.mode === "real" && !data.confirmed) {
-      throw new Error("Se requiere confirmación explícita para operar en Real");
+    if (!data.confirmed) {
+      throw new Error("Se requiere confirmación explícita para cambiar el modo del bot");
     }
     const db = await admin();
     const { data: bot } = await db
@@ -261,14 +231,15 @@ export const setBotMode = createServerFn({ method: "POST" })
       .select("name, mode")
       .eq("id", data.botId)
       .maybeSingle();
-    if (data.mode === "real") {
-      const { data: creds } = await db.from("binance_credentials").select("connection_status");
-      const ok = creds?.some((c) => c.connection_status === "ok");
-      if (!ok) throw new Error("Configura y verifica tus API Keys de Binance antes de pasar a Real");
-    }
+    // El paso a Real vive en promoteBotToReal (risk.functions.ts): exige criterios y 2FA.
     const { error } = await db
       .from("bots")
-      .update({ mode: data.mode, status: "paused", updated_at: new Date().toISOString() })
+      .update({
+        mode: data.mode,
+        status: "paused",
+        demo_since: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", data.botId);
     if (error) throw new Error(error.message);
     await audit("bot.mode_changed", "bot", bot?.name ?? data.botId, {

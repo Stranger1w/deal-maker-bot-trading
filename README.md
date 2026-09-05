@@ -100,11 +100,49 @@ capital asignado y máximo de operaciones diarias. Al alcanzarse un límite el b
 automáticamente, se registra auditoría y se muestra alerta. Las órdenes usan clave de
 idempotencia por bot y ciclo para evitar duplicados, con reintentos y logs de ejecución.
 
+## Mantenimiento programado (reportes y capital)
+
+Programa un segundo cron diario y semanal:
+
+`POST https://<tu-dominio>/api/public/maintenance` con `Authorization: Bearer $LOVABLE_CRON_SECRET`
+y cuerpo `{"scope":"daily"}` o `{"scope":"weekly"}`.
+
+- **daily**: reporte de rendimiento de Escuadrón y Enjambre.
+- **weekly**: reporte semanal + aplicación de la política de capital (reinvertir o reservar
+  un % de la ganancia semanal como saldo disponible en Fondos). Nunca realiza retiros externos.
+
+## Autenticación y 2FA
+
+`/acceso` implementa sesión real con correo y contraseña más TOTP (autenticador). Los flujos
+sensibles —**retiro de fondos** y **paso Demo→Real**— se validan en el backend exigiendo nivel de
+seguridad `aal2` (segundo factor verificado en la sesión actual). Sin ello quedan bloqueados: no se
+simula seguridad. Los flujos antiguos sin 2FA están deshabilitados en el backend.
+
+## Alertas y notificaciones
+
+Las alertas in-app cubren parada/error de bot, breach de drawdown, desconexión de Binance y
+depósitos/retiros, y aparecen en Dashboard, Escuadrón, Enjambre y Fondos. La entrega por email
+requiere un dominio de envío verificado; mientras no exista, las alertas se marcan como
+*pendientes de configuración* y **no** se simulan entregas.
+
+## Binance: permisos y whitelist de IP
+
+Al guardar o probar claves se muestra el checklist obligatorio: activar solo lectura y trading,
+**nunca** permiso de retiro, y restringir la clave por whitelist de IP a las salidas del despliegue
+Cloud. Solo se guarda configuración no sensible en claro; el secreto se cifra en reposo y se
+descifra únicamente en el backend para firmar solicitudes.
+
+## Demo→Real: criterios
+
+Configurables en Escuadrón: mínimo de días en demo, mínimo de operaciones demo, stop-loss y
+take-profit obligatorios, credenciales Binance verificadas y (opcional) superar el benchmark
+buy-and-hold del mismo activo. El backend revalida todos los criterios y la 2FA.
+
 ## Advertencias de seguridad (trading real)
 
 El trading real está **desactivado por defecto** y requiere, antes de habilitarlo:
 
-- Autenticación de usuarios y 2FA reales (aún no implementados en este MVP).
+- Sesión autenticada con 2FA verificada (implementada en `/acceso`; obligatoria en retiros y Demo→Real).
 - Claves de Binance con permisos mínimos y **sin permiso de retiro**.
 - Despliegue Cloud activo con el cron del motor funcionando y monitorizado.
 - Revisión humana de los límites de riesgo y del kill switch.

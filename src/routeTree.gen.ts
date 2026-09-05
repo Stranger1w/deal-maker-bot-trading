@@ -10,16 +10,23 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AccesoRouteImport } from './routes/acceso'
 import { Route as AutomatizacionRouteImport } from './routes/automatizacion'
 import { Route as BinanceRouteImport } from './routes/binance'
 import { Route as EscuadronRouteImport } from './routes/escuadron'
 import { Route as FondosRouteImport } from './routes/fondos'
 import { Route as MineriaRouteImport } from './routes/mineria'
 import { Route as ApiPublicAutomationTickRouteImport } from './routes/api/public/automation-tick'
+import { Route as ApiPublicMaintenanceRouteImport } from './routes/api/public/maintenance'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccesoRoute = AccesoRouteImport.update({
+  id: '/acceso',
+  path: '/acceso',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AutomatizacionRoute = AutomatizacionRouteImport.update({
@@ -52,73 +59,92 @@ const ApiPublicAutomationTickRoute = ApiPublicAutomationTickRouteImport.update({
   path: '/api/public/automation-tick',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicMaintenanceRoute = ApiPublicMaintenanceRouteImport.update({
+  id: '/api/public/maintenance',
+  path: '/api/public/maintenance',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/acceso': typeof AccesoRoute
   '/automatizacion': typeof AutomatizacionRoute
   '/binance': typeof BinanceRoute
   '/escuadron': typeof EscuadronRoute
   '/fondos': typeof FondosRoute
   '/mineria': typeof MineriaRoute
   '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
+  '/api/public/maintenance': typeof ApiPublicMaintenanceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/acceso': typeof AccesoRoute
   '/automatizacion': typeof AutomatizacionRoute
   '/binance': typeof BinanceRoute
   '/escuadron': typeof EscuadronRoute
   '/fondos': typeof FondosRoute
   '/mineria': typeof MineriaRoute
   '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
+  '/api/public/maintenance': typeof ApiPublicMaintenanceRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/acceso': typeof AccesoRoute
   '/automatizacion': typeof AutomatizacionRoute
   '/binance': typeof BinanceRoute
   '/escuadron': typeof EscuadronRoute
   '/fondos': typeof FondosRoute
   '/mineria': typeof MineriaRoute
   '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
+  '/api/public/maintenance': typeof ApiPublicMaintenanceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/acceso'
     | '/automatizacion'
     | '/binance'
     | '/escuadron'
     | '/fondos'
     | '/mineria'
     | '/api/public/automation-tick'
+    | '/api/public/maintenance'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/acceso'
     | '/automatizacion'
     | '/binance'
     | '/escuadron'
     | '/fondos'
     | '/mineria'
     | '/api/public/automation-tick'
+    | '/api/public/maintenance'
   id:
     | '__root__'
     | '/'
+    | '/acceso'
     | '/automatizacion'
     | '/binance'
     | '/escuadron'
     | '/fondos'
     | '/mineria'
     | '/api/public/automation-tick'
+    | '/api/public/maintenance'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AccesoRoute: typeof AccesoRoute
   AutomatizacionRoute: typeof AutomatizacionRoute
   BinanceRoute: typeof BinanceRoute
   EscuadronRoute: typeof EscuadronRoute
   FondosRoute: typeof FondosRoute
   MineriaRoute: typeof MineriaRoute
   ApiPublicAutomationTickRoute: typeof ApiPublicAutomationTickRoute
+  ApiPublicMaintenanceRoute: typeof ApiPublicMaintenanceRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -128,6 +154,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/acceso': {
+      id: '/acceso'
+      path: '/acceso'
+      fullPath: '/acceso'
+      preLoaderRoute: typeof AccesoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/automatizacion': {
@@ -172,17 +205,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicAutomationTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/maintenance': {
+      id: '/api/public/maintenance'
+      path: '/api/public/maintenance'
+      fullPath: '/api/public/maintenance'
+      preLoaderRoute: typeof ApiPublicMaintenanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AccesoRoute: AccesoRoute,
   AutomatizacionRoute: AutomatizacionRoute,
   BinanceRoute: BinanceRoute,
   EscuadronRoute: EscuadronRoute,
   FondosRoute: FondosRoute,
   MineriaRoute: MineriaRoute,
   ApiPublicAutomationTickRoute: ApiPublicAutomationTickRoute,
+  ApiPublicMaintenanceRoute: ApiPublicMaintenanceRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

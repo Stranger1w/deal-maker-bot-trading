@@ -1,17 +1,21 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
+import { AlertsPanel } from "@/components/AlertsPanel";
 import { ComparisonCharts } from "@/components/ComparisonCharts";
+import { KillSwitchButton, KillSwitchStatus } from "@/components/KillSwitchButton";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusPill, statusTone } from "@/components/StatusPill";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { dateTime, money } from "@/lib/format";
 import {
+  alertsQuery,
   auditQuery,
   automationQuery,
   binanceQuery,
   botsQuery,
   fundsQuery,
+  reportsQuery,
   workersQuery,
 } from "@/lib/queries";
 
@@ -41,6 +45,8 @@ function Dashboard() {
   const audit = useQuery(auditQuery);
   const binance = useQuery(binanceQuery);
   const engine = useQuery(automationQuery);
+  const alerts = useQuery(alertsQuery);
+  const reports = useQuery(reportsQuery);
 
   const botList = bots.data ?? [];
   const workerList = workers.data ?? [];
@@ -49,6 +55,37 @@ function Dashboard() {
   const realBots = botList.filter((b) => b.mode === "real").length;
   const mining = workerList.filter((w) => w.status === "mining").length;
   const dailyMining = workerList.reduce((s, w) => s + Number(w.estimated_daily_earnings), 0);
+  const alertList = alerts.data ?? [];
+  const criticalAlerts = alertList.filter((a) => a.severity === "critical" && !a.acknowledged).length;
+  const stoppedByRisk = botList.filter((b) => b.auto_stop_reason).length;
+  const offlineWorkers = workerList.filter((w) => w.status === "offline").length;
+  const health: { label: string; ok: boolean; detail: string }[] = [
+    {
+      label: "Motor 24/7",
+      ok: !!engine.data?.engine_enabled && !engine.data.kill_switch,
+      detail: engine.data?.engine_status ?? "sin datos",
+    },
+    {
+      label: "Conexión Binance",
+      ok: binance.data?.connection_status === "ok",
+      detail: binance.data?.connection_status ?? "sin configurar",
+    },
+    {
+      label: "Riesgo del escuadrón",
+      ok: stoppedByRisk === 0,
+      detail: stoppedByRisk === 0 ? "sin paradas por límite" : `${stoppedByRisk} bots detenidos`,
+    },
+    {
+      label: "Enjambre de minería",
+      ok: offlineWorkers === 0,
+      detail: offlineWorkers === 0 ? "sin workers caídos" : `${offlineWorkers} offline`,
+    },
+    {
+      label: "Alertas críticas",
+      ok: criticalAlerts === 0,
+      detail: criticalAlerts === 0 ? "ninguna pendiente" : `${criticalAlerts} sin revisar`,
+    },
+  ];
 
   return (
     <div className="space-y-8">
@@ -126,6 +163,67 @@ function Dashboard() {
           </span>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex flex-wrap items-center justify-between gap-3 text-base">
+            Salud general y parada de emergencia
+            <KillSwitchButton />
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <KillSwitchStatus />
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+            {health.map((h) => (
+              <div
+                key={h.label}
+                className="rounded-md border border-border bg-secondary/40 px-3 py-2"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium">{h.label}</span>
+                  <StatusPill tone={h.ok ? "success" : "danger"}>{h.ok ? "ok" : "atención"}</StatusPill>
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">{h.detail}</p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <AlertsPanel title="Resumen de alertas" limit={6} />
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Reportes de performance</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {(reports.data ?? []).length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Aún no hay reportes generados. El cron diario y semanal los crea automáticamente.
+              </p>
+            )}
+            {(reports.data ?? []).slice(0, 5).map((r) => (
+              <div key={r.id} className="rounded-md border border-border bg-secondary/40 px-3 py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <span className="font-medium">
+                    {r.period === "daily" ? "Diario" : "Semanal"} ·{" "}
+                    {r.scope === "squad" ? "Escuadrón" : "Enjambre"}
+                  </span>
+                  <span className="tabular text-xs text-muted-foreground">
+                    {r.period_start} → {r.period_end}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">{r.summary}</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Email: {r.email_status === "no_configurado"
+                    ? "no configurado"
+                    : "pendiente de dominio de envío verificado"}
+                </p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
 
       <ComparisonCharts />
 

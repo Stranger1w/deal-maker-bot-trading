@@ -3,9 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Brain, Pause, Play, ScrollText, Settings2, Square } from "lucide-react";
+import { Brain, Pause, Play, ScrollText, Settings2, ShieldAlert, Square } from "lucide-react";
 
+import { AlertsPanel } from "@/components/AlertsPanel";
 import { PageHeader } from "@/components/PageHeader";
+import { SortableTable, type Column } from "@/components/SortableTable";
 import { StatusPill, statusTone } from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,8 +39,17 @@ import {
   setBotStatus,
   updateBotStrategy,
 } from "@/lib/dealmaker.functions";
+import { useSecuritySession } from "@/hooks/useSecuritySession";
+import {
+  evaluatePromotion,
+  promoteBotToReal,
+  saveBotRisk,
+  saveSquadRisk,
+  type PromotionCheck,
+} from "@/lib/risk.functions";
 import { dateTime, money, pct } from "@/lib/format";
 import {
+  automationQuery,
   botLogsQuery,
   botsQuery,
   sandboxesQuery,
@@ -88,6 +99,18 @@ function SquadPage() {
   );
 }
 
+function Criterion({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span
+      className={`rounded-md border px-2 py-1 ${
+        ok ? "border-success/40 bg-success/10 text-success" : "border-destructive/40 bg-destructive/10 text-destructive"
+      }`}
+    >
+      {ok ? "✓" : "✕"} {label}
+    </span>
+  );
+}
+
 /* ------------------------------ BOTS ------------------------------ */
 
 function SquadTab() {
@@ -99,6 +122,18 @@ function SquadTab() {
   const create = useServerFn(createBot);
   const edit = useServerFn(updateBotStrategy);
 
+  const settings = useQuery(automationQuery);
+  const session = useSecuritySession();
+  const saveRisk = useServerFn(saveBotRisk);
+  const saveSquad = useServerFn(saveSquadRisk);
+  const evaluate = useServerFn(evaluatePromotion);
+  const promote = useServerFn(promoteBotToReal);
+
+  const [view, setView] = useState<"cards" | "table">("cards");
+  const [search, setSearch] = useState("");
+  const [riskFor, setRiskFor] = useState<BotRow | null>(null);
+  const [check, setCheck] = useState<PromotionCheck | null>(null);
+  const [squadForm, setSquadForm] = useState<Record<string, string> | null>(null);
   const [groupBy, setGroupBy] = useState<"strategy" | "pair">("strategy");
   const [realTarget, setRealTarget] = useState<BotRow | null>(null);
   const [logsFor, setLogsFor] = useState<BotRow | null>(null);
@@ -130,7 +165,16 @@ function SquadTab() {
   };
 
   const toggleMode = async (bot: BotRow, toReal: boolean) => {
-    if (toReal) return setRealTarget(bot);
+    if (toReal) {
+      setRealTarget(bot);
+      setCheck(null);
+      try {
+        setCheck(await evaluate({ data: { botId: bot.id } }));
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "No se pudo validar el bot");
+      }
+      return;
+    }
     try {
       await mode({ data: { botId: bot.id, mode: "demo", confirmed: true } });
       toast.success(`${bot.name} vuelve a modo Demo`);
@@ -143,9 +187,10 @@ function SquadTab() {
   const confirmReal = async () => {
     if (!realTarget) return;
     try {
-      await mode({ data: { botId: realTarget.id, mode: "real", confirmed: true } });
+      await promote({ data: { botId: realTarget.id, confirmed: true } });
       toast.success(`${realTarget.name} operará con fondos reales vía Binance`);
       setRealTarget(null);
+      setCheck(null);
       refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo activar el modo Real");
@@ -193,8 +238,170 @@ function SquadTab() {
     }
   };
 
+  const submitRisk = async () => {
+    if (!riskFor) return;
+    try {
+      await saveRisk({
+        data: {
+          botId: riskFor.id,
+          automationEnabled: riskFor.automation_enabled,
+          stopLossPct: Number(riskFor.stop_loss_pct) || 0,
+          takeProfitPct: Number(riskFor.take_profit_pct) || 0,
+          maxDailyLoss: Number(riskFor.max_daily_loss) || 0,
+          maxDrawdownPct: Number(riskFor.max_drawdown_pct) || 0,
+          maxWeeklyDrawdownPct: Number(riskFor.max_weekly_drawdown_pct) || 0,
+          maxCapital: Number(riskFor.max_capital) || 0,
+          maxTradesPerDay: Number(riskFor.max_trades_per_day) || 0,
+        },
+      });
+      toast.success("Riesgo del bot actualizado");
+      setRiskFor(null);
+      refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar el riesgo");
+    }
+  };
+
+  const squadValues = squadForm ?? {
+    globalMaxDailyLoss: String(settings.data?.global_max_daily_loss ?? 500),
+    globalMaxDrawdownPct: String(settings.data?.global_max_drawdown_pct ?? 15),
+    globalMaxWeeklyDrawdownPct: String(settings.data?.global_max_weekly_drawdown_pct ?? 25),
+    globalMaxCapital: String(settings.data?.global_max_capital ?? 50000),
+    maxPairConcentrationPct: String(settings.data?.max_pair_concentration_pct ?? 40),
+    minDemoDays: String(settings.data?.min_demo_days ?? 14),
+    minDemoTrades: String(settings.data?.min_demo_trades ?? 50),
+  };
+
+  const submitSquad = async () => {
+    try {
+      await saveSquad({
+        data: {
+          globalMaxDailyLoss: Number(squadValues['globalMaxDailyLoss']) || 0,
+          globalMaxDrawdownPct: Number(squadValues['globalMaxDrawdownPct']) || 0,
+          globalMaxWeeklyDrawdownPct: Number(squadValues['globalMaxWeeklyDrawdownPct']) || 0,
+          globalMaxCapital: Number(squadValues['globalMaxCapital']) || 0,
+          maxPairConcentrationPct: Number(squadValues['maxPairConcentrationPct']) || 1,
+          minDemoDays: Number(squadValues['minDemoDays']) || 0,
+          minDemoTrades: Number(squadValues['minDemoTrades']) || 0,
+          requireBenchmarkOutperformance:
+            settings.data?.require_benchmark_outperformance !== false,
+        },
+      });
+      toast.success("Límites del escuadrón actualizados");
+      void qc.invalidateQueries({ queryKey: ["automation_settings"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudieron guardar los límites");
+    }
+  };
+
+  const allBots = bots.data ?? [];
+  const term = search.trim().toLowerCase();
+  const filteredBots = term
+    ? allBots.filter((b) =>
+        [b.name, b.strategy, b.pair, b.status, b.mode, b.exchange].join(" ").toLowerCase().includes(term),
+      )
+    : allBots;
+
+  const squadCapital = allBots.reduce((s, b) => s + Number(b.capital), 0);
+  const concentration = allBots.reduce<Record<string, number>>((acc, b) => {
+    acc[b.pair] = (acc[b.pair] ?? 0) + Number(b.capital);
+    return acc;
+  }, {});
+  const topPair = Object.entries(concentration).sort((a, b) => b[1] - a[1])[0];
+  const topPairPct = topPair && squadCapital > 0 ? (topPair[1] / squadCapital) * 100 : 0;
+
+  const botColumns: Column<BotRow>[] = [
+    { key: "name", label: "Bot", value: (b) => b.name, render: (b) => (
+      <div>
+        <p className="font-medium">{b.name}</p>
+        <p className="text-xs text-muted-foreground">{b.strategy} · {b.pair}</p>
+      </div>
+    ) },
+    { key: "status", label: "Estado", value: (b) => b.status, render: (b) => (
+      <div className="space-y-1">
+        <StatusPill tone={statusTone(b.status)}>{b.status}</StatusPill>
+        {b.auto_stop_reason && (
+          <p className="text-[11px] text-destructive">{b.auto_stop_reason}</p>
+        )}
+      </div>
+    ) },
+    { key: "pnl", label: "P&L", align: "right", value: (b) => Number(b.pnl), render: (b) => (
+      <span className={Number(b.pnl) >= 0 ? "text-success" : "text-destructive"}>
+        {money(Number(b.pnl))}
+      </span>
+    ) },
+    { key: "mode", label: "Modo", value: (b) => b.mode, render: (b) => (
+      <StatusPill tone={b.mode === "real" ? "danger" : "neutral"}>{b.mode}</StatusPill>
+    ) },
+    { key: "exchange", label: "Exchange", value: (b) => b.exchange, render: (b) => b.exchange },
+    { key: "capital", label: "Capital", align: "right", value: (b) => Number(b.capital), render: (b) => money(Number(b.capital)) },
+    { key: "risk", label: "SL / TP", align: "right", value: (b) => Number(b.stop_loss_pct), render: (b) => (
+      <span className={Number(b.stop_loss_pct) > 0 && Number(b.take_profit_pct) > 0 ? "" : "text-warning"}>
+        {Number(b.stop_loss_pct)}% / {Number(b.take_profit_pct)}%
+      </span>
+    ) },
+    { key: "actions", label: "Acciones", render: (b) => (
+      <div className="flex flex-wrap gap-1">
+        <Button size="sm" variant="secondary" onClick={() => act(b, "running")} aria-label={`Iniciar ${b.name}`}>
+          <Play className="size-3.5" />
+        </Button>
+        <Button size="sm" variant="secondary" onClick={() => act(b, "paused")} aria-label={`Pausar ${b.name}`}>
+          <Pause className="size-3.5" />
+        </Button>
+        <Button size="sm" variant="secondary" onClick={() => act(b, "stopped")} aria-label={`Detener ${b.name}`}>
+          <Square className="size-3.5" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setRiskFor(b)} aria-label={`Riesgo de ${b.name}`}>
+          <ShieldAlert className="size-3.5" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setLogsFor(b)} aria-label={`Logs de ${b.name}`}>
+          <ScrollText className="size-3.5" />
+        </Button>
+      </div>
+    ) },
+  ];
+
   return (
     <div className="space-y-6">
+      <AlertsPanel title="Alertas del escuadrón" category={["risk", "bot", "engine", "binance", "security"]} limit={5} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Riesgo global del escuadrón</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-4">
+            {[
+              ["globalMaxDailyLoss", "Pérdida diaria máx. (USDT)"],
+              ["globalMaxDrawdownPct", "Drawdown diario máx. (%)"],
+              ["globalMaxWeeklyDrawdownPct", "Drawdown semanal máx. (%)"],
+              ["globalMaxCapital", "Tope de capital global (USDT)"],
+              ["maxPairConcentrationPct", "Concentración máx. por par (%)"],
+              ["minDemoDays", "Días mínimos en demo"],
+              ["minDemoTrades", "Operaciones demo mínimas"],
+            ].map(([key, label]) => (
+              <div key={key} className="space-y-1.5">
+                <Label>{label}</Label>
+                <Input
+                  inputMode="decimal"
+                  value={squadValues[key as string] ?? ""}
+                  onChange={(e) => setSquadForm({ ...squadValues, [key as string]: e.target.value })}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            <span>Capital asignado: {money(squadCapital)}</span>
+            {topPair && (
+              <span className={topPairPct > Number(settings.data?.max_pair_concentration_pct ?? 40) ? "text-destructive" : ""}>
+                Mayor concentración: {topPair[0]} {topPairPct.toFixed(1)}%
+              </span>
+            )}
+          </div>
+          <Button onClick={submitSquad}>Guardar límites del escuadrón</Button>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Alta rápida</CardTitle>
@@ -239,7 +446,23 @@ function SquadTab() {
         </CardContent>
       </Card>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <Label className="text-muted-foreground">Vista</Label>
+        <Select value={view} onValueChange={(v) => setView(v as "cards" | "table")}>
+          <SelectTrigger className="w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="cards">Tarjetas</SelectItem>
+            <SelectItem value="table">Tabla ordenable</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar bot, estrategia o par"
+          className="max-w-xs"
+        />
         <Label className="text-muted-foreground">Agrupar por</Label>
         <Select value={groupBy} onValueChange={(v) => setGroupBy(v as "strategy" | "pair")}>
           <SelectTrigger className="w-48">
@@ -252,7 +475,17 @@ function SquadTab() {
         </Select>
       </div>
 
-      {groups.map(([key, list]) => {
+      {view === "table" && (
+        <SortableTable
+          rows={filteredBots}
+          rowKey={(b) => b.id}
+          initialSort={{ key: "pnl", dir: "desc" }}
+          columns={botColumns}
+          empty="Sin bots en el escuadrón."
+        />
+      )}
+
+      {view === "cards" && groups.map(([key, list]) => {
         const pnl = list.reduce((s, b) => s + Number(b.pnl), 0);
         const capital = list.reduce((s, b) => s + Number(b.capital), 0);
         const winRate = list.reduce((s, b) => s + Number(b.win_rate), 0) / (list.length || 1);
@@ -315,6 +548,9 @@ function SquadTab() {
                       <Button size="sm" variant="secondary" onClick={() => act(bot, "stopped")}>
                         <Square className="size-3.5" /> Detener
                       </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setRiskFor(bot)}>
+                        <ShieldAlert className="size-3.5" /> Riesgo
+                      </Button>
                       <Button size="sm" variant="ghost" onClick={() => setEditing(bot)}>
                         <Settings2 className="size-3.5" /> Estrategia
                       </Button>
@@ -330,21 +566,123 @@ function SquadTab() {
         );
       })}
 
-      <Dialog open={!!realTarget} onOpenChange={(open) => !open && setRealTarget(null)}>
+      <Dialog
+        open={!!realTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRealTarget(null);
+            setCheck(null);
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Cambiar a modo REAL</DialogTitle>
             <DialogDescription>
-              {realTarget?.name} pasará a operar con fondos reales de tu cuenta a través de Binance,
-              usando las API Keys verificadas. El cambio queda registrado en la auditoría y el bot se
-              deja en pausa para que revises la estrategia antes de iniciarlo.
+              {realTarget?.name} pasaría a operar con fondos reales vía Binance. Se validan los
+              criterios demo, el benchmark buy-and-hold del mismo activo y la 2FA de tu sesión.
             </DialogDescription>
           </DialogHeader>
+
+          <div className="space-y-2 text-sm">
+            {!check && <p className="text-muted-foreground">Validando criterios…</p>}
+            {check && (
+              <>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <Criterion ok={check.hasStopLoss} label="Stop-loss configurado" />
+                  <Criterion ok={check.hasTakeProfit} label="Take-profit configurado" />
+                  <Criterion
+                    ok={check.demoDays >= check.minDemoDays}
+                    label={`Días en demo ${check.demoDays}/${check.minDemoDays}`}
+                  />
+                  <Criterion
+                    ok={check.demoTrades >= check.minDemoTrades}
+                    label={`Operaciones demo ${check.demoTrades}/${check.minDemoTrades}`}
+                  />
+                  <Criterion
+                    ok={!check.benchmarkRequired || check.botReturnPct > check.benchmarkReturnPct}
+                    label={`Bot ${check.botReturnPct}% vs buy-and-hold ${check.benchmarkReturnPct}%`}
+                  />
+                  <Criterion ok={check.binanceVerified} label="Binance verificado" />
+                  <Criterion ok={session.twoFactorVerified} label="2FA verificada en la sesión" />
+                </div>
+                {check.reasons.length > 0 && (
+                  <ul className="list-disc space-y-1 pl-5 text-xs text-destructive">
+                    {check.reasons.map((r) => (
+                      <li key={r}>{r}</li>
+                    ))}
+                  </ul>
+                )}
+                {!session.twoFactorVerified && (
+                  <p className="text-xs text-warning">
+                    Verifica tu segundo factor en “Acceso y 2FA”: sin ello el backend rechaza el
+                    cambio a Real.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+
           <DialogFooter>
             <Button variant="secondary" onClick={() => setRealTarget(null)}>
               Cancelar
             </Button>
-            <Button onClick={confirmReal}>Sí, usar fondos reales</Button>
+            <Button
+              onClick={confirmReal}
+              disabled={!check?.ok || !session.twoFactorVerified}
+              variant="destructive"
+            >
+              Sí, usar fondos reales
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!riskFor} onOpenChange={(open) => !open && setRiskFor(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Riesgo · {riskFor?.name}</DialogTitle>
+            <DialogDescription>
+              Stop-loss y take-profit son obligatorios para operar en Real. Al superar cualquier
+              límite el bot se pausa automáticamente, se cancela el ciclo antes de abrir órdenes y se
+              registra auditoría y alerta.
+            </DialogDescription>
+          </DialogHeader>
+          {riskFor && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {([
+                ["stop_loss_pct", "Stop-loss por operación (%)"],
+                ["take_profit_pct", "Take-profit por operación (%)"],
+                ["max_daily_loss", "Pérdida diaria máx. (USDT)"],
+                ["max_drawdown_pct", "Drawdown diario máx. (%)"],
+                ["max_weekly_drawdown_pct", "Drawdown semanal máx. (%)"],
+                ["max_capital", "Tope de capital (USDT)"],
+                ["max_trades_per_day", "Máx. operaciones/día"],
+              ] as const).map(([key, label]) => (
+                <div key={key} className="space-y-1.5">
+                  <Label>{label}</Label>
+                  <Input
+                    inputMode="decimal"
+                    value={String(riskFor[key] ?? "")}
+                    onChange={(e) => setRiskFor({ ...riskFor, [key]: Number(e.target.value) })}
+                  />
+                </div>
+              ))}
+              <div className="flex items-center justify-between rounded-md border border-border px-3 py-2 sm:col-span-2">
+                <span className="text-sm">Automatización 24/7 para este bot</span>
+                <Switch
+                  checked={riskFor.automation_enabled}
+                  onCheckedChange={(v) => setRiskFor({ ...riskFor, automation_enabled: v })}
+                  aria-label="Activar automatización del bot"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setRiskFor(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={submitRisk}>Guardar riesgo</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

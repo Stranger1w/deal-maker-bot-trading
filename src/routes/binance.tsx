@@ -104,6 +104,25 @@ function BinancePage() {
         subtitle="Todo el trading real se ejecuta vía Binance. El secreto se cifra en reposo, nunca se expone al navegador ni se escribe en logs; solo el backend lo descifra para firmar solicitudes."
       />
 
+      <Card className="border-warning/40 bg-warning/5">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Checklist obligatorio antes de guardar o probar</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+            <li>Activa solo lectura y trading. Nunca habilites el permiso de retiro.</li>
+            <li>
+              Restringe la clave por <strong>whitelist de IP</strong> a las direcciones de salida de
+              tu despliegue en la nube.
+            </li>
+            <li>Usa una subcuenta o capital limitado mientras validas el motor.</li>
+            <li>Guarda solo configuración no sensible aquí: el secreto se cifra en reposo.</li>
+          </ul>
+        </CardContent>
+      </Card>
+
+
+
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <Card>
           <CardHeader>

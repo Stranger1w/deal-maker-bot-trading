@@ -11,10 +11,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AlertsPanel } from "@/components/AlertsPanel";
+import { SortableTable, type Column } from "@/components/SortableTable";
 import { createWorker, setWorkerStatus } from "@/lib/dealmaker.functions";
 import { dateTime, money, uptime } from "@/lib/format";
-import { payoutsQuery, workersQuery } from "@/lib/queries";
+import { payoutsQuery, workersQuery, type Payout, type Worker } from "@/lib/queries";
 
 export const Route = createFileRoute("/mineria")({
   head: () => ({
@@ -43,6 +44,7 @@ function MiningPage() {
   const create = useServerFn(createWorker);
 
   const [form, setForm] = useState({ name: "", coin: "BTC", pool: "", rigId: "" });
+  const [search, setSearch] = useState("");
 
   const refresh = () => void qc.invalidateQueries({ queryKey: ["mining_workers"] });
 
@@ -78,6 +80,57 @@ function MiningPage() {
       toast.error(e instanceof Error ? e.message : "No se pudo añadir el worker");
     }
   };
+
+  const term = search.trim().toLowerCase();
+  const filtered = term
+    ? list.filter((w) =>
+        [w.name, w.coin, w.pool, w.rig_id, w.status].join(" ").toLowerCase().includes(term),
+      )
+    : list;
+
+  const workerColumns: Column<Worker>[] = [
+    { key: "name", label: "Worker", value: (w) => w.name, render: (w) => (
+      <div>
+        <p className="font-medium">{w.name}</p>
+        <p className="text-xs text-muted-foreground">{w.rig_id}</p>
+      </div>
+    ) },
+    { key: "status", label: "Estado", value: (w) => w.status, render: (w) => (
+      <StatusPill tone={statusTone(w.status)}>
+        {w.status === "mining" ? "minando" : w.status === "idle" ? "inactivo" : "offline"}
+      </StatusPill>
+    ) },
+    { key: "hash", label: "Hash rate", align: "right", value: (w) => Number(w.hash_rate), render: (w) => `${Number(w.hash_rate).toFixed(2)} ${w.hash_unit}` },
+    { key: "coin", label: "Moneda", value: (w) => w.coin, render: (w) => w.coin },
+    { key: "pool", label: "Pool", value: (w) => w.pool, render: (w) => w.pool },
+    { key: "uptime", label: "Uptime", align: "right", value: (w) => Number(w.uptime_seconds), render: (w) => uptime(Number(w.uptime_seconds)) },
+    { key: "earnings", label: "Est./día", align: "right", value: (w) => Number(w.estimated_daily_earnings), render: (w) => (
+      <span className="text-success">{money(Number(w.estimated_daily_earnings), "USD")}</span>
+    ) },
+    { key: "actions", label: "Acciones", render: (w) => (
+      <div className="flex gap-1">
+        <Button size="sm" variant="secondary" onClick={() => act("start", w.id)} aria-label={`Iniciar ${w.name}`}>
+          <Play className="size-3.5" />
+        </Button>
+        <Button size="sm" variant="secondary" onClick={() => act("stop", w.id)} aria-label={`Detener ${w.name}`}>
+          <Square className="size-3.5" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => act("restart", w.id)} aria-label={`Reiniciar ${w.name}`}>
+          <RotateCcw className="size-3.5" />
+        </Button>
+      </div>
+    ) },
+  ];
+
+  const payoutColumns: Column<Payout>[] = [
+    { key: "paid_at", label: "Fecha", value: (p) => new Date(p.paid_at).getTime(), render: (p) => (
+      <span className="tabular text-xs">{dateTime(p.paid_at)}</span>
+    ) },
+    { key: "coin", label: "Moneda", value: (p) => p.coin, render: (p) => <span className="font-medium">{p.coin}</span> },
+    { key: "pool", label: "Pool", value: (p) => p.pool, render: (p) => p.pool },
+    { key: "amount", label: "Cantidad", align: "right", value: (p) => Number(p.amount), render: (p) => Number(p.amount) },
+    { key: "usd", label: "Valor USD", align: "right", value: (p) => Number(p.usd_value), render: (p) => money(Number(p.usd_value), "USD") },
+  ];
 
   return (
     <div className="space-y-8">
@@ -215,35 +268,43 @@ function MiningPage() {
         ))}
       </div>
 
+      <AlertsPanel title="Salud y alertas del enjambre" category={["mining", "security"]} limit={5} />
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex flex-wrap items-center justify-between gap-3">
+            Workers (vista de tabla)
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar worker, moneda, pool o rig"
+              className="max-w-xs"
+            />
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SortableTable
+            rows={filtered}
+            rowKey={(w) => w.id}
+            initialSort={{ key: "hash", dir: "desc" }}
+            columns={workerColumns}
+            empty="Sin workers en el enjambre."
+          />
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Historial de pagos</CardTitle>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Moneda</TableHead>
-                <TableHead>Pool</TableHead>
-                <TableHead className="text-right">Cantidad</TableHead>
-                <TableHead className="text-right">Valor USD</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(payouts.data ?? []).map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="tabular text-xs">{dateTime(p.paid_at)}</TableCell>
-                  <TableCell className="font-medium">{p.coin}</TableCell>
-                  <TableCell>{p.pool}</TableCell>
-                  <TableCell className="tabular text-right">{Number(p.amount)}</TableCell>
-                  <TableCell className="tabular text-right">
-                    {money(Number(p.usd_value), "USD")}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <CardContent>
+          <SortableTable
+            rows={payouts.data ?? []}
+            rowKey={(p) => p.id}
+            initialSort={{ key: "paid_at", dir: "desc" }}
+            columns={payoutColumns}
+            empty="Sin pagos registrados."
+          />
         </CardContent>
       </Card>
     </div>
