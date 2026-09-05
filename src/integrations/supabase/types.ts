@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      alerts: {
+        Row: {
+          acknowledged: boolean
+          category: string
+          created_at: string
+          delivery_status: string
+          entity: string | null
+          entity_id: string | null
+          id: string
+          is_demo: boolean
+          message: string
+          severity: string
+          title: string
+        }
+        Insert: {
+          acknowledged?: boolean
+          category: string
+          created_at?: string
+          delivery_status?: string
+          entity?: string | null
+          entity_id?: string | null
+          id?: string
+          is_demo?: boolean
+          message: string
+          severity?: string
+          title: string
+        }
+        Update: {
+          acknowledged?: boolean
+          category?: string
+          created_at?: string
+          delivery_status?: string
+          entity?: string | null
+          entity_id?: string | null
+          id?: string
+          is_demo?: boolean
+          message?: string
+          severity?: string
+          title?: string
+        }
+        Relationships: []
+      }
       audit_events: {
         Row: {
           action: string
@@ -49,12 +91,28 @@ export type Database = {
           allow_real_trading: boolean
           engine_enabled: boolean
           engine_status: string
+          global_max_capital: number
           global_max_daily_loss: number
           global_max_drawdown_pct: number
+          global_max_weekly_drawdown_pct: number
+          global_weekly_loss: number
           id: string
           kill_switch: boolean
+          kill_switch_actor: string | null
+          kill_switch_at: string | null
+          kill_switch_reason: string | null
           last_error: string | null
           last_heartbeat_at: string | null
+          last_profit_sweep_on: string | null
+          max_pair_concentration_pct: number
+          min_demo_days: number
+          min_demo_trades: number
+          notify_email: string | null
+          notify_email_enabled: boolean
+          profit_policy: string
+          profit_reserve_pct: number
+          require_benchmark_outperformance: boolean
+          risk_week: string
           tick_interval_seconds: number
           updated_at: string
         }
@@ -62,12 +120,28 @@ export type Database = {
           allow_real_trading?: boolean
           engine_enabled?: boolean
           engine_status?: string
+          global_max_capital?: number
           global_max_daily_loss?: number
           global_max_drawdown_pct?: number
+          global_max_weekly_drawdown_pct?: number
+          global_weekly_loss?: number
           id?: string
           kill_switch?: boolean
+          kill_switch_actor?: string | null
+          kill_switch_at?: string | null
+          kill_switch_reason?: string | null
           last_error?: string | null
           last_heartbeat_at?: string | null
+          last_profit_sweep_on?: string | null
+          max_pair_concentration_pct?: number
+          min_demo_days?: number
+          min_demo_trades?: number
+          notify_email?: string | null
+          notify_email_enabled?: boolean
+          profit_policy?: string
+          profit_reserve_pct?: number
+          require_benchmark_outperformance?: boolean
+          risk_week?: string
           tick_interval_seconds?: number
           updated_at?: string
         }
@@ -75,12 +149,28 @@ export type Database = {
           allow_real_trading?: boolean
           engine_enabled?: boolean
           engine_status?: string
+          global_max_capital?: number
           global_max_daily_loss?: number
           global_max_drawdown_pct?: number
+          global_max_weekly_drawdown_pct?: number
+          global_weekly_loss?: number
           id?: string
           kill_switch?: boolean
+          kill_switch_actor?: string | null
+          kill_switch_at?: string | null
+          kill_switch_reason?: string | null
           last_error?: string | null
           last_heartbeat_at?: string | null
+          last_profit_sweep_on?: string | null
+          max_pair_concentration_pct?: number
+          min_demo_days?: number
+          min_demo_trades?: number
+          notify_email?: string | null
+          notify_email_enabled?: boolean
+          profit_policy?: string
+          profit_reserve_pct?: number
+          require_benchmark_outperformance?: boolean
+          risk_week?: string
           tick_interval_seconds?: number
           updated_at?: string
         }
@@ -265,6 +355,8 @@ export type Database = {
           created_at: string
           daily_loss: number
           demo_engine: string
+          demo_since: string
+          demo_trades: number
           exchange: string
           id: string
           last_tick_at: string | null
@@ -272,17 +364,21 @@ export type Database = {
           max_daily_loss: number
           max_drawdown_pct: number
           max_trades_per_day: number
+          max_weekly_drawdown_pct: number
           mode: string
           name: string
           pair: string
           peak_pnl: number
           pnl: number
           risk_day: string
+          risk_week: string
           status: string
           stop_loss_pct: number
           strategy: string
+          take_profit_pct: number
           trades_today: number
           updated_at: string
+          weekly_loss: number
           win_rate: number
         }
         Insert: {
@@ -292,6 +388,8 @@ export type Database = {
           created_at?: string
           daily_loss?: number
           demo_engine?: string
+          demo_since?: string
+          demo_trades?: number
           exchange?: string
           id?: string
           last_tick_at?: string | null
@@ -299,17 +397,21 @@ export type Database = {
           max_daily_loss?: number
           max_drawdown_pct?: number
           max_trades_per_day?: number
+          max_weekly_drawdown_pct?: number
           mode?: string
           name: string
           pair: string
           peak_pnl?: number
           pnl?: number
           risk_day?: string
+          risk_week?: string
           status?: string
           stop_loss_pct?: number
           strategy: string
+          take_profit_pct?: number
           trades_today?: number
           updated_at?: string
+          weekly_loss?: number
           win_rate?: number
         }
         Update: {
@@ -319,6 +421,8 @@ export type Database = {
           created_at?: string
           daily_loss?: number
           demo_engine?: string
+          demo_since?: string
+          demo_trades?: number
           exchange?: string
           id?: string
           last_tick_at?: string | null
@@ -326,17 +430,21 @@ export type Database = {
           max_daily_loss?: number
           max_drawdown_pct?: number
           max_trades_per_day?: number
+          max_weekly_drawdown_pct?: number
           mode?: string
           name?: string
           pair?: string
           peak_pnl?: number
           pnl?: number
           risk_day?: string
+          risk_week?: string
           status?: string
           stop_loss_pct?: number
           strategy?: string
+          take_profit_pct?: number
           trades_today?: number
           updated_at?: string
+          weekly_loss?: number
           win_rate?: number
         }
         Relationships: []
@@ -591,6 +699,45 @@ export type Database = {
           status?: string
           updated_at?: string
           uptime_seconds?: number
+        }
+        Relationships: []
+      }
+      performance_reports: {
+        Row: {
+          created_at: string
+          email_status: string
+          id: string
+          is_demo: boolean
+          metrics: Json
+          period: string
+          period_end: string
+          period_start: string
+          scope: string
+          summary: string
+        }
+        Insert: {
+          created_at?: string
+          email_status?: string
+          id?: string
+          is_demo?: boolean
+          metrics?: Json
+          period: string
+          period_end: string
+          period_start: string
+          scope: string
+          summary?: string
+        }
+        Update: {
+          created_at?: string
+          email_status?: string
+          id?: string
+          is_demo?: boolean
+          metrics?: Json
+          period?: string
+          period_end?: string
+          period_start?: string
+          scope?: string
+          summary?: string
         }
         Relationships: []
       }
