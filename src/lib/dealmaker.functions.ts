@@ -70,6 +70,20 @@ export const createWithdrawal = createServerFn({ method: "POST" })
     );
   });
 
+/* ------------------------------- BINANCE ------------------------------ */
+
+async function binancePing(apiKey: string, apiSecret: string) {
+  const { signBinanceQuery } = await import("./crypto.server");
+  const query = `timestamp=${Date.now()}&recvWindow=5000`;
+  const signature = await signBinanceQuery(query, apiSecret);
+  const res = await fetch(`https://api.binance.com/api/v3/account?${query}&signature=${signature}`, {
+    headers: { "X-MBX-APIKEY": apiKey },
+  });
+  if (res.ok) return { ok: true as const, message: "Conexión de solo lectura verificada" };
+  const body = (await res.json().catch(() => ({}))) as { msg?: string };
+  return { ok: false as const, message: body.msg ?? `Binance respondió ${res.status}` };
+}
+
 export const testBinanceConnection = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
     z.object({ apiKey: z.string().min(8), apiSecret: z.string().min(8) }).parse(input),
