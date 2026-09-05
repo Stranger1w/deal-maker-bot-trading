@@ -169,7 +169,9 @@ export const botsQuery = queryOptions({
     unwrap<Bot[]>(
       await supabase
         .from("bots")
-        .select("id,name,strategy,pair,capital,status,mode,demo_engine,exchange,pnl,win_rate")
+        .select(
+          "id,name,strategy,pair,capital,status,mode,demo_engine,exchange,pnl,win_rate,automation_enabled,stop_loss_pct,take_profit_pct,max_daily_loss,max_drawdown_pct,max_weekly_drawdown_pct,max_capital,max_trades_per_day,trades_today,daily_loss,weekly_loss,demo_since,demo_trades,auto_stop_reason",
+        )
         .order("created_at", { ascending: true }),
     ),
 });
