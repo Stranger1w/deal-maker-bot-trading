@@ -262,6 +262,14 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           continue;
         }
 
+        // Restricción geográfica: el bot Real se pausa de forma segura (sin abrir posiciones).
+        if (bot.mode === "real" && geoRestricted) {
+          await stopBot(db, bot.id, bot.name, "binance_restriccion_geografica", {
+            code: "binance_geo_restricted",
+          });
+          continue;
+        }
+
         // Trading real bloqueado por defecto
         if (bot.mode === "real" && !realAllowed) {
           await log(
@@ -272,6 +280,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           );
           continue;
         }
+
 
         // Límite de capital asignado
         if (Number(bot.capital) > Number(bot.max_capital)) {
