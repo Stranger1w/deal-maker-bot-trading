@@ -155,10 +155,14 @@ export const saveBinanceCredentials = createServerFn({ method: "POST" })
       api_key_cipher: await encryptSecret(apiKey),
       api_secret_cipher: await encryptSecret(apiSecret),
       market_mode: data.marketMode,
-      connection_status: test.ok ? "ok" : "failed",
+      connection_status: test.ok ? "ok" : test.restricted ? "geo_restricted" : "failed",
+      geo_restricted: test.restricted,
+      last_error_code: test.ok ? null : test.code,
+      last_error_message: test.ok ? null : test.message,
       last_tested_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+
     const { data: existing } = await db.from("binance_credentials").select("id").limit(1);
     if (existing && existing.length > 0 && existing[0]) {
       const { error } = await db
