@@ -54,69 +54,21 @@ export const createDeposit = createServerFn({ method: "POST" })
     return { ok: true, reference };
   });
 
+// Flujo antiguo sin 2FA: deshabilitado. Usa createSecureWithdrawal (risk.functions.ts).
 export const createWithdrawal = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
     z
       .object({
         amount: z.number().positive(),
         method: z.enum(["transfer", "wallet", "onchain"]),
-        twoFactorCode: z.string().optional(),
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async () => {
     throw new Error(
       "Los retiros exigen sesión autenticada con 2FA verificada. Usa el flujo protegido de Fondos.",
     );
-    // eslint-disable-next-line no-unreachable
-    const db = await admin();
-    const { data: account, error: accErr } = await db
-      .from("fund_accounts")
-      .select("available_balance")
-      .eq("id", ACCOUNT_ID)
-      .single();
-    if (accErr || !account) throw new Error("No se pudo leer la cuenta de fondos");
-    if (data.amount > Number(account.available_balance)) {
-      throw new Error("Saldo disponible insuficiente para este retiro");
-    }
-    const reference = `WD-${Date.now().toString().slice(-6)}`;
-    const { error } = await db.from("fund_transactions").insert({
-      account_id: ACCOUNT_ID,
-      kind: "withdrawal",
-      method: data.method,
-      amount: data.amount,
-      status: "pending",
-      reference,
-    });
-    if (error) throw new Error(error.message);
-    await db
-      .from("fund_accounts")
-      .update({
-        available_balance: Number(account.available_balance) - data.amount,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", ACCOUNT_ID);
-    await audit("withdrawal.created", "fund_transaction", reference, {
-      amount: data.amount,
-      method: data.method,
-      two_factor: data.twoFactorCode ? "provided" : "pending_setup",
-    });
-    return { ok: true, reference };
   });
-
-/* ------------------------------- BINANCE ------------------------------ */
-
-async function binancePing(apiKey: string, apiSecret: string) {
-  const { signBinanceQuery } = await import("./crypto.server");
-  const query = `timestamp=${Date.now()}&recvWindow=5000`;
-  const signature = await signBinanceQuery(query, apiSecret);
-  const res = await fetch(`https://api.binance.com/api/v3/account?${query}&signature=${signature}`, {
-    headers: { "X-MBX-APIKEY": apiKey },
-  });
-  if (res.ok) return { ok: true as const, message: "Conexión de solo lectura verificada" };
-  const body = (await res.json().catch(() => ({}))) as { msg?: string };
-  return { ok: false as const, message: body.msg ?? `Binance respondió ${res.status}` };
-}
 
 export const testBinanceConnection = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
@@ -250,17 +202,12 @@ export const setBotMode = createServerFn({ method: "POST" })
     z
       .object({
         botId: z.string().uuid(),
-        mode: z.enum(["demo", "real"]),
+        mode: z.literal("demo"),
         confirmed: z.boolean(),
       })
       .parse(input),
   )
   .handler(async ({ data }) => {
-    if (data.mode === "real") {
-      throw new Error(
-        "El paso Demo→Real exige validación de criterios y 2FA verificada: usa el flujo protegido del Escuadrón.",
-      );
-    }
     if (data.mode === "real" && !data.confirmed) {
       throw new Error("Se requiere confirmación explícita para operar en Real");
     }
