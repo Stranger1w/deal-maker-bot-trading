@@ -64,7 +64,10 @@ export const createWithdrawal = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({
+    throw new Error(
+      "Los retiros exigen sesión autenticada con 2FA verificada. Usa el flujo protegido de Fondos.",
+    ); data }) => {
     const db = await admin();
     const { data: account, error: accErr } = await db
       .from("fund_accounts")
@@ -251,7 +254,12 @@ export const setBotMode = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({
+    if (data.mode === "real") {
+      throw new Error(
+        "El paso Demo→Real exige validación de criterios y 2FA verificada: usa el flujo protegido del Escuadrón.",
+      );
+    } data }) => {
     if (data.mode === "real" && !data.confirmed) {
       throw new Error("Se requiere confirmación explícita para operar en Real");
     }
