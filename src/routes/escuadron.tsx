@@ -5,7 +5,9 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Brain, Pause, Play, ScrollText, Settings2, Square } from "lucide-react";
 
+import { AlertsPanel } from "@/components/AlertsPanel";
 import { PageHeader } from "@/components/PageHeader";
+import { SortableTable, type Column } from "@/components/SortableTable";
 import { StatusPill, statusTone } from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,8 +39,17 @@ import {
   setBotStatus,
   updateBotStrategy,
 } from "@/lib/dealmaker.functions";
+import { useSecuritySession } from "@/hooks/useSecuritySession";
+import {
+  evaluatePromotion,
+  promoteBotToReal,
+  saveBotRisk,
+  saveSquadRisk,
+  type PromotionCheck,
+} from "@/lib/risk.functions";
 import { dateTime, money, pct } from "@/lib/format";
 import {
+  automationQuery,
   botLogsQuery,
   botsQuery,
   sandboxesQuery,
@@ -99,6 +110,18 @@ function SquadTab() {
   const create = useServerFn(createBot);
   const edit = useServerFn(updateBotStrategy);
 
+  const settings = useQuery(automationQuery);
+  const session = useSecuritySession();
+  const saveRisk = useServerFn(saveBotRisk);
+  const saveSquad = useServerFn(saveSquadRisk);
+  const evaluate = useServerFn(evaluatePromotion);
+  const promote = useServerFn(promoteBotToReal);
+
+  const [view, setView] = useState<"cards" | "table">("cards");
+  const [search, setSearch] = useState("");
+  const [riskFor, setRiskFor] = useState<BotRow | null>(null);
+  const [check, setCheck] = useState<PromotionCheck | null>(null);
+  const [squadForm, setSquadForm] = useState<Record<string, string> | null>(null);
   const [groupBy, setGroupBy] = useState<"strategy" | "pair">("strategy");
   const [realTarget, setRealTarget] = useState<BotRow | null>(null);
   const [logsFor, setLogsFor] = useState<BotRow | null>(null);
@@ -130,7 +153,16 @@ function SquadTab() {
   };
 
   const toggleMode = async (bot: BotRow, toReal: boolean) => {
-    if (toReal) return setRealTarget(bot);
+    if (toReal) {
+      setRealTarget(bot);
+      setCheck(null);
+      try {
+        setCheck(await evaluate({ data: { botId: bot.id } }));
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "No se pudo validar el bot");
+      }
+      return;
+    }
     try {
       await mode({ data: { botId: bot.id, mode: "demo", confirmed: true } });
       toast.success(`${bot.name} vuelve a modo Demo`);
@@ -143,9 +175,10 @@ function SquadTab() {
   const confirmReal = async () => {
     if (!realTarget) return;
     try {
-      await mode({ data: { botId: realTarget.id, mode: "real", confirmed: true } });
+      await promote({ data: { botId: realTarget.id, confirmed: true } });
       toast.success(`${realTarget.name} operará con fondos reales vía Binance`);
       setRealTarget(null);
+      setCheck(null);
       refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo activar el modo Real");
