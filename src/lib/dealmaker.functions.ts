@@ -222,8 +222,8 @@ export const setBotMode = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data }) => {
-    if (data.mode === "real" && !data.confirmed) {
-      throw new Error("Se requiere confirmación explícita para operar en Real");
+    if (!data.confirmed) {
+      throw new Error("Se requiere confirmación explícita para cambiar el modo del bot");
     }
     const db = await admin();
     const { data: bot } = await db
@@ -231,14 +231,15 @@ export const setBotMode = createServerFn({ method: "POST" })
       .select("name, mode")
       .eq("id", data.botId)
       .maybeSingle();
-    if (data.mode === "real") {
-      const { data: creds } = await db.from("binance_credentials").select("connection_status");
-      const ok = creds?.some((c) => c.connection_status === "ok");
-      if (!ok) throw new Error("Configura y verifica tus API Keys de Binance antes de pasar a Real");
-    }
+    // El paso a Real vive en promoteBotToReal (risk.functions.ts): exige criterios y 2FA.
     const { error } = await db
       .from("bots")
-      .update({ mode: data.mode, status: "paused", updated_at: new Date().toISOString() })
+      .update({
+        mode: data.mode,
+        status: "paused",
+        demo_since: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", data.botId);
     if (error) throw new Error(error.message);
     await audit("bot.mode_changed", "bot", bot?.name ?? data.botId, {
