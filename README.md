@@ -132,6 +132,35 @@ Al guardar o probar claves se muestra el checklist obligatorio: activar solo lec
 Cloud. Solo se guarda configuración no sensible en claro; el secreto se cifra en reposo y se
 descifra únicamente en el backend para firmar solicitudes.
 
+## Región del backend y restricción geográfica de Binance
+
+Las llamadas firmadas a Binance salen del backend desplegado (`src/lib/dealmaker.functions.ts`
+y el motor de automatización), nunca del navegador ni de Electron. **La región efectiva la
+determina la plataforma de alojamiento gestionada**: el proyecto no expone —ni puede exponer— un
+selector de región por proyecto, así que no se ha añadido ninguno falso. En `vite.config.ts` el
+build web usa el preset gestionado (Cloudflare) y `supabase/config.toml` solo contiene el
+identificador del proyecto: no hay ajuste de región disponible.
+
+Para obtener evidencia real, en **Binance → Ubicación del backend** hay una comprobación que
+consulta la traza del borde (plataforma, centro de datos y país de salida) y el endpoint público
+`api/v3/ping`, y guarda el resultado en `backend_region_probes` (sin secretos).
+
+Si Binance responde con ubicación restringida (HTTP 451/403 o el mensaje
+*"Service unavailable from a restricted location according to b. Eligibility"*), la app:
+
+- detecta el caso en la prueba de conexión y en cada ciclo del motor;
+- guarda `connection_status = geo_restricted` con código y mensaje seguros (sin claves);
+- pausa de forma segura los bots en modo Real antes de abrir nuevas posiciones, con auditoría,
+  log y alerta;
+- muestra: *"Binance no está disponible desde la ubicación del servidor actual. Esta es una
+  restricción geográfica de Binance, no un problema con tus claves."*
+
+Alternativas legales: revisar la lista oficial de países/territorios admitidos por Binance,
+alojar el backend en una región o plataforma admitida oficialmente, o usar la entidad local de
+Binance correspondiente a tu jurisdicción. **No uses VPN ni proxies para eludir la restricción**:
+incumple los términos de Binance y puede bloquear la cuenta. Cambiar de región tampoco garantiza
+disponibilidad.
+
 ## Demo→Real: criterios
 
 Configurables en Escuadrón: mínimo de días en demo, mínimo de operaciones demo, stop-loss y
