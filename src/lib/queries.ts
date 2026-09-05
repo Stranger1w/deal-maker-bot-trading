@@ -259,6 +259,21 @@ export type AutomationSettings = {
   engine_status: "stopped" | "running" | "halted" | "error";
   last_heartbeat_at: string | null;
   last_error: string | null;
+  global_max_capital: number;
+  max_pair_concentration_pct: number;
+  global_max_weekly_drawdown_pct: number;
+  global_weekly_loss: number;
+  min_demo_days: number;
+  min_demo_trades: number;
+  require_benchmark_outperformance: boolean;
+  profit_policy: "reinvest" | "reserve";
+  profit_reserve_pct: number;
+  last_profit_sweep_on: string | null;
+  notify_email: string | null;
+  notify_email_enabled: boolean;
+  kill_switch_reason: string | null;
+  kill_switch_actor: string | null;
+  kill_switch_at: string | null;
 };
 
 export type BotRisk = {
