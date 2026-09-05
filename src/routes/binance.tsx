@@ -121,6 +121,10 @@ function BinancePage() {
         </CardContent>
       </Card>
 
+      <RegionCard restricted={saved?.geo_restricted === true || tested?.restricted === true} />
+
+
+
 
 
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
