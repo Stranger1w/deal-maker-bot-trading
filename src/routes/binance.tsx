@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Lock, PlugZap } from "lucide-react";
+import { Globe2, Lock, PlugZap, ShieldAlert } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { StatusPill, statusTone } from "@/components/StatusPill";
@@ -19,8 +19,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { saveBinanceCredentials, testBinanceConnection } from "@/lib/dealmaker.functions";
+import { checkBackendRegion } from "@/lib/region.functions";
+import { GEO_RESTRICTED_HINTS, GEO_RESTRICTED_MESSAGE } from "@/lib/binance-region";
 import { dateTime } from "@/lib/format";
-import { binanceQuery } from "@/lib/queries";
+import { binanceQuery, regionProbeQuery } from "@/lib/queries";
 
 export const Route = createFileRoute("/binance")({
   head: () => ({
@@ -53,7 +55,9 @@ function BinancePage() {
   const [apiSecret, setApiSecret] = useState("");
   const [market, setMarket] = useState<Market>("spot");
   const [busy, setBusy] = useState(false);
-  const [tested, setTested] = useState<null | { ok: boolean; message: string }>(null);
+  const [tested, setTested] = useState<null | { ok: boolean; message: string; restricted?: boolean }>(
+    null,
+  );
 
   const runTest = async () => {
     if (apiKey.length < 8 || apiSecret.length < 8)
@@ -177,15 +181,12 @@ function BinancePage() {
                 Guardar cifrado
               </Button>
             </div>
-            {tested && (
-              <p
-                className={
-                  tested.ok ? "text-sm text-success" : "text-sm text-destructive"
-                }
-              >
+            {tested && !tested.restricted && (
+              <p className={tested.ok ? "text-sm text-success" : "text-sm text-destructive"}>
                 {tested.message}
               </p>
             )}
+            {tested?.restricted && <GeoRestrictedNotice />}
           </CardContent>
         </Card>
 
@@ -204,11 +205,14 @@ function BinancePage() {
                   <StatusPill tone={statusTone(saved.connection_status)}>
                     {saved.connection_status === "ok"
                       ? "Verificada"
-                      : saved.connection_status === "failed"
-                        ? "Fallida"
-                        : "Sin probar"}
+                      : saved.connection_status === "geo_restricted"
+                        ? "Bloqueada por región"
+                        : saved.connection_status === "failed"
+                          ? "Fallida"
+                          : "Sin probar"}
                   </StatusPill>
                 </div>
+                {saved.geo_restricted && <GeoRestrictedNotice />}
                 <Row
                   label="Última prueba"
                   value={saved.last_tested_at ? dateTime(saved.last_tested_at) : "—"}
