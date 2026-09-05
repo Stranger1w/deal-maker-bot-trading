@@ -74,21 +74,64 @@ export const createWithdrawal = createServerFn({ method: "POST" })
 
 async function binancePing(apiKey: string, apiSecret: string) {
   const { signBinanceQuery } = await import("./crypto.server");
+  const { isBinanceGeoRestricted, safeBinanceError, GEO_RESTRICTED_MESSAGE, GEO_RESTRICTED_CODE } =
+    await import("./binance-region");
   const query = `timestamp=${Date.now()}&recvWindow=5000`;
   const signature = await signBinanceQuery(query, apiSecret);
   const res = await fetch(`https://api.binance.com/api/v3/account?${query}&signature=${signature}`, {
     headers: { "X-MBX-APIKEY": apiKey },
   });
-  if (res.ok) return { ok: true as const, message: "Conexión de solo lectura verificada" };
-  const body = (await res.json().catch(() => ({}))) as { msg?: string };
-  return { ok: false as const, message: body.msg ?? `Binance respondió ${res.status}` };
+  if (res.ok)
+    return { ok: true as const, restricted: false, code: null as string | null, message: "Conexión de solo lectura verificada" };
+  const raw = await res.text().catch(() => "");
+  let msg = "";
+  try {
+    msg = (JSON.parse(raw) as { msg?: string }).msg ?? "";
+  } catch {
+    msg = "";
+  }
+  if (isBinanceGeoRestricted(res.status, raw)) {
+    return {
+      ok: false as const,
+      restricted: true,
+      code: GEO_RESTRICTED_CODE,
+      message: GEO_RESTRICTED_MESSAGE,
+      detail: safeBinanceError(res.status, msg || raw),
+    };
+  }
+  return {
+    ok: false as const,
+    restricted: false,
+    code: `http_${res.status}`,
+    message: msg || `Binance respondió ${res.status}`,
+  };
 }
 
 export const testBinanceConnection = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
     z.object({ apiKey: z.string().min(8), apiSecret: z.string().min(8) }).parse(input),
   )
-  .handler(async ({ data }) => binancePing(data.apiKey.trim(), data.apiSecret.trim()));
+  .handler(async ({ data }) => {
+    const test = await binancePing(data.apiKey.trim(), data.apiSecret.trim());
+    if (test.restricted) {
+      // Error seguro y auditado: nunca se registran claves ni firmas.
+      const { raiseAlertStandalone } = await import("./alerts.server");
+      await audit("binance.geo_restricted", "binance_credentials", null, {
+        source: "test_connection",
+        code: test.code,
+        detail: "detail" in test ? test.detail : null,
+      });
+      await raiseAlertStandalone({
+        category: "binance",
+        severity: "critical",
+        title: "Binance bloqueado por región del servidor",
+        message: test.message,
+        entity: "binance",
+      });
+    }
+    return test;
+  });
+
 
 export const saveBinanceCredentials = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
@@ -112,10 +155,14 @@ export const saveBinanceCredentials = createServerFn({ method: "POST" })
       api_key_cipher: await encryptSecret(apiKey),
       api_secret_cipher: await encryptSecret(apiSecret),
       market_mode: data.marketMode,
-      connection_status: test.ok ? "ok" : "failed",
+      connection_status: test.ok ? "ok" : test.restricted ? "geo_restricted" : "failed",
+      geo_restricted: test.restricted,
+      last_error_code: test.ok ? null : test.code,
+      last_error_message: test.ok ? null : test.message,
       last_tested_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+
     const { data: existing } = await db.from("binance_credentials").select("id").limit(1);
     if (existing && existing.length > 0 && existing[0]) {
       const { error } = await db

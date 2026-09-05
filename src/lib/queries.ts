@@ -124,9 +124,36 @@ export type BinanceSettings = {
   api_key_last4: string;
   api_secret_last4: string;
   market_mode: "spot" | "futures" | "both";
-  connection_status: "untested" | "ok" | "failed";
+  connection_status: "untested" | "ok" | "failed" | "geo_restricted";
   last_tested_at: string | null;
+  geo_restricted: boolean;
+  last_error_code: string | null;
+  last_error_message: string | null;
 };
+
+export type RegionProbeRow = {
+  id: string;
+  platform: string;
+  colo: string | null;
+  country: string | null;
+  binance_status: number | null;
+  binance_restricted: boolean;
+  detail: string;
+  created_at: string;
+};
+
+export const regionProbeQuery = queryOptions({
+  queryKey: ["backend_region_probe"],
+  queryFn: async () =>
+    unwrap<RegionProbeRow[]>(
+      await supabase
+        .from("backend_region_probes")
+        .select("id,platform,colo,country,binance_status,binance_restricted,detail,created_at")
+        .order("created_at", { ascending: false })
+        .limit(1),
+    ).at(0) ?? null,
+});
+
 
 export const fundsQuery = queryOptions({
   queryKey: ["fund_account"],
@@ -241,8 +268,12 @@ export const binanceQuery = queryOptions({
     unwrap<BinanceSettings[]>(
       await supabase
         .from("binance_credentials")
-        .select("id,api_key_last4,api_secret_last4,market_mode,connection_status,last_tested_at")
+        .select(
+          "id,api_key_last4,api_secret_last4,market_mode,connection_status,last_tested_at,geo_restricted,last_error_code,last_error_message",
+        )
         .limit(1),
+
+
     ).at(0) ?? null,
 });
 

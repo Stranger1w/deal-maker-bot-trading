@@ -146,7 +146,44 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
 
     const { data: creds } = await db.from("binance_credentials").select("connection_status");
     const binanceOk = (creds ?? []).some((c) => c.connection_status === "ok");
-    const realAllowed = settings.allow_real_trading === true && binanceOk;
+
+    // Restricción geográfica de Binance: se detecta en cada ciclo antes de operar.
+    const { isBinanceGeoRestricted, safeBinanceError, GEO_RESTRICTED_MESSAGE, GEO_RESTRICTED_CODE } =
+      await import("./binance-region");
+    let geoRestricted = false;
+    try {
+      const ping = await fetch("https://api.binance.com/api/v3/ping");
+      if (!ping.ok) {
+        const raw = await ping.text().catch(() => "");
+        geoRestricted = isBinanceGeoRestricted(ping.status, raw);
+        if (geoRestricted) {
+          await db
+            .from("binance_credentials")
+            .update({
+              connection_status: "geo_restricted",
+              geo_restricted: true,
+              last_error_code: GEO_RESTRICTED_CODE,
+              last_error_message: GEO_RESTRICTED_MESSAGE,
+              updated_at: new Date().toISOString(),
+            })
+            .neq("id", "00000000-0000-0000-0000-000000000000");
+          await audit(db, "binance.geo_restricted", null, {
+            source: "engine_tick",
+            detail: safeBinanceError(ping.status, raw),
+          });
+          await raise(
+            "binance",
+            "critical",
+            "Binance bloqueado por región del servidor",
+            GEO_RESTRICTED_MESSAGE,
+          );
+        }
+      }
+    } catch {
+      // Fallo de red puntual: no se marca restricción geográfica.
+    }
+
+    const realAllowed = settings.allow_real_trading === true && binanceOk && !geoRestricted;
     if (settings.allow_real_trading === true && !binanceOk) {
       await raise(
         "binance",
@@ -155,6 +192,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         "El trading real está autorizado pero la conexión con Binance no está verificada. Los bots en Real quedan bloqueados hasta reconectar.",
       );
     }
+
 
     const today = new Date().toISOString().slice(0, 10);
     const minuteKey = new Date().toISOString().slice(0, 16);
@@ -224,6 +262,14 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           continue;
         }
 
+        // Restricción geográfica: el bot Real se pausa de forma segura (sin abrir posiciones).
+        if (bot.mode === "real" && geoRestricted) {
+          await stopBot(db, bot.id, bot.name, "binance_restriccion_geografica", {
+            code: "binance_geo_restricted",
+          });
+          continue;
+        }
+
         // Trading real bloqueado por defecto
         if (bot.mode === "real" && !realAllowed) {
           await log(
@@ -234,6 +280,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           );
           continue;
         }
+
 
         // Límite de capital asignado
         if (Number(bot.capital) > Number(bot.max_capital)) {
