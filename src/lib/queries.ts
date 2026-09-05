@@ -271,6 +271,8 @@ export const binanceQuery = queryOptions({
         .select(
           "id,api_key_last4,api_secret_last4,market_mode,connection_status,last_tested_at,geo_restricted,last_error_code,last_error_message",
         )
+        .limit(1),
+
 
     ).at(0) ?? null,
 });
