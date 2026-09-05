@@ -176,6 +176,39 @@ export type Database = {
         }
         Relationships: []
       }
+      backend_region_probes: {
+        Row: {
+          binance_restricted: boolean
+          binance_status: number | null
+          colo: string | null
+          country: string | null
+          created_at: string
+          detail: string
+          id: string
+          platform: string
+        }
+        Insert: {
+          binance_restricted?: boolean
+          binance_status?: number | null
+          colo?: string | null
+          country?: string | null
+          created_at?: string
+          detail?: string
+          id?: string
+          platform: string
+        }
+        Update: {
+          binance_restricted?: boolean
+          binance_status?: number | null
+          colo?: string | null
+          country?: string | null
+          created_at?: string
+          detail?: string
+          id?: string
+          platform?: string
+        }
+        Relationships: []
+      }
       binance_credentials: {
         Row: {
           api_key_cipher: string
@@ -184,7 +217,10 @@ export type Database = {
           api_secret_last4: string
           connection_status: string
           created_at: string
+          geo_restricted: boolean
           id: string
+          last_error_code: string | null
+          last_error_message: string | null
           last_tested_at: string | null
           market_mode: string
           updated_at: string
@@ -196,7 +232,10 @@ export type Database = {
           api_secret_last4: string
           connection_status?: string
           created_at?: string
+          geo_restricted?: boolean
           id?: string
+          last_error_code?: string | null
+          last_error_message?: string | null
           last_tested_at?: string | null
           market_mode?: string
           updated_at?: string
@@ -208,7 +247,10 @@ export type Database = {
           api_secret_last4?: string
           connection_status?: string
           created_at?: string
+          geo_restricted?: boolean
           id?: string
+          last_error_code?: string | null
+          last_error_message?: string | null
           last_tested_at?: string | null
           market_mode?: string
           updated_at?: string
