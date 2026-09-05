@@ -43,7 +43,10 @@ function AccessPage() {
     setBusy(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
-    if (error) return toast.error(error.message);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success("Sesión iniciada");
   };
 
@@ -51,7 +54,10 @@ function AccessPage() {
     setBusy(true);
     const { error } = await supabase.auth.signUp({ email, password });
     setBusy(false);
-    if (error) return toast.error(error.message);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success("Cuenta creada. Revisa tu correo si se requiere confirmación.");
   };
 
@@ -65,20 +71,29 @@ function AccessPage() {
       factorType: "totp",
       friendlyName: `Deal Maker ${Date.now()}`,
     });
-    if (error) return toast.error(error.message);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     setQr({ id: data.id, svg: data.totp.qr_code, secret: data.totp.secret });
   };
 
   const verifyEnroll = async () => {
     if (!qr) return;
     const { data: challenge, error: cErr } = await supabase.auth.mfa.challenge({ factorId: qr.id });
-    if (cErr) return toast.error(cErr.message);
+    if (cErr) {
+      toast.error(cErr.message);
+      return;
+    }
     const { error } = await supabase.auth.mfa.verify({
       factorId: qr.id,
       challengeId: challenge.id,
       code,
     });
-    if (error) return toast.error(error.message);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     setQr(null);
     setCode("");
     toast.success("2FA verificada en esta sesión");
@@ -86,19 +101,31 @@ function AccessPage() {
 
   const challengeExisting = async () => {
     const { data: factors, error: fErr } = await supabase.auth.mfa.listFactors();
-    if (fErr) return toast.error(fErr.message);
+    if (fErr) {
+      toast.error(fErr.message);
+      return;
+    }
     const factor = factors.totp?.[0];
-    if (!factor) return toast.error("No hay factor TOTP registrado");
+    if (!factor) {
+      toast.error("No hay factor TOTP registrado");
+      return;
+    }
     const { data: challenge, error: cErr } = await supabase.auth.mfa.challenge({
       factorId: factor.id,
     });
-    if (cErr) return toast.error(cErr.message);
+    if (cErr) {
+      toast.error(cErr.message);
+      return;
+    }
     const { error } = await supabase.auth.mfa.verify({
       factorId: factor.id,
       challengeId: challenge.id,
       code,
     });
-    if (error) return toast.error(error.message);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     setCode("");
     toast.success("Segundo factor verificado");
   };
