@@ -51,6 +51,18 @@ async function log(db: Db, botId: string, level: "info" | "warn" | "error", mess
   await db.from("bot_logs").insert({ bot_id: botId, level, message });
 }
 
+async function raise(
+  category: "risk" | "engine" | "bot" | "binance" | "mining",
+  severity: "info" | "warning" | "critical",
+  title: string,
+  message: string,
+  entityId?: string,
+) {
+  const db = await getDb();
+  const { raiseAlert } = await import("./alerts.server");
+  await raiseAlert(db, { category, severity, title, message, entity: "automation", entityId: entityId ?? null });
+}
+
 async function audit(db: Db, action: string, entityId: string | null, details: Record<string, unknown>) {
   await db.from("audit_events").insert({
     action,
@@ -135,6 +147,14 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
     const { data: creds } = await db.from("binance_credentials").select("connection_status");
     const binanceOk = (creds ?? []).some((c) => c.connection_status === "ok");
     const realAllowed = settings.allow_real_trading === true && binanceOk;
+    if (settings.allow_real_trading === true && !binanceOk) {
+      await raise(
+        "binance",
+        "critical",
+        "Binance no verificado",
+        "El trading real está autorizado pero la conexión con Binance no está verificada. Los bots en Real quedan bloqueados hasta reconectar.",
+      );
+    }
 
     const today = new Date().toISOString().slice(0, 10);
     const minuteKey = new Date().toISOString().slice(0, 16);
@@ -145,7 +165,22 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
       .eq("status", "running")
       .eq("automation_enabled", true);
 
+    const weekStart = (() => {
+      const d = new Date();
+      const diff = (d.getUTCDay() + 6) % 7;
+      d.setUTCDate(d.getUTCDate() - diff);
+      return d.toISOString().slice(0, 10);
+    })();
+
+    const { data: allBots } = await db.from("bots").select("pair, capital");
+    const squadCapital = (allBots ?? []).reduce((s, b) => s + Number(b.capital), 0);
+    const pairCapital = (allBots ?? []).reduce<Record<string, number>>((acc, b) => {
+      acc[b.pair] = (acc[b.pair] ?? 0) + Number(b.capital);
+      return acc;
+    }, {});
+
     let globalDailyLoss = 0;
+    let globalWeeklyLoss = 0;
 
     for (const bot of bots ?? []) {
       botsProcessed++;
@@ -153,9 +188,40 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         // Reinicio diario de contadores de riesgo
         let dailyLoss = Number(bot.daily_loss ?? 0);
         let tradesToday = Number(bot.trades_today ?? 0);
+        let weeklyLoss = Number(bot.weekly_loss ?? 0);
         if (bot.risk_day !== today) {
           dailyLoss = 0;
           tradesToday = 0;
+        }
+        if (bot.risk_week !== weekStart) {
+          weeklyLoss = 0;
+        }
+
+        // Stop-loss y take-profit son obligatorios para operar en Real.
+        if (bot.mode === "real" && (Number(bot.stop_loss_pct) <= 0 || Number(bot.take_profit_pct) <= 0)) {
+          await stopBot(db, bot.id, bot.name, "faltan_stop_loss_o_take_profit", {
+            stop_loss_pct: Number(bot.stop_loss_pct),
+            take_profit_pct: Number(bot.take_profit_pct),
+          });
+          continue;
+        }
+
+        // Tope global de capital del Escuadrón y regla de diversificación.
+        if (squadCapital > Number(settings.global_max_capital)) {
+          await stopBot(db, bot.id, bot.name, "tope_global_capital_escuadron", {
+            squad_capital: squadCapital,
+            max: Number(settings.global_max_capital),
+          });
+          continue;
+        }
+        const pairShare = squadCapital > 0 ? ((pairCapital[bot.pair] ?? 0) / squadCapital) * 100 : 0;
+        if (pairShare > Number(settings.max_pair_concentration_pct)) {
+          await stopBot(db, bot.id, bot.name, "concentracion_excesiva_por_par", {
+            pair: bot.pair,
+            concentration_pct: Number(pairShare.toFixed(2)),
+            max: Number(settings.max_pair_concentration_pct),
+          });
+          continue;
         }
 
         // Trading real bloqueado por defecto
@@ -220,8 +286,10 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         const newPnl = Number((Number(bot.pnl) + pnlDelta).toFixed(2));
         const peak = Math.max(Number(bot.peak_pnl ?? 0), newPnl);
         dailyLoss = Number((dailyLoss + Math.max(0, -pnlDelta)).toFixed(2));
+        weeklyLoss = Number((weeklyLoss + Math.max(0, -pnlDelta)).toFixed(2));
         tradesToday += 1;
         globalDailyLoss += Math.max(0, -pnlDelta);
+        globalWeeklyLoss += Math.max(0, -pnlDelta);
 
         await withRetry(
           async () => {
@@ -231,8 +299,11 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
                 pnl: newPnl,
                 peak_pnl: peak,
                 daily_loss: dailyLoss,
+                weekly_loss: weeklyLoss,
                 trades_today: tradesToday,
                 risk_day: today,
+                risk_week: weekStart,
+                demo_trades: bot.mode === "demo" ? Number(bot.demo_trades ?? 0) + 1 : Number(bot.demo_trades ?? 0),
                 last_tick_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
               })
@@ -244,6 +315,10 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           },
         );
 
+        const takeProfitAmount = (size * Number(bot.take_profit_pct ?? 0)) / 100;
+        if (takeProfitAmount > 0 && pnlDelta >= takeProfitAmount) {
+          await log(db, bot.id, "info", `Take-profit alcanzado (${bot.take_profit_pct}%): posición cerrada con beneficio.`);
+        }
         if (hitStopLoss) {
           await log(db, bot.id, "warn", `Stop-loss por operación aplicado (${bot.stop_loss_pct}%).`);
         }
@@ -253,6 +328,15 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           await stopBot(db, bot.id, bot.name, "limite_perdida_diaria", {
             daily_loss: dailyLoss,
             max: Number(bot.max_daily_loss),
+          });
+          continue;
+        }
+
+        // Drawdown semanal por bot
+        if (weeklyLoss >= Number(bot.max_weekly_drawdown_pct) * Number(bot.max_capital) / 100) {
+          await stopBot(db, bot.id, bot.name, "drawdown_semanal_bot", {
+            weekly_loss: weeklyLoss,
+            max_pct: Number(bot.max_weekly_drawdown_pct),
           });
           continue;
         }
@@ -274,6 +358,21 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           `Error en el ciclo del motor: ${error instanceof Error ? error.message : "desconocido"}`,
         );
       }
+    }
+
+    // Límite global de pérdida semanal del Escuadrón
+    if (globalWeeklyLoss >= Number(settings.global_max_weekly_drawdown_pct) * Number(settings.global_max_capital) / 100) {
+      await db
+        .from("automation_settings")
+        .update({ global_weekly_loss: Number(globalWeeklyLoss.toFixed(2)), risk_week: weekStart, updated_at: new Date().toISOString() })
+        .eq("id", settings.id);
+      await stopAllBots(db, "drawdown_semanal_escuadron");
+      await raise("risk", "critical", "Drawdown semanal del Escuadrón alcanzado", `Se pausaron todos los bots tras una pérdida semanal de ${globalWeeklyLoss.toFixed(2)}.`);
+      return await finish(
+        { status: "halted", botsProcessed, ordersCreated, errors, retries, notes: "Drawdown semanal del Escuadrón alcanzado" },
+        "halted",
+        "Drawdown semanal del Escuadrón alcanzado",
+      );
     }
 
     // Límite global de pérdida diaria → kill switch automático
@@ -340,6 +439,13 @@ async function stopBot(
     .eq("id", botId);
   await log(db, botId, "error", `Bot detenido automáticamente: ${reason} ${JSON.stringify(details)}`);
   await audit(db, "risk.limit_reached", botName, { reason, ...details });
+  await raise(
+    "risk",
+    "critical",
+    `Bot detenido por límite de riesgo: ${botName}`,
+    `Motivo: ${reason}. Detalles: ${JSON.stringify(details)}. No quedan órdenes pendientes: el ciclo se cierra antes de abrir nuevas posiciones.`,
+    botId,
+  );
 }
 
 async function stopAllBots(db: Db, reason: string) {
