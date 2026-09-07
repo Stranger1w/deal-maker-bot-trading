@@ -604,6 +604,45 @@ export type Database = {
           },
         ]
       }
+      market_data_sources: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          is_demo: boolean
+          kind: string
+          last_sync_at: string | null
+          name: string
+          notes: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          is_demo?: boolean
+          kind?: string
+          last_sync_at?: string | null
+          name: string
+          notes?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          is_demo?: boolean
+          kind?: string
+          last_sync_at?: string | null
+          name?: string
+          notes?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       market_prices: {
         Row: {
           id: string
@@ -782,6 +821,154 @@ export type Database = {
           summary?: string
         }
         Relationships: []
+      }
+      recon_bots: {
+        Row: {
+          created_at: string
+          findings_count: number
+          focus: string
+          id: string
+          interval_seconds: number
+          last_error: string | null
+          last_run_at: string | null
+          name: string
+          observations_count: number
+          sources: string[]
+          status: string
+          symbols: string[]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          findings_count?: number
+          focus?: string
+          id?: string
+          interval_seconds?: number
+          last_error?: string | null
+          last_run_at?: string | null
+          name: string
+          observations_count?: number
+          sources?: string[]
+          status?: string
+          symbols?: string[]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          findings_count?: number
+          focus?: string
+          id?: string
+          interval_seconds?: number
+          last_error?: string | null
+          last_run_at?: string | null
+          name?: string
+          observations_count?: number
+          sources?: string[]
+          status?: string
+          symbols?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      recon_findings: {
+        Row: {
+          bot_name: string
+          confidence: number
+          created_at: string
+          detail: string
+          headline: string
+          id: string
+          is_demo: boolean
+          kind: string
+          recon_bot_id: string | null
+          severity: string
+          sources: string[]
+          symbol: string
+        }
+        Insert: {
+          bot_name?: string
+          confidence?: number
+          created_at?: string
+          detail?: string
+          headline: string
+          id?: string
+          is_demo?: boolean
+          kind: string
+          recon_bot_id?: string | null
+          severity?: string
+          sources?: string[]
+          symbol: string
+        }
+        Update: {
+          bot_name?: string
+          confidence?: number
+          created_at?: string
+          detail?: string
+          headline?: string
+          id?: string
+          is_demo?: boolean
+          kind?: string
+          recon_bot_id?: string | null
+          severity?: string
+          sources?: string[]
+          symbol?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recon_findings_recon_bot_id_fkey"
+            columns: ["recon_bot_id"]
+            isOneToOne: false
+            referencedRelation: "recon_bots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recon_observations: {
+        Row: {
+          created_at: string
+          id: string
+          is_demo: boolean
+          meta: Json
+          metric: string
+          observed_at: string
+          recon_bot_id: string | null
+          source: string
+          symbol: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_demo?: boolean
+          meta?: Json
+          metric: string
+          observed_at?: string
+          recon_bot_id?: string | null
+          source: string
+          symbol: string
+          value?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_demo?: boolean
+          meta?: Json
+          metric?: string
+          observed_at?: string
+          recon_bot_id?: string | null
+          source?: string
+          symbol?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recon_observations_recon_bot_id_fkey"
+            columns: ["recon_bot_id"]
+            isOneToOne: false
+            referencedRelation: "recon_bots"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       training_runs: {
         Row: {
