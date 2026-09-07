@@ -7,7 +7,16 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { Bot, Cpu, KeyRound, LayoutDashboard, Pickaxe, ShieldCheck, Wallet } from "lucide-react";
+import {
+  Bot,
+  Cpu,
+  KeyRound,
+  LayoutDashboard,
+  Pickaxe,
+  Radar,
+  ShieldCheck,
+  Wallet,
+} from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 
 import { KillSwitchButton } from "@/components/KillSwitchButton";
