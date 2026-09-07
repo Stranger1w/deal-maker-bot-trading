@@ -7,7 +7,16 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { Bot, Cpu, KeyRound, LayoutDashboard, Pickaxe, ShieldCheck, Wallet } from "lucide-react";
+import {
+  Bot,
+  Cpu,
+  KeyRound,
+  LayoutDashboard,
+  Pickaxe,
+  Radar,
+  ShieldCheck,
+  Wallet,
+} from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 
 import { KillSwitchButton } from "@/components/KillSwitchButton";
@@ -121,6 +130,7 @@ const navItems = [
   { to: "/fondos", label: "Fondos", icon: Wallet },
   { to: "/binance", label: "Binance / API", icon: KeyRound },
   { to: "/escuadron", label: "Escuadrón", icon: Bot },
+  { to: "/reconocimiento", label: "Reconocimiento", icon: Radar },
   { to: "/automatizacion", label: "Automatización", icon: Cpu },
   { to: "/mineria", label: "Enjambre", icon: Pickaxe },
   { to: "/acceso", label: "Acceso y 2FA", icon: ShieldCheck },

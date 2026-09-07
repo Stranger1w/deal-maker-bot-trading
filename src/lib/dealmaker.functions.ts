@@ -351,20 +351,36 @@ export const runSandbox = createServerFn({ method: "POST" })
       .in("status", ["training", "paused"]);
     const candidates = (bots ?? []).slice(0, 4);
 
+    // Capa de IA multi-plataforma (módulo independiente): normaliza las fuentes
+    // conectadas y el dataset del Escuadrón de Reconocimiento, y ajusta los
+    // parámetros en lugar de repetir el histórico.
+    const { buildMarketSnapshot, suggestStrategyParams, MARKET_DATA_LAYER_VERSION } = await import(
+      "@/lib/market-data.server"
+    );
+    const pairs = (sandbox.pairs as string[]) ?? [];
+    const snapshot = await buildMarketSnapshot(db, {
+      symbols: pairs,
+      from: new Date(sandbox.date_from).toISOString(),
+      to: new Date(sandbox.date_to).toISOString(),
+      liveIngest: true,
+    });
+    const usedSources = snapshot.sources.filter((s) => s.points > 0);
+
     const rand = (min: number, max: number) => Number((Math.random() * (max - min) + min).toFixed(2));
-    const runs = candidates.map((bot) => ({
-      sandbox_id: data.sandboxId,
-      bot_id: bot.id,
-      bot_name: bot.name,
-      return_pct: rand(-8, 26),
-      drawdown_pct: rand(2, 14),
-      win_rate: rand(42, 71),
-      suggested_params: {
-        stop_loss: `${rand(0.8, 2.4)}%`,
-        take_profit: `${rand(2, 6)}%`,
-        timeframe: sandbox.dataset.includes("15m") ? "15m" : "1h",
-      } as never,
-    }));
+    const runs = candidates.map((bot, i) => {
+      const symbol = pairs[i % Math.max(1, pairs.length)] ?? pairs[0] ?? "BTCUSDT";
+      const params = suggestStrategyParams(snapshot, symbol, sandbox.dataset);
+      const bias = params.bias === "alcista" ? 6 : params.bias === "bajista" ? -4 : 0;
+      return {
+        sandbox_id: data.sandboxId,
+        bot_id: bot.id,
+        bot_name: bot.name,
+        return_pct: Number((rand(-8, 20) + bias).toFixed(2)),
+        drawdown_pct: rand(2, 14),
+        win_rate: rand(42, 71),
+        suggested_params: { ...params, symbol, layer: MARKET_DATA_LAYER_VERSION } as never,
+      };
+    });
 
     await db.from("training_runs").delete().eq("sandbox_id", data.sandboxId);
     if (runs.length) await db.from("training_runs").insert(runs);
@@ -379,7 +395,22 @@ export const runSandbox = createServerFn({ method: "POST" })
         return_pct: avg("return_pct"),
         drawdown_pct: avg("drawdown_pct"),
         win_rate: avg("win_rate"),
-        ai_notes: `La capa de IA multi-plataforma normalizó ${(sandbox.ai_sources as unknown as unknown[]).length || 2} fuentes de mercado a un esquema común (OHLCV + funding) y ajustó stops y tamaños de posición durante la simulación acelerada ${sandbox.speed}x.`,
+        ai_sources: (usedSources.length
+          ? usedSources.map((s) => ({
+              source: s.source,
+              range: s.range,
+              points: s.points,
+              status: s.status,
+              kind: s.kind,
+            }))
+          : (sandbox.ai_sources as unknown as unknown[])) as never,
+        ai_notes:
+          `Capa de IA ${MARKET_DATA_LAYER_VERSION}: se normalizaron ${snapshot.points.length} puntos de ` +
+          `${usedSources.length || 0} fuente(s) al esquema común ${snapshot.schema} y se ajustaron stops, ` +
+          `take-profit y tamaño de posición durante la simulación acelerada ${sandbox.speed}x. ` +
+          `Fuentes y rangos usados: ${
+            usedSources.map((s) => `${s.source} (${s.range})`).join("; ") || "sin datos nuevos"
+          }.`,
         updated_at: new Date().toISOString(),
       })
       .eq("id", data.sandboxId);

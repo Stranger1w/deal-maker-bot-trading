@@ -506,3 +506,106 @@ export const reportsQuery = queryOptions({
         .limit(20),
     ),
 });
+
+/* ------------------- ESCUADRÓN DE RECONOCIMIENTO ------------------- */
+
+export type ReconBot = {
+  id: string;
+  name: string;
+  status: "active" | "paused";
+  sources: string[];
+  symbols: string[];
+  focus: string;
+  interval_seconds: number;
+  last_run_at: string | null;
+  observations_count: number;
+  findings_count: number;
+  last_error: string | null;
+};
+
+export type ReconFinding = {
+  id: string;
+  bot_name: string;
+  symbol: string;
+  kind: string;
+  severity: "info" | "warning" | "critical";
+  headline: string;
+  detail: string;
+  confidence: number;
+  sources: string[];
+  is_demo: boolean;
+  created_at: string;
+};
+
+export type ReconObservation = {
+  id: string;
+  source: string;
+  symbol: string;
+  metric: string;
+  value: number;
+  is_demo: boolean;
+  observed_at: string;
+};
+
+export type MarketDataSource = {
+  id: string;
+  name: string;
+  kind: string;
+  enabled: boolean;
+  status: string;
+  last_sync_at: string | null;
+  notes: string | null;
+  is_demo: boolean;
+};
+
+export const reconBotsQuery = queryOptions({
+  queryKey: ["recon_bots"],
+  refetchInterval: 30000,
+  queryFn: async () =>
+    unwrap<ReconBot[]>(
+      await supabase
+        .from("recon_bots")
+        .select(
+          "id,name,status,sources,symbols,focus,interval_seconds,last_run_at,observations_count,findings_count,last_error",
+        )
+        .order("created_at", { ascending: true }),
+    ),
+});
+
+export const reconFindingsQuery = queryOptions({
+  queryKey: ["recon_findings"],
+  refetchInterval: 30000,
+  queryFn: async () =>
+    unwrap<ReconFinding[]>(
+      await supabase
+        .from("recon_findings")
+        .select(
+          "id,bot_name,symbol,kind,severity,headline,detail,confidence,sources,is_demo,created_at",
+        )
+        .order("created_at", { ascending: false })
+        .limit(40),
+    ),
+});
+
+export const reconObservationsQuery = queryOptions({
+  queryKey: ["recon_observations"],
+  queryFn: async () =>
+    unwrap<ReconObservation[]>(
+      await supabase
+        .from("recon_observations")
+        .select("id,source,symbol,metric,value,is_demo,observed_at")
+        .order("observed_at", { ascending: false })
+        .limit(60),
+    ),
+});
+
+export const marketSourcesQuery = queryOptions({
+  queryKey: ["market_data_sources"],
+  queryFn: async () =>
+    unwrap<MarketDataSource[]>(
+      await supabase
+        .from("market_data_sources")
+        .select("id,name,kind,enabled,status,last_sync_at,notes,is_demo")
+        .order("name", { ascending: true }),
+    ),
+});

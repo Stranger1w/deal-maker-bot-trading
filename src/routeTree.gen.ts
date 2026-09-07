@@ -16,6 +16,7 @@ import { Route as BinanceRouteImport } from './routes/binance'
 import { Route as EscuadronRouteImport } from './routes/escuadron'
 import { Route as FondosRouteImport } from './routes/fondos'
 import { Route as MineriaRouteImport } from './routes/mineria'
+import { Route as ReconocimientoRouteImport } from './routes/reconocimiento'
 import { Route as ApiPublicAutomationTickRouteImport } from './routes/api/public/automation-tick'
 import { Route as ApiPublicMaintenanceRouteImport } from './routes/api/public/maintenance'
 
@@ -54,6 +55,11 @@ const MineriaRoute = MineriaRouteImport.update({
   path: '/mineria',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReconocimientoRoute = ReconocimientoRouteImport.update({
+  id: '/reconocimiento',
+  path: '/reconocimiento',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicAutomationTickRoute = ApiPublicAutomationTickRouteImport.update({
   id: '/api/public/automation-tick',
   path: '/api/public/automation-tick',
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/escuadron': typeof EscuadronRoute
   '/fondos': typeof FondosRoute
   '/mineria': typeof MineriaRoute
+  '/reconocimiento': typeof ReconocimientoRoute
   '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
   '/api/public/maintenance': typeof ApiPublicMaintenanceRoute
 }
@@ -84,6 +91,7 @@ export interface FileRoutesByTo {
   '/escuadron': typeof EscuadronRoute
   '/fondos': typeof FondosRoute
   '/mineria': typeof MineriaRoute
+  '/reconocimiento': typeof ReconocimientoRoute
   '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
   '/api/public/maintenance': typeof ApiPublicMaintenanceRoute
 }
@@ -96,6 +104,7 @@ export interface FileRoutesById {
   '/escuadron': typeof EscuadronRoute
   '/fondos': typeof FondosRoute
   '/mineria': typeof MineriaRoute
+  '/reconocimiento': typeof ReconocimientoRoute
   '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
   '/api/public/maintenance': typeof ApiPublicMaintenanceRoute
 }
@@ -109,6 +118,7 @@ export interface FileRouteTypes {
     | '/escuadron'
     | '/fondos'
     | '/mineria'
+    | '/reconocimiento'
     | '/api/public/automation-tick'
     | '/api/public/maintenance'
   fileRoutesByTo: FileRoutesByTo
@@ -120,6 +130,7 @@ export interface FileRouteTypes {
     | '/escuadron'
     | '/fondos'
     | '/mineria'
+    | '/reconocimiento'
     | '/api/public/automation-tick'
     | '/api/public/maintenance'
   id:
@@ -131,6 +142,7 @@ export interface FileRouteTypes {
     | '/escuadron'
     | '/fondos'
     | '/mineria'
+    | '/reconocimiento'
     | '/api/public/automation-tick'
     | '/api/public/maintenance'
   fileRoutesById: FileRoutesById
@@ -143,6 +155,7 @@ export interface RootRouteChildren {
   EscuadronRoute: typeof EscuadronRoute
   FondosRoute: typeof FondosRoute
   MineriaRoute: typeof MineriaRoute
+  ReconocimientoRoute: typeof ReconocimientoRoute
   ApiPublicAutomationTickRoute: typeof ApiPublicAutomationTickRoute
   ApiPublicMaintenanceRoute: typeof ApiPublicMaintenanceRoute
 }
@@ -198,6 +211,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MineriaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reconocimiento': {
+      id: '/reconocimiento'
+      path: '/reconocimiento'
+      fullPath: '/reconocimiento'
+      preLoaderRoute: typeof ReconocimientoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/automation-tick': {
       id: '/api/public/automation-tick'
       path: '/api/public/automation-tick'
@@ -223,6 +243,7 @@ const rootRouteChildren: RootRouteChildren = {
   EscuadronRoute: EscuadronRoute,
   FondosRoute: FondosRoute,
   MineriaRoute: MineriaRoute,
+  ReconocimientoRoute: ReconocimientoRoute,
   ApiPublicAutomationTickRoute: ApiPublicAutomationTickRoute,
   ApiPublicMaintenanceRoute: ApiPublicMaintenanceRoute,
 }
