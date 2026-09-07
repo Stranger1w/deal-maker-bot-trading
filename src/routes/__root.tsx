@@ -121,6 +121,7 @@ const navItems = [
   { to: "/fondos", label: "Fondos", icon: Wallet },
   { to: "/binance", label: "Binance / API", icon: KeyRound },
   { to: "/escuadron", label: "Escuadrón", icon: Bot },
+  { to: "/reconocimiento", label: "Reconocimiento", icon: Radar },
   { to: "/automatizacion", label: "Automatización", icon: Cpu },
   { to: "/mineria", label: "Enjambre", icon: Pickaxe },
   { to: "/acceso", label: "Acceso y 2FA", icon: ShieldCheck },
