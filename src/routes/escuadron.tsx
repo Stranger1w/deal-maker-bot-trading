@@ -921,6 +921,10 @@ function TrainingTab() {
                     {(sandbox.ai_sources ?? []).map((src) => (
                       <li key={src.source}>
                         · {src.source} <span className="tabular">({src.range})</span>
+                        {src.points !== undefined && (
+                          <span className="tabular"> · {src.points} datos</span>
+                        )}
+                        {src.status && <span> · {src.status}</span>}
                       </li>
                     ))}
                   </ul>
