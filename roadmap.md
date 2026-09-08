@@ -13,3 +13,5 @@
 - [x] Validación Demo→Real con criterios y benchmark buy-and-hold
 - [x] Política de capital: reinversión o reserva semanal vía cron de mantenimiento
 - [x] Tablas ordenables con búsqueda en Fondos, Escuadrón y Enjambre
+- [x] Escuadrón de Reconocimiento (bots, dataset compartido, hallazgos, alertas y auditoría)
+- [x] Capa de IA multi-plataforma modular con fuentes y rangos en el reporte de entrenamiento
