@@ -177,3 +177,40 @@ El trading real está **desactivado por defecto** y requiere, antes de habilitar
 - Revisión humana de los límites de riesgo y del kill switch.
 
 Deal Maker no promete rentabilidad. No uses fondos reales sin estas salvaguardas.
+
+## Escuadrón de Reconocimiento
+
+Tercer escuadrón, independiente del de trading y del de minería. **Nunca ejecuta
+órdenes, no tiene modo Demo/Real y no toca fondos**, por lo que tampoco le aplican
+los límites de riesgo del Escuadrón de trading.
+
+- Cada bot de reconocimiento vigila una o más fuentes (precios, volumen, order
+  book, noticias o indicadores) sobre uno o más activos, con frecuencia
+  configurable.
+- Lista con estado (activo/pausado), fuentes vigiladas, última actualización,
+  volumen de datos y hallazgos, con tablas ordenables y búsqueda.
+- Los datos se guardan normalizados en el **dataset compartido**
+  (`recon_observations`), disponible para la capa de IA del campo de
+  entrenamiento y como señales para el Escuadrón de trading.
+- **Panel de hallazgos**: resumen legible de patrones detectados (picos de
+  volumen, cambios de tendencia) con severidad y confianza. Los hallazgos de
+  severidad media o alta generan alerta en el sistema existente y quedan en
+  auditoría (`recon.bot_created`, `recon.status_changed`, `recon.scan`).
+- Si Binance no responde desde la región del backend, el escaneo lo registra
+  como error del bot y alerta, sin inventar datos.
+
+## Capa de IA multi-plataforma (campo de entrenamiento)
+
+Módulo independiente (`src/lib/market-data.server.ts`, versionado con
+`MARKET_DATA_LAYER_VERSION`) que se puede actualizar sin tocar el resto del
+sandbox:
+
+1. Ingesta de las fuentes conectadas listadas en `market_data_sources`
+   (klines públicos de Binance sin credenciales + dataset del reconocimiento).
+2. Normalización a un esquema común `ohlcv_v1` (`source`, `symbol`, `metric`,
+   `value`, `observedAt`).
+3. Ajuste de parámetros de estrategia con esos datos —volatilidad, tendencia y
+   ratio de volumen definen stop-loss, take-profit, tamaño de posición y sesgo—
+   en lugar de repetir el histórico.
+4. El reporte de entrenamiento muestra **qué fuentes se usaron, su rango de
+   fechas, número de puntos y estado**, para que sea auditable.
