@@ -330,7 +330,7 @@ function ReconPage() {
     <div className="space-y-8">
       <PageHeader
         title="Escuadrón de Reconocimiento"
-        description="Bots que solo estudian el mercado: precios, volumen, order book, noticias e indicadores. No ejecutan operaciones, no tienen modo Demo/Real y no mueven capital."
+        subtitle="Bots que solo estudian el mercado: precios, volumen, order book, noticias e indicadores. No ejecutan operaciones, no tienen modo Demo/Real y no mueven capital."
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
