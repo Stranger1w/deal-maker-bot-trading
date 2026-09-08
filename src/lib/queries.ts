@@ -82,7 +82,13 @@ export type Sandbox = {
   return_pct: number | null;
   drawdown_pct: number | null;
   win_rate: number | null;
-  ai_sources: { source: string; range: string }[];
+  ai_sources: {
+    source: string;
+    range: string;
+    points?: number;
+    status?: string;
+    kind?: string;
+  }[];
   ai_notes: string | null;
 };
 
