@@ -533,6 +533,60 @@ export type Database = {
         }
         Relationships: []
       }
+      exchange_credentials: {
+        Row: {
+          api_key_cipher: string
+          api_key_last4: string
+          api_secret_cipher: string
+          api_secret_last4: string
+          connection_status: string
+          created_at: string
+          exchange: string
+          id: string
+          label: string
+          last_error_code: string | null
+          last_error_message: string | null
+          last_tested_at: string | null
+          market_mode: string
+          passphrase_cipher: string | null
+          updated_at: string
+        }
+        Insert: {
+          api_key_cipher: string
+          api_key_last4: string
+          api_secret_cipher: string
+          api_secret_last4: string
+          connection_status?: string
+          created_at?: string
+          exchange: string
+          id?: string
+          label: string
+          last_error_code?: string | null
+          last_error_message?: string | null
+          last_tested_at?: string | null
+          market_mode?: string
+          passphrase_cipher?: string | null
+          updated_at?: string
+        }
+        Update: {
+          api_key_cipher?: string
+          api_key_last4?: string
+          api_secret_cipher?: string
+          api_secret_last4?: string
+          connection_status?: string
+          created_at?: string
+          exchange?: string
+          id?: string
+          label?: string
+          last_error_code?: string | null
+          last_error_message?: string | null
+          last_tested_at?: string | null
+          market_mode?: string
+          passphrase_cipher?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       fund_accounts: {
         Row: {
           available_balance: number
