@@ -15,8 +15,11 @@ import { Route as AutomatizacionRouteImport } from './routes/automatizacion'
 import { Route as BinanceRouteImport } from './routes/binance'
 import { Route as EscuadronRouteImport } from './routes/escuadron'
 import { Route as FondosRouteImport } from './routes/fondos'
+import { Route as McpRouteImport } from './routes/mcp'
 import { Route as MineriaRouteImport } from './routes/mineria'
 import { Route as ReconocimientoRouteImport } from './routes/reconocimiento'
+import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
+import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as ApiPublicAutomationTickRouteImport } from './routes/api/public/automation-tick'
 import { Route as ApiPublicMaintenanceRouteImport } from './routes/api/public/maintenance'
 
@@ -50,6 +53,11 @@ const FondosRoute = FondosRouteImport.update({
   path: '/fondos',
   getParentRoute: () => rootRouteImport,
 } as any)
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MineriaRoute = MineriaRouteImport.update({
   id: '/mineria',
   path: '/mineria',
@@ -58,6 +66,17 @@ const MineriaRoute = MineriaRouteImport.update({
 const ReconocimientoRoute = ReconocimientoRouteImport.update({
   id: '/reconocimiento',
   path: '/reconocimiento',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Char91DotwellKnownChar93OauthProtectedResourceRoute =
+  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
+  id: '/.lovable/oauth/consent',
+  path: '/.lovable/oauth/consent',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicAutomationTickRoute = ApiPublicAutomationTickRouteImport.update({
@@ -78,8 +97,11 @@ export interface FileRoutesByFullPath {
   '/binance': typeof BinanceRoute
   '/escuadron': typeof EscuadronRoute
   '/fondos': typeof FondosRoute
+  '/mcp': typeof McpRoute
   '/mineria': typeof MineriaRoute
   '/reconocimiento': typeof ReconocimientoRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
   '/api/public/maintenance': typeof ApiPublicMaintenanceRoute
 }
@@ -90,8 +112,11 @@ export interface FileRoutesByTo {
   '/binance': typeof BinanceRoute
   '/escuadron': typeof EscuadronRoute
   '/fondos': typeof FondosRoute
+  '/mcp': typeof McpRoute
   '/mineria': typeof MineriaRoute
   '/reconocimiento': typeof ReconocimientoRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
   '/api/public/maintenance': typeof ApiPublicMaintenanceRoute
 }
@@ -103,8 +128,11 @@ export interface FileRoutesById {
   '/binance': typeof BinanceRoute
   '/escuadron': typeof EscuadronRoute
   '/fondos': typeof FondosRoute
+  '/mcp': typeof McpRoute
   '/mineria': typeof MineriaRoute
   '/reconocimiento': typeof ReconocimientoRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
   '/api/public/maintenance': typeof ApiPublicMaintenanceRoute
 }
@@ -117,8 +145,11 @@ export interface FileRouteTypes {
     | '/binance'
     | '/escuadron'
     | '/fondos'
+    | '/mcp'
     | '/mineria'
     | '/reconocimiento'
+    | '/.well-known/oauth-protected-resource'
+    | '/.lovable/oauth/consent'
     | '/api/public/automation-tick'
     | '/api/public/maintenance'
   fileRoutesByTo: FileRoutesByTo
@@ -129,8 +160,11 @@ export interface FileRouteTypes {
     | '/binance'
     | '/escuadron'
     | '/fondos'
+    | '/mcp'
     | '/mineria'
     | '/reconocimiento'
+    | '/.well-known/oauth-protected-resource'
+    | '/.lovable/oauth/consent'
     | '/api/public/automation-tick'
     | '/api/public/maintenance'
   id:
@@ -141,8 +175,11 @@ export interface FileRouteTypes {
     | '/binance'
     | '/escuadron'
     | '/fondos'
+    | '/mcp'
     | '/mineria'
     | '/reconocimiento'
+    | '/.well-known/oauth-protected-resource'
+    | '/.lovable/oauth/consent'
     | '/api/public/automation-tick'
     | '/api/public/maintenance'
   fileRoutesById: FileRoutesById
@@ -154,8 +191,11 @@ export interface RootRouteChildren {
   BinanceRoute: typeof BinanceRoute
   EscuadronRoute: typeof EscuadronRoute
   FondosRoute: typeof FondosRoute
+  McpRoute: typeof McpRoute
   MineriaRoute: typeof MineriaRoute
   ReconocimientoRoute: typeof ReconocimientoRoute
+  Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   ApiPublicAutomationTickRoute: typeof ApiPublicAutomationTickRoute
   ApiPublicMaintenanceRoute: typeof ApiPublicMaintenanceRoute
 }
@@ -204,6 +244,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FondosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/mineria': {
       id: '/mineria'
       path: '/mineria'
@@ -216,6 +263,20 @@ declare module '@tanstack/react-router' {
       path: '/reconocimiento'
       fullPath: '/reconocimiento'
       preLoaderRoute: typeof ReconocimientoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.lovable/oauth/consent': {
+      id: '/.lovable/oauth/consent'
+      path: '/.lovable/oauth/consent'
+      fullPath: '/.lovable/oauth/consent'
+      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/automation-tick': {
@@ -242,8 +303,12 @@ const rootRouteChildren: RootRouteChildren = {
   BinanceRoute: BinanceRoute,
   EscuadronRoute: EscuadronRoute,
   FondosRoute: FondosRoute,
+  McpRoute: McpRoute,
   MineriaRoute: MineriaRoute,
   ReconocimientoRoute: ReconocimientoRoute,
+  Char91DotwellKnownChar93OauthProtectedResourceRoute:
+    Char91DotwellKnownChar93OauthProtectedResourceRoute,
+  DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   ApiPublicAutomationTickRoute: ApiPublicAutomationTickRoute,
   ApiPublicMaintenanceRoute: ApiPublicMaintenanceRoute,
 }

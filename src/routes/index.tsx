@@ -61,60 +61,60 @@ function Dashboard() {
   const offlineWorkers = workerList.filter((w) => w.status === "offline").length;
   const health: { label: string; ok: boolean; detail: string }[] = [
     {
-      label: "Motor 24/7",
+      label: "Piloto automático",
       ok: !!engine.data?.engine_enabled && !engine.data.kill_switch,
-      detail: engine.data?.engine_status ?? "sin datos",
+      detail: engine.data?.engine_enabled ? "encendido" : "apagado",
     },
     {
-      label: "Conexión Binance",
+      label: "Cuenta de Binance",
       ok: binance.data?.connection_status === "ok",
-      detail: binance.data?.connection_status ?? "sin configurar",
+      detail: binance.data?.connection_status === "ok" ? "conectada" : "sin conectar",
     },
     {
-      label: "Riesgo del escuadrón",
+      label: "Seguridad de tus bots",
       ok: stoppedByRisk === 0,
-      detail: stoppedByRisk === 0 ? "sin paradas por límite" : `${stoppedByRisk} bots detenidos`,
+      detail: stoppedByRisk === 0 ? "ninguno se detuvo solo" : `${stoppedByRisk} bots detenidos`,
     },
     {
-      label: "Enjambre de minería",
+      label: "Equipos de minería",
       ok: offlineWorkers === 0,
-      detail: offlineWorkers === 0 ? "sin workers caídos" : `${offlineWorkers} offline`,
+      detail: offlineWorkers === 0 ? "todos encendidos" : `${offlineWorkers} apagados`,
     },
     {
-      label: "Alertas críticas",
+      label: "Avisos urgentes",
       ok: criticalAlerts === 0,
-      detail: criticalAlerts === 0 ? "ninguna pendiente" : `${criticalAlerts} sin revisar`,
+      detail: criticalAlerts === 0 ? "ninguno pendiente" : `${criticalAlerts} sin revisar`,
     },
   ];
 
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Dashboard"
-        subtitle="Resumen operativo en tiempo real: tesorería, escuadrón de bots en Binance y enjambre de minería."
+        title="Inicio"
+        subtitle="Un vistazo rápido a tu dinero, tus bots y si todo está funcionando bien."
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Stat
-          title="Saldo disponible"
+          title="Dinero disponible"
           value={money(Number(funds.data?.available_balance ?? 0))}
-          hint={`${money(Number(funds.data?.in_use_balance ?? 0))} en uso por bots`}
+          hint={`${money(Number(funds.data?.in_use_balance ?? 0))} lo están usando tus bots`}
           tone="success"
         />
         <Stat
-          title="P&L agregado"
+          title="Ganancia o pérdida"
           value={money(pnl)}
-          hint={`${running} bots corriendo · ${realBots} en real`}
+          hint={`${running} bots activos · ${realBots} con dinero real`}
           tone={pnl >= 0 ? "success" : "danger"}
         />
         <Stat
-          title="Enjambre de minería"
+          title="Equipos minando"
           value={`${mining}/${workerList.length}`}
-          hint={`${money(dailyMining, "USD")} estimado/día`}
+          hint={`${money(dailyMining, "USD")} estimado al día`}
           tone={mining > 0 ? "success" : "warning"}
         />
         <Stat
-          title="Conexión Binance"
+          title="Conexión con Binance"
           value={
             binance.data
               ? binance.data.connection_status === "ok"
@@ -124,7 +124,7 @@ function Dashboard() {
                   : "Sin probar"
               : "Sin configurar"
           }
-          hint={binance.data ? `API Key •••• ${binance.data.api_key_last4}` : "Configura tus API Keys"}
+          hint={binance.data ? `Clave •••• ${binance.data.api_key_last4}` : "Conecta tu cuenta de Binance"}
           tone={binance.data?.connection_status === "ok" ? "success" : "warning"}
         />
       </div>
@@ -132,9 +132,9 @@ function Dashboard() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
-            Motor de automatización 24/7
+            Piloto automático (funciona día y noche)
             <Link to="/automatizacion" className="text-xs text-primary hover:underline">
-              Gestionar
+              Ajustar
             </Link>
           </CardTitle>
         </CardHeader>
@@ -149,16 +149,16 @@ function Dashboard() {
             }
           >
             {engine.data?.kill_switch
-              ? "kill switch activo"
+              ? "todo detenido por seguridad"
               : engine.data?.engine_enabled
-                ? (engine.data.engine_status ?? "running")
-                : "motor detenido"}
+                ? "encendido"
+                : "apagado"}
           </StatusPill>
           <span className="text-xs text-muted-foreground">
-            Trading real: {engine.data?.allow_real_trading ? "autorizado" : "bloqueado por defecto"}
+            Operar con dinero real: {engine.data?.allow_real_trading ? "permitido" : "bloqueado"}
           </span>
           <span className="text-xs text-muted-foreground">
-            Último heartbeat:{" "}
+            Última señal de vida:{" "}
             {engine.data?.last_heartbeat_at ? dateTime(engine.data.last_heartbeat_at) : "sin datos"}
           </span>
         </CardContent>
@@ -167,7 +167,7 @@ function Dashboard() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex flex-wrap items-center justify-between gap-3 text-base">
-            Salud general y parada de emergencia
+            ¿Está todo bien? · Botón de parada
             <KillSwitchButton />
           </CardTitle>
         </CardHeader>
@@ -181,7 +181,7 @@ function Dashboard() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium">{h.label}</span>
-                  <StatusPill tone={h.ok ? "success" : "danger"}>{h.ok ? "ok" : "atención"}</StatusPill>
+                  <StatusPill tone={h.ok ? "success" : "danger"}>{h.ok ? "bien" : "revisar"}</StatusPill>
                 </div>
                 <p className="mt-1 text-[11px] text-muted-foreground">{h.detail}</p>
               </div>
@@ -191,10 +191,10 @@ function Dashboard() {
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <AlertsPanel title="Resumen de alertas" limit={6} />
+        <AlertsPanel title="Avisos importantes" limit={6} />
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Reportes de performance</CardTitle>
+            <CardTitle className="text-base">Resúmenes de resultados</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {(reports.data ?? []).length === 0 && (
@@ -231,9 +231,9 @@ function Dashboard() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              Escuadrón
+              Mis bots
               <Link to="/escuadron" className="text-xs text-primary hover:underline">
-                Ver todo
+                Ver todos
               </Link>
             </CardTitle>
           </CardHeader>
@@ -265,9 +265,9 @@ function Dashboard() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              Enjambre
+              Equipos de minería
               <Link to="/mineria" className="text-xs text-primary hover:underline">
-                Ver todo
+                Ver todos
               </Link>
             </CardTitle>
           </CardHeader>
@@ -298,9 +298,9 @@ function Dashboard() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            Auditoría reciente
+            Últimos movimientos
             <Link to="/fondos" className="text-xs text-primary hover:underline">
-              Ver fondos
+              Ver mi dinero
             </Link>
           </CardTitle>
         </CardHeader>

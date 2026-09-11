@@ -125,15 +125,28 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
-const navItems = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/fondos", label: "Fondos", icon: Wallet },
-  { to: "/binance", label: "Binance / API", icon: KeyRound },
-  { to: "/escuadron", label: "Escuadrón", icon: Bot },
-  { to: "/reconocimiento", label: "Reconocimiento", icon: Radar },
-  { to: "/automatizacion", label: "Automatización", icon: Cpu },
-  { to: "/mineria", label: "Enjambre", icon: Pickaxe },
-  { to: "/acceso", label: "Acceso y 2FA", icon: ShieldCheck },
+const navGroups = [
+  {
+    title: "Mi dinero",
+    items: [
+      { to: "/", label: "Inicio", icon: LayoutDashboard },
+      { to: "/fondos", label: "Mi dinero", icon: Wallet },
+      { to: "/binance", label: "Mi cuenta Binance", icon: KeyRound },
+    ],
+  },
+  {
+    title: "Mis bots",
+    items: [
+      { to: "/escuadron", label: "Mis bots", icon: Bot },
+      { to: "/reconocimiento", label: "Buscar oportunidades", icon: Radar },
+      { to: "/automatizacion", label: "Piloto automático", icon: Cpu },
+      { to: "/mineria", label: "Minería", icon: Pickaxe },
+    ],
+  },
+  {
+    title: "Seguridad",
+    items: [{ to: "/acceso", label: "Seguridad", icon: ShieldCheck }],
+  },
 ] as const;
 
 function RootComponent() {
@@ -150,18 +163,23 @@ function RootComponent() {
               </span>
               <span className="text-lg font-semibold tracking-tight">Deal Maker</span>
             </Link>
-            <nav className="flex flex-wrap items-center gap-1">
-              {navItems.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  activeOptions={{ exact: item.to === "/" }}
-                  className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                  activeProps={{ className: "bg-secondary text-foreground" }}
-                >
-                  <item.icon className="size-4" />
-                  {item.label}
-                </Link>
+            <nav className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              {navGroups.map((group, i) => (
+                <div key={group.title} className="flex items-center gap-1">
+                  {i > 0 && <span aria-hidden className="mr-2 h-5 w-px bg-border" />}
+                  {group.items.map((item) => (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      activeOptions={{ exact: item.to === "/" }}
+                      className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                      activeProps={{ className: "bg-primary text-primary-foreground" }}
+                    >
+                      <item.icon className="size-4" />
+                      {item.label}
+                    </Link>
+                  ))}
+                </div>
               ))}
             </nav>
             {/* Parada de emergencia siempre accesible, también en móvil. */}

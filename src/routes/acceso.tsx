@@ -13,6 +13,9 @@ import { useSecuritySession } from "@/hooks/useSecuritySession";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/acceso")({
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s['next'] === "string" ? s['next'] : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Acceso y 2FA — Deal Maker" },
@@ -31,13 +34,22 @@ export const Route = createFileRoute("/acceso")({
   component: AccessPage,
 });
 
+// Solo se acepta una ruta relativa del mismo origen como destino de retorno.
+function safeNext(next: string | undefined): string | null {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) return null;
+  return next;
+}
+
 function AccessPage() {
   const session = useSecuritySession();
+  const { next } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [qr, setQr] = useState<{ id: string; svg: string; secret: string } | null>(null);
   const [code, setCode] = useState("");
+
+  const returnTo = safeNext(next);
 
   const signIn = async () => {
     setBusy(true);
@@ -48,18 +60,27 @@ function AccessPage() {
       return;
     }
     toast.success("Sesión iniciada");
+    if (returnTo) window.location.href = returnTo;
   };
 
   const signUp = async () => {
     setBusy(true);
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      ...(returnTo
+        ? { options: { emailRedirectTo: `${window.location.origin}${returnTo}` } }
+        : {}),
+    });
     setBusy(false);
     if (error) {
       toast.error(error.message);
       return;
     }
     toast.success("Cuenta creada. Revisa tu correo si se requiere confirmación.");
+    if (returnTo) window.location.href = returnTo;
   };
+
 
   const signOut = async () => {
     await supabase.auth.signOut();
