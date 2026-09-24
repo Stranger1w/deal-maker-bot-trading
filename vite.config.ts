@@ -9,7 +9,13 @@ import { mcpPlugin } from "@lovable.dev/mcp-js/stacks/tanstack/vite";
 
 // DESKTOP=1 builds the Node server bundle that the Electron app boots locally.
 // Without it the build stays identical to the web/cloud build.
+// NOTE: mcpPlugin() se omite siempre en Windows — su assert de paths mezcla
+// C:/ con C:\ y rompe `vite build`, `vite dev` y `vite preview`
+// (routesDir must resolve under). Solo se activa fuera de Windows.
+// En desktop además se usa preset node-server.
 const isDesktop = process.env["DESKTOP"] === "1";
+const isWindows = process.platform === "win32";
+const useMcp = !isWindows;
 
 export default defineConfig({
   tanstackStart: {
@@ -17,6 +23,6 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
-  vite: { plugins: [mcpPlugin()] },
+  vite: { plugins: useMcp ? [mcpPlugin()] : [] },
   ...(isDesktop ? { nitro: { preset: "node-server" as const } } : {}),
 });

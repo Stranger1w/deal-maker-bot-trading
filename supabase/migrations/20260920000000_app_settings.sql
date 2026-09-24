@@ -1,45 +1,21 @@
--- Tabla de configuración global de la app (key-value)
-create table if not exists public.app_settings (
-  key text primary key,
-  value text not null,
-  updated_at timestamptz not null default now()
+-- ============ APP SETTINGS (estado/persitencia app) ============
+-- Tabla genérica de configuración de app y estado ligero.
+-- `key` único para upserts simples. RLS abierto para lectura; escritura via RPC service_role.
+CREATE TABLE IF NOT EXISTS public.app_settings (
+  key text PRIMARY KEY,
+  value text NOT NULL,
+  notes text,
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
+GRANT SELECT ON public.app_settings TO anon, authenticated;
+GRANT ALL ON public.app_settings TO service_role;
+ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "app_settings_read" ON public.app_settings FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "app_settings_write" ON public.app_settings FOR ALL TO authenticated USING (true);
 
--- Trigger para mantener updated_at al día
-create or replace function public.set_app_settings_updated_at()
-returns trigger as $$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$$ language plpgsql;
+-- Estado del entorno de trading: 'testnet' (default) | 'production'.
+INSERT INTO public.app_settings (key, value, notes)
+  VALUES ('binance_trading_env', 'testnet', 'Entorno de trading real. Testnet por defecto; production requiere doble confirmación.')
+  ON CONFLICT (key) DO NOTHING;
 
-drop trigger if exists trg_app_settings_updated_at on public.app_settings;
-create trigger trg_app_settings_updated_at
-  before update on public.app_settings
-  for each row
-  execute function public.set_app_settings_updated_at();
-
--- RLS: habilitada pero permisiva para el rol autenticado/servicio
-alter table public.app_settings enable row level security;
-
-drop policy if exists "app_settings_select" on public.app_settings;
-create policy "app_settings_select"
-  on public.app_settings for select
-  using (true);
-
-drop policy if exists "app_settings_upsert" on public.app_settings;
-create policy "app_settings_upsert"
-  on public.app_settings for insert
-  with check (true);
-
-drop policy if exists "app_settings_update" on public.app_settings;
-create policy "app_settings_update"
-  on public.app_settings for update
-  using (true)
-  with check (true);
-
--- Valor inicial para el modo de trading de Binance (testnet por defecto)
-insert into public.app_settings (key, value)
-values ('binance_trading_env', 'testnet')
-on conflict (key) do nothing;
+CREATE INDEX IF NOT EXISTS app_settings_key_idx ON public.app_settings (key);

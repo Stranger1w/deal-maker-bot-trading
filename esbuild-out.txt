@@ -1,0 +1,4 @@
+
+  ..\..\AppData\Local\Temp\xmr-check.mjs  23.6kb
+
+Done in 324ms

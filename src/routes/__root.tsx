@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
@@ -20,7 +20,10 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import { KillSwitchButton } from "@/components/KillSwitchButton";
+import { Onboarding, OnboardingButton } from "@/components/Onboarding";
+import { StatusPill } from "@/components/StatusPill";
 import { Toaster } from "@/components/ui/sonner";
+import { resolveTradingEnv } from "@/lib/dealmaker.functions";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
@@ -131,7 +134,7 @@ const navGroups = [
     items: [
       { to: "/", label: "Inicio", icon: LayoutDashboard },
       { to: "/fondos", label: "Mi dinero", icon: Wallet },
-      { to: "/binance", label: "Mi cuenta Binance", icon: KeyRound },
+      { to: "/binance", label: "Cuentas conectadas", icon: KeyRound },
     ],
   },
   {
@@ -148,6 +151,32 @@ const navGroups = [
     items: [{ to: "/acceso", label: "Seguridad", icon: ShieldCheck }],
   },
 ] as const;
+
+/**
+ * Estado del entorno de trading (Real/Demo) siempre visible en el encabezado.
+ * Solo informa; el cambio se hace en Cuentas conectadas con confirmación.
+ */
+function TradingModeBadge() {
+  const env = useQuery({
+    queryKey: ["trading_env"],
+    queryFn: () => resolveTradingEnv(),
+    staleTime: 15000,
+    refetchInterval: 60000,
+  });
+  if (env.isError) return null;
+  const isReal = env.data === "production";
+  return (
+    <Link
+      to="/binance"
+      title="Cambiar entre modo Real y Demo en Cuentas conectadas"
+      className="transition-opacity hover:opacity-80"
+    >
+      <StatusPill tone={isReal ? "danger" : "success"}>
+        {env.isLoading ? "Modo…" : isReal ? "Real" : "Demo"}
+      </StatusPill>
+    </Link>
+  );
+}
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
@@ -183,7 +212,9 @@ function RootComponent() {
               ))}
             </nav>
             {/* Parada de emergencia siempre accesible, también en móvil. */}
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
+              <TradingModeBadge />
+              <OnboardingButton />
               <KillSwitchButton />
             </div>
           </div>
@@ -193,6 +224,7 @@ function RootComponent() {
           <Outlet />
         </main>
       </div>
+      <Onboarding />
       <Toaster position="top-right" richColors />
     </QueryClientProvider>
   );

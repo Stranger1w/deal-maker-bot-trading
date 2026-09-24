@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Brain, Pause, Play, ScrollText, Settings2, ShieldAlert, Square } from "lucide-react";
 
 import { AlertsPanel } from "@/components/AlertsPanel";
+import { FieldHelp } from "@/components/HelpTip";
 import { PageHeader } from "@/components/PageHeader";
 import { SortableTable, type Column } from "@/components/SortableTable";
 import { StatusPill, statusTone } from "@/components/StatusPill";
@@ -37,6 +38,7 @@ import {
   runSandbox,
   setBotMode,
   setBotStatus,
+  startAllBots,
   updateBotStrategy,
 } from "@/lib/dealmaker.functions";
 import { useSecuritySession } from "@/hooks/useSecuritySession";
@@ -80,8 +82,8 @@ function SquadPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Escuadrón de bots"
-        subtitle="Cada bot opera en Binance. Demo usa Binance testnet o el simulador interno; Real requiere confirmación explícita y consume fondos reales."
+        title="Mis bots (trabajan por ti)"
+        subtitle="Cada bot compra y vende solo. Empiezan en demo (dinero falso) y pausados: mándalos al simulador primero, y solo con ganancias pásalos a real."
       />
       <Tabs defaultValue="squad">
         <TabsList>
@@ -103,7 +105,9 @@ function Criterion({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span
       className={`rounded-md border px-2 py-1 ${
-        ok ? "border-success/40 bg-success/10 text-success" : "border-destructive/40 bg-destructive/10 text-destructive"
+        ok
+          ? "border-success/40 bg-success/10 text-success"
+          : "border-destructive/40 bg-destructive/10 text-destructive"
       }`}
     >
       {ok ? "✓" : "✕"} {label}
@@ -121,6 +125,7 @@ function SquadTab() {
   const mode = useServerFn(setBotMode);
   const create = useServerFn(createBot);
   const edit = useServerFn(updateBotStrategy);
+  const startAll = useServerFn(startAllBots);
 
   const settings = useQuery(automationQuery);
   const session = useSecuritySession();
@@ -138,7 +143,13 @@ function SquadTab() {
   const [realTarget, setRealTarget] = useState<BotRow | null>(null);
   const [logsFor, setLogsFor] = useState<BotRow | null>(null);
   const [editing, setEditing] = useState<BotRow | null>(null);
-  const [form, setForm] = useState({ name: "", strategy: "momentum", pair: "BTCUSDT", capital: "1000" });
+  const [startingAll, setStartingAll] = useState(false);
+  const [form, setForm] = useState({
+    name: "",
+    strategy: "momentum",
+    pair: "BTCUSDT",
+    capital: "100",
+  });
 
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ["bots"] });
@@ -155,12 +166,37 @@ function SquadTab() {
     return [...map.entries()];
   }, [bots.data, groupBy]);
 
-  const act = async (bot: BotRow, next: "running" | "paused" | "stopped") => {
+  const act = async (bot: BotRow, next: "running" | "paused" | "stopped" | "training") => {
     try {
       await status({ data: { botId: bot.id, status: next } });
       refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Acción fallida");
+    }
+  };
+
+  // Arranque masivo: solo bots en Demo con frenos completos. Los de Real requieren
+  // validación y 2FA. El servidor activa el interruptor automático de cada bot.
+  const startAllNow = async () => {
+    setStartingAll(true);
+    try {
+      const res = await startAll({});
+      const realNote = res.skippedReal
+        ? ` · ${res.skippedReal} bot(s) en Real no se tocaron (necesitan validación y 2FA)`
+        : "";
+      const riskNote = res.blockedNoRisk
+        ? ` · ${res.blockedNoRisk} sin arrancar por frenos incompletos`
+        : "";
+      if (res.started) {
+        toast.success(`Se iniciaron ${res.started} de ${res.total} bots${realNote}${riskNote}`);
+      } else {
+        toast.info(`No había bots en Demo listos para iniciar${realNote}${riskNote}`);
+      }
+      refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudieron iniciar los bots");
+    } finally {
+      setStartingAll(false);
     }
   };
 
@@ -211,8 +247,10 @@ function SquadTab() {
           capital: Number(form.capital) || 0,
         },
       });
-      toast.success("Bot creado en modo Demo");
-      setForm({ name: "", strategy: "momentum", pair: "BTCUSDT", capital: "1000" });
+      toast.success(
+        "Bot creado en modo Demo (pausado y con frenos de seguridad). Márcalo 'Al campo' para practicar.",
+      );
+      setForm({ name: "", strategy: "momentum", pair: "BTCUSDT", capital: "100" });
       refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo crear el bot");
@@ -276,15 +314,14 @@ function SquadTab() {
     try {
       await saveSquad({
         data: {
-          globalMaxDailyLoss: Number(squadValues['globalMaxDailyLoss']) || 0,
-          globalMaxDrawdownPct: Number(squadValues['globalMaxDrawdownPct']) || 0,
-          globalMaxWeeklyDrawdownPct: Number(squadValues['globalMaxWeeklyDrawdownPct']) || 0,
-          globalMaxCapital: Number(squadValues['globalMaxCapital']) || 0,
-          maxPairConcentrationPct: Number(squadValues['maxPairConcentrationPct']) || 1,
-          minDemoDays: Number(squadValues['minDemoDays']) || 0,
-          minDemoTrades: Number(squadValues['minDemoTrades']) || 0,
-          requireBenchmarkOutperformance:
-            settings.data?.require_benchmark_outperformance !== false,
+          globalMaxDailyLoss: Number(squadValues["globalMaxDailyLoss"]) || 0,
+          globalMaxDrawdownPct: Number(squadValues["globalMaxDrawdownPct"]) || 0,
+          globalMaxWeeklyDrawdownPct: Number(squadValues["globalMaxWeeklyDrawdownPct"]) || 0,
+          globalMaxCapital: Number(squadValues["globalMaxCapital"]) || 0,
+          maxPairConcentrationPct: Number(squadValues["maxPairConcentrationPct"]) || 1,
+          minDemoDays: Number(squadValues["minDemoDays"]) || 0,
+          minDemoTrades: Number(squadValues["minDemoTrades"]) || 0,
+          requireBenchmarkOutperformance: settings.data?.require_benchmark_outperformance !== false,
         },
       });
       toast.success("Límites del escuadrón actualizados");
@@ -295,10 +332,25 @@ function SquadTab() {
   };
 
   const allBots = bots.data ?? [];
+  const demoBots = allBots.filter((b) => b.mode !== "real");
+  // Mismo criterio que el arranque en lote del servidor: solo cuentan los bots con
+  // frenos completos (stop-loss, take-profit, máximo de operaciones y capital).
+  const demosToStart = demoBots.filter(
+    (b) =>
+      b.status !== "running" &&
+      Number(b.stop_loss_pct) > 0 &&
+      Number(b.take_profit_pct) > 0 &&
+      Number(b.max_trades_per_day) > 0 &&
+      Number(b.max_capital) > 0 &&
+      Number(b.capital) <= Number(b.max_capital),
+  ).length;
   const term = search.trim().toLowerCase();
   const filteredBots = term
     ? allBots.filter((b) =>
-        [b.name, b.strategy, b.pair, b.status, b.mode, b.exchange].join(" ").toLowerCase().includes(term),
+        [b.name, b.strategy, b.pair, b.status, b.mode, b.exchange]
+          .join(" ")
+          .toLowerCase()
+          .includes(term),
       )
     : allBots;
 
@@ -311,59 +363,139 @@ function SquadTab() {
   const topPairPct = topPair && squadCapital > 0 ? (topPair[1] / squadCapital) * 100 : 0;
 
   const botColumns: Column<BotRow>[] = [
-    { key: "name", label: "Bot", value: (b) => b.name, render: (b) => (
-      <div>
-        <p className="font-medium">{b.name}</p>
-        <p className="text-xs text-muted-foreground">{b.strategy} · {b.pair}</p>
-      </div>
-    ) },
-    { key: "status", label: "Estado", value: (b) => b.status, render: (b) => (
-      <div className="space-y-1">
-        <StatusPill tone={statusTone(b.status)}>{b.status}</StatusPill>
-        {b.auto_stop_reason && (
-          <p className="text-[11px] text-destructive">{b.auto_stop_reason}</p>
-        )}
-      </div>
-    ) },
-    { key: "pnl", label: "P&L", align: "right", value: (b) => Number(b.pnl), render: (b) => (
-      <span className={Number(b.pnl) >= 0 ? "text-success" : "text-destructive"}>
-        {money(Number(b.pnl))}
-      </span>
-    ) },
-    { key: "mode", label: "Modo", value: (b) => b.mode, render: (b) => (
-      <StatusPill tone={b.mode === "real" ? "danger" : "neutral"}>{b.mode}</StatusPill>
-    ) },
+    {
+      key: "name",
+      label: "Bot",
+      value: (b) => b.name,
+      render: (b) => (
+        <div>
+          <p className="font-medium">{b.name}</p>
+          <p className="text-xs text-muted-foreground">
+            {b.strategy} · {b.pair}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: "status",
+      label: "Estado",
+      value: (b) => b.status,
+      render: (b) => (
+        <div className="space-y-1">
+          <StatusPill tone={statusTone(b.status)}>{b.status}</StatusPill>
+          {b.auto_stop_reason && (
+            <p className="text-[11px] text-destructive">{b.auto_stop_reason}</p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "pnl",
+      label: "P&L",
+      align: "right",
+      value: (b) => Number(b.pnl),
+      render: (b) => (
+        <span className={Number(b.pnl) >= 0 ? "text-success" : "text-destructive"}>
+          {money(Number(b.pnl))}
+        </span>
+      ),
+    },
+    {
+      key: "mode",
+      label: "Modo",
+      value: (b) => b.mode,
+      render: (b) => (
+        <StatusPill tone={b.mode === "real" ? "danger" : "neutral"}>{b.mode}</StatusPill>
+      ),
+    },
     { key: "exchange", label: "Exchange", value: (b) => b.exchange, render: (b) => b.exchange },
-    { key: "capital", label: "Capital", align: "right", value: (b) => Number(b.capital), render: (b) => money(Number(b.capital)) },
-    { key: "risk", label: "SL / TP", align: "right", value: (b) => Number(b.stop_loss_pct), render: (b) => (
-      <span className={Number(b.stop_loss_pct) > 0 && Number(b.take_profit_pct) > 0 ? "" : "text-warning"}>
-        {Number(b.stop_loss_pct)}% / {Number(b.take_profit_pct)}%
-      </span>
-    ) },
-    { key: "actions", label: "Acciones", render: (b) => (
-      <div className="flex flex-wrap gap-1">
-        <Button size="sm" variant="secondary" onClick={() => act(b, "running")} aria-label={`Iniciar ${b.name}`}>
-          <Play className="size-3.5" />
-        </Button>
-        <Button size="sm" variant="secondary" onClick={() => act(b, "paused")} aria-label={`Pausar ${b.name}`}>
-          <Pause className="size-3.5" />
-        </Button>
-        <Button size="sm" variant="secondary" onClick={() => act(b, "stopped")} aria-label={`Detener ${b.name}`}>
-          <Square className="size-3.5" />
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => setRiskFor(b)} aria-label={`Riesgo de ${b.name}`}>
-          <ShieldAlert className="size-3.5" />
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => setLogsFor(b)} aria-label={`Logs de ${b.name}`}>
-          <ScrollText className="size-3.5" />
-        </Button>
-      </div>
-    ) },
+    {
+      key: "capital",
+      label: "Capital",
+      align: "right",
+      value: (b) => Number(b.capital),
+      render: (b) => money(Number(b.capital)),
+    },
+    {
+      key: "risk",
+      label: "SL / TP",
+      align: "right",
+      value: (b) => Number(b.stop_loss_pct),
+      render: (b) => (
+        <span
+          className={
+            Number(b.stop_loss_pct) > 0 && Number(b.take_profit_pct) > 0 ? "" : "text-warning"
+          }
+        >
+          {Number(b.stop_loss_pct)}% / {Number(b.take_profit_pct)}%
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      label: "Acciones",
+      render: (b) => (
+        <div className="flex flex-wrap gap-1">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => act(b, "running")}
+            aria-label={`Iniciar ${b.name}`}
+          >
+            <Play className="size-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => act(b, "paused")}
+            aria-label={`Pausar ${b.name}`}
+          >
+            <Pause className="size-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => act(b, "stopped")}
+            aria-label={`Detener ${b.name}`}
+          >
+            <Square className="size-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => act(b, "training")}
+            aria-label={`Mandar ${b.name} al campo`}
+          >
+            <Brain className="size-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setRiskFor(b)}
+            aria-label={`Riesgo de ${b.name}`}
+          >
+            <ShieldAlert className="size-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setLogsFor(b)}
+            aria-label={`Logs de ${b.name}`}
+          >
+            <ScrollText className="size-3.5" />
+          </Button>
+        </div>
+      ),
+    },
   ];
 
   return (
     <div className="space-y-6">
-      <AlertsPanel title="Alertas del escuadrón" category={["risk", "bot", "engine", "binance", "security"]} limit={5} />
+      <AlertsPanel
+        title="Alertas del escuadrón"
+        category={["risk", "bot", "engine", "binance", "security"]}
+        limit={5}
+      />
 
       <Card>
         <CardHeader>
@@ -385,7 +517,9 @@ function SquadTab() {
                 <Input
                   inputMode="decimal"
                   value={squadValues[key as string] ?? ""}
-                  onChange={(e) => setSquadForm({ ...squadValues, [key as string]: e.target.value })}
+                  onChange={(e) =>
+                    setSquadForm({ ...squadValues, [key as string]: e.target.value })
+                  }
                 />
               </div>
             ))}
@@ -393,7 +527,13 @@ function SquadTab() {
           <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             <span>Capital asignado: {money(squadCapital)}</span>
             {topPair && (
-              <span className={topPairPct > Number(settings.data?.max_pair_concentration_pct ?? 40) ? "text-destructive" : ""}>
+              <span
+                className={
+                  topPairPct > Number(settings.data?.max_pair_concentration_pct ?? 40)
+                    ? "text-destructive"
+                    : ""
+                }
+              >
                 Mayor concentración: {topPair[0]} {topPairPct.toFixed(1)}%
               </span>
             )}
@@ -404,43 +544,77 @@ function SquadTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Alta rápida</CardTitle>
+          <CardTitle>
+            Crear bot{" "}
+            <span className="text-xs font-normal text-muted-foreground">
+              (empieza seguro: te sugerimos límites conservadores)
+            </span>
+          </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-5">
           <div className="space-y-1.5">
             <Label>Nombre</Label>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <Input
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="Ej.: Mi primer bot"
+            />
           </div>
           <div className="space-y-1.5">
-            <Label>Estrategia base</Label>
+            <Label>
+              <FieldHelp label="Estrategia base" term="estrategia" />
+            </Label>
             <Select value={form.strategy} onValueChange={(v) => setForm({ ...form, strategy: v })}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {["momentum", "grid", "mean_reversion", "breakout", "scalping"].map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
+                {(
+                  [
+                    ["momentum", "Momentum — compra lo que está subiendo"],
+                    ["mean_reversion", "Retorno — compra barato, vende caro"],
+                    ["grid", "Rejilla — gana con sube y baja pequeños"],
+                    ["breakout", "Ruptura — entra cuando despega fuerte"],
+                    ["scalping", "Rápido — muchas ganancias pequeñas"],
+                  ] as [string, string][]
+                ).map(([v, label]) => (
+                  <SelectItem key={v} value={v}>
+                    {label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Par / activo</Label>
-            <Input value={form.pair} onChange={(e) => setForm({ ...form, pair: e.target.value })} />
+            <Label>
+              <FieldHelp label="Par / activo" term="par / activo" />
+            </Label>
+            <Input
+              value={form.pair}
+              onChange={(e) => setForm({ ...form, pair: e.target.value })}
+              placeholder="BTCUSDT"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Recomendado para empezar: BTCUSDT (el más estable).
+            </p>
           </div>
           <div className="space-y-1.5">
-            <Label>Capital (USDT)</Label>
+            <Label>
+              <FieldHelp label="Capital (USDT)" term="capital" />
+            </Label>
             <Input
               inputMode="decimal"
               value={form.capital}
               onChange={(e) => setForm({ ...form, capital: e.target.value })}
+              placeholder="100"
             />
+            <p className="text-[11px] text-muted-foreground">
+              Empieza con poco (100). Podrás subirlo luego.
+            </p>
           </div>
           <div className="flex items-end">
             <Button className="w-full" onClick={submitNew}>
-              Crear bot
+              Crear bot en demo
             </Button>
           </div>
         </CardContent>
@@ -473,7 +647,28 @@ function SquadTab() {
             <SelectItem value="pair">Par / activo</SelectItem>
           </SelectContent>
         </Select>
+        {/* Arranque masivo: un clic para poner a trabajar todo el escuadrón en Demo. */}
+        <Button
+          onClick={startAllNow}
+          disabled={startingAll || demosToStart === 0}
+          className="ml-auto"
+          aria-label="Iniciar todos los bots en demo"
+        >
+          <Play className="size-4" />
+          {startingAll
+            ? "Iniciando…"
+            : demosToStart > 0
+              ? `Iniciar todos los bots (${demosToStart})`
+              : "Iniciar todos los bots"}
+        </Button>
       </div>
+      {allBots.some((b) => b.mode === "real") && (
+        <p className="text-xs text-muted-foreground">
+          Los bots en modo Real quedan fuera del arranque en lote: para operar con fondos reales
+          necesitan credenciales Binance verificadas y la promoción con 2FA. Tampoco se encienden
+          bots sin stop-loss, take-profit o máximo de operaciones configurados.
+        </p>
+      )}
 
       {view === "table" && (
         <SortableTable
@@ -485,86 +680,102 @@ function SquadTab() {
         />
       )}
 
-      {view === "cards" && groups.map(([key, list]) => {
-        const pnl = list.reduce((s, b) => s + Number(b.pnl), 0);
-        const capital = list.reduce((s, b) => s + Number(b.capital), 0);
-        const winRate = list.reduce((s, b) => s + Number(b.win_rate), 0) / (list.length || 1);
-        return (
-          <section key={key} className="space-y-3">
-            <div className="flex flex-wrap items-center gap-4 border-l-2 border-primary pl-3">
-              <h2 className="text-lg font-semibold uppercase tracking-wide">{key}</h2>
-              <span className="tabular text-sm text-muted-foreground">
-                {list.length} bots · capital {money(capital)} · P&L{" "}
-                <span className={pnl >= 0 ? "text-success" : "text-destructive"}>{money(pnl)}</span>{" "}
-                · win rate {winRate.toFixed(1)}%
-              </span>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {list.map((bot) => (
-                <Card key={bot.id} className="border-border/80">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <CardTitle className="text-base">{bot.name}</CardTitle>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {bot.pair} · {bot.strategy} · {bot.exchange}
-                        </p>
+      {view === "cards" &&
+        groups.map(([key, list]) => {
+          const pnl = list.reduce((s, b) => s + Number(b.pnl), 0);
+          const capital = list.reduce((s, b) => s + Number(b.capital), 0);
+          const winRate = list.reduce((s, b) => s + Number(b.win_rate), 0) / (list.length || 1);
+          return (
+            <section key={key} className="space-y-3">
+              <div className="flex flex-wrap items-center gap-4 border-l-2 border-primary pl-3">
+                <h2 className="text-lg font-semibold uppercase tracking-wide">{key}</h2>
+                <span className="tabular text-sm text-muted-foreground">
+                  {list.length} bots · capital {money(capital)} · P&L{" "}
+                  <span className={pnl >= 0 ? "text-success" : "text-destructive"}>
+                    {money(pnl)}
+                  </span>{" "}
+                  · win rate {winRate.toFixed(1)}%
+                </span>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {list.map((bot) => (
+                  <Card key={bot.id} className="border-border/80">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <CardTitle className="text-base">{bot.name}</CardTitle>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {bot.pair} · {bot.strategy} · {bot.exchange}
+                          </p>
+                        </div>
+                        <StatusPill tone={statusTone(bot.status)}>{bot.status}</StatusPill>
                       </div>
-                      <StatusPill tone={statusTone(bot.status)}>{bot.status}</StatusPill>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-3 gap-2 text-sm">
-                      <Metric label="P&L" value={money(Number(bot.pnl))} positive={Number(bot.pnl) >= 0} />
-                      <Metric label="Capital" value={money(Number(bot.capital))} />
-                      <Metric label="Win rate" value={`${Number(bot.win_rate).toFixed(1)}%`} />
-                    </div>
-                    <div className="flex items-center justify-between rounded-md border border-border bg-secondary/40 px-3 py-2">
-                      <div>
-                        <p className="text-xs font-medium">
-                          {bot.mode === "real" ? "REAL · fondos reales" : "DEMO"}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {bot.mode === "real"
-                            ? "Binance producción"
-                            : bot.demo_engine === "binance_testnet"
-                              ? "Binance testnet"
-                              : "Simulador interno"}
-                        </p>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-3 gap-2 text-sm">
+                        <Metric
+                          label={<FieldHelp label="Ganancia" term="pnl / p&l" />}
+                          value={money(Number(bot.pnl))}
+                          positive={Number(bot.pnl) >= 0}
+                        />
+                        <Metric
+                          label={<FieldHelp label="Dinero asignado" term="capital" />}
+                          value={money(Number(bot.capital))}
+                        />
+                        <Metric
+                          label={<FieldHelp label="% que gana" term="win rate" />}
+                          value={`${Number(bot.win_rate).toFixed(1)}%`}
+                        />
                       </div>
-                      <Switch
-                        checked={bot.mode === "real"}
-                        onCheckedChange={(v) => toggleMode(bot, v)}
-                        aria-label="Alternar demo o real"
-                      />
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="secondary" onClick={() => act(bot, "running")}>
-                        <Play className="size-3.5" /> Iniciar
-                      </Button>
-                      <Button size="sm" variant="secondary" onClick={() => act(bot, "paused")}>
-                        <Pause className="size-3.5" /> Pausar
-                      </Button>
-                      <Button size="sm" variant="secondary" onClick={() => act(bot, "stopped")}>
-                        <Square className="size-3.5" /> Detener
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setRiskFor(bot)}>
-                        <ShieldAlert className="size-3.5" /> Riesgo
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setEditing(bot)}>
-                        <Settings2 className="size-3.5" /> Estrategia
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setLogsFor(bot)}>
-                        <ScrollText className="size-3.5" /> Logs
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </section>
-        );
-      })}
+                      <div className="flex items-center justify-between rounded-md border border-border bg-secondary/40 px-3 py-2">
+                        <div>
+                          <p className="text-xs font-medium">
+                            {bot.mode === "real" ? "REAL · fondos reales" : "DEMO"}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {bot.mode === "real"
+                              ? "Binance producción"
+                              : bot.demo_engine === "binance_testnet"
+                                ? "Binance testnet"
+                                : "Simulador interno"}
+                          </p>
+                        </div>
+                        <Switch
+                          checked={bot.mode === "real"}
+                          onCheckedChange={(v) => toggleMode(bot, v)}
+                          aria-label="Alternar demo o real"
+                        />
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="secondary" onClick={() => act(bot, "running")}>
+                          <Play className="size-3.5" /> Iniciar
+                        </Button>
+                        <Button size="sm" variant="secondary" onClick={() => act(bot, "paused")}>
+                          <Pause className="size-3.5" /> Pausar
+                        </Button>
+                        <Button size="sm" variant="secondary" onClick={() => act(bot, "stopped")}>
+                          <Square className="size-3.5" /> Detener
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => act(bot, "training")}>
+                          <Brain className="size-3.5" /> Al campo
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setRiskFor(bot)}>
+                          <ShieldAlert className="size-3.5" /> Riesgo
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setEditing(bot)}>
+                          <Settings2 className="size-3.5" /> Estrategia
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setLogsFor(bot)}>
+                          <ScrollText className="size-3.5" /> Logs
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </section>
+          );
+        })}
 
       <Dialog
         open={!!realTarget}
@@ -641,24 +852,26 @@ function SquadTab() {
       <Dialog open={!!riskFor} onOpenChange={(open) => !open && setRiskFor(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Riesgo · {riskFor?.name}</DialogTitle>
+            <DialogTitle>Frenos de seguridad · {riskFor?.name}</DialogTitle>
             <DialogDescription>
-              Stop-loss y take-profit son obligatorios para operar en Real. Al superar cualquier
-              límite el bot se pausa automáticamente, se cancela el ciclo antes de abrir órdenes y se
-              registra auditoría y alerta.
+              Estos frenos apagan el bot solo antes de que pierda de más. Vienen con valores
+              seguros; solo cámbialos si entiendes el riesgo. Sin freno de pérdida y de ganancia no
+              puede usar dinero real.
             </DialogDescription>
           </DialogHeader>
           {riskFor && (
             <div className="grid gap-3 sm:grid-cols-2">
-              {([
-                ["stop_loss_pct", "Stop-loss por operación (%)"],
-                ["take_profit_pct", "Take-profit por operación (%)"],
-                ["max_daily_loss", "Pérdida diaria máx. (USDT)"],
-                ["max_drawdown_pct", "Drawdown diario máx. (%)"],
-                ["max_weekly_drawdown_pct", "Drawdown semanal máx. (%)"],
-                ["max_capital", "Tope de capital (USDT)"],
-                ["max_trades_per_day", "Máx. operaciones/día"],
-              ] as const).map(([key, label]) => (
+              {(
+                [
+                  ["stop_loss_pct", "Stop-loss por operación (%)"],
+                  ["take_profit_pct", "Take-profit por operación (%)"],
+                  ["max_daily_loss", "Pérdida diaria máx. (USDT)"],
+                  ["max_drawdown_pct", "Drawdown diario máx. (%)"],
+                  ["max_weekly_drawdown_pct", "Drawdown semanal máx. (%)"],
+                  ["max_capital", "Tope de capital (USDT)"],
+                  ["max_trades_per_day", "Máx. operaciones/día"],
+                ] as const
+              ).map(([key, label]) => (
                 <div key={key} className="space-y-1.5">
                   <Label>{label}</Label>
                   <Input
@@ -738,10 +951,20 @@ function SquadTab() {
               .map((log) => (
                 <div key={log.id} className="rounded-md border border-border px-3 py-2 text-xs">
                   <div className="flex items-center justify-between">
-                    <StatusPill tone={log.level === "error" ? "danger" : log.level === "warn" ? "warning" : "success"}>
+                    <StatusPill
+                      tone={
+                        log.level === "error"
+                          ? "danger"
+                          : log.level === "warn"
+                            ? "warning"
+                            : "success"
+                      }
+                    >
                       {log.level}
                     </StatusPill>
-                    <span className="tabular text-muted-foreground">{dateTime(log.created_at)}</span>
+                    <span className="tabular text-muted-foreground">
+                      {dateTime(log.created_at)}
+                    </span>
                   </div>
                   <p className="mt-1.5">{log.message}</p>
                 </div>
@@ -756,7 +979,15 @@ function SquadTab() {
   );
 }
 
-function Metric({ label, value, positive }: { label: string; value: string; positive?: boolean }) {
+function Metric({
+  label,
+  value,
+  positive,
+}: {
+  label: ReactNode;
+  value: string;
+  positive?: boolean;
+}) {
   return (
     <div>
       <p className="text-[11px] uppercase text-muted-foreground">{label}</p>
@@ -809,7 +1040,10 @@ function TrainingTab() {
           dataset: form.dataset,
           dateFrom: form.dateFrom,
           dateTo: form.dateTo,
-          pairs: form.pairs.split(",").map((p) => p.trim()).filter(Boolean),
+          pairs: form.pairs
+            .split(",")
+            .map((p) => p.trim())
+            .filter(Boolean),
           simulatedCapital: Number(form.simulatedCapital) || 1000,
           speed: Number(form.speed) || 10,
         },
@@ -861,7 +1095,10 @@ function TrainingTab() {
             />
           </Field>
           <Field label="Pares (coma)">
-            <Input value={form.pairs} onChange={(e) => setForm({ ...form, pairs: e.target.value })} />
+            <Input
+              value={form.pairs}
+              onChange={(e) => setForm({ ...form, pairs: e.target.value })}
+            />
           </Field>
           <Field label="Capital simulado">
             <Input
@@ -905,11 +1142,17 @@ function TrainingTab() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-3 gap-2">
-                  <Metric label="Retorno" value={pct(sandbox.return_pct)} positive={(sandbox.return_pct ?? 0) >= 0} />
+                  <Metric
+                    label="Retorno"
+                    value={pct(sandbox.return_pct)}
+                    positive={(sandbox.return_pct ?? 0) >= 0}
+                  />
                   <Metric label="Drawdown" value={pct(sandbox.drawdown_pct)} />
                   <Metric
                     label="Win rate"
-                    value={sandbox.win_rate === null ? "—" : `${Number(sandbox.win_rate).toFixed(1)}%`}
+                    value={
+                      sandbox.win_rate === null ? "—" : `${Number(sandbox.win_rate).toFixed(1)}%`
+                    }
                   />
                 </div>
 
@@ -928,7 +1171,9 @@ function TrainingTab() {
                       </li>
                     ))}
                   </ul>
-                  {sandbox.ai_notes && <p className="mt-2 text-muted-foreground">{sandbox.ai_notes}</p>}
+                  {sandbox.ai_notes && (
+                    <p className="mt-2 text-muted-foreground">{sandbox.ai_notes}</p>
+                  )}
                 </div>
 
                 {sandboxRuns.length > 0 && (

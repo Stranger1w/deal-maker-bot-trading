@@ -105,6 +105,14 @@ export const runReconScan = createServerFn({ method: "POST" })
 
     for (const bot of list) {
       try {
+        // Respeta el intervalo: si el último escaneo fue hace menos de
+        // interval_seconds, se omite (antes escaneaba siempre y duplicaba
+        // observaciones/hallazgos en cada clic o cron).
+        const lastRun = bot.last_run_at ? new Date(bot.last_run_at).getTime() : 0;
+        const intervalMs = Number(bot.interval_seconds ?? 300) * 1000;
+        if (lastRun && Date.now() - lastRun < intervalMs && !data.botId) {
+          continue;
+        }
         const snapshot = await buildMarketSnapshot(db, {
           symbols: bot.symbols as string[],
           liveIngest: true,
@@ -112,7 +120,7 @@ export const runReconScan = createServerFn({ method: "POST" })
 
         const liveRows = snapshot.points
           .filter((p) => p.source === "Binance Spot Klines")
-          .slice(-120)
+          .slice(-40)
           .map((p) => ({
             recon_bot_id: bot.id,
             source: p.source,
@@ -124,15 +132,30 @@ export const runReconScan = createServerFn({ method: "POST" })
             observed_at: p.observedAt,
           }));
         if (liveRows.length) {
-          await db.from("recon_observations").insert(liveRows);
-          observations += liveRows.length;
+          try {
+            await db.from("recon_observations").insert(liveRows);
+            observations += liveRows.length;
+          } catch {
+            // Nube sin PART7: se omiten las observaciones crudas pero el
+            // escaneo sigue generando hallazgos con la ingesta pública.
+          }
         }
 
         const newFindings: Record<string, unknown>[] = [];
         for (const symbol of bot.symbols as string[]) {
           const a = analyzeSymbol(snapshot, symbol);
           if (a.samples < 3) continue;
-          if (a.volumeRatio >= 1.8) {
+          // Anti-spam: si ya hay un hallazgo igual en las últimas 6h, no duplicar.
+          const since = new Date(Date.now() - 6 * 3600e3).toISOString();
+          const { data: recent } = await db
+            .from("recon_findings")
+            .select("kind")
+            .eq("recon_bot_id", bot.id)
+            .eq("symbol", symbol)
+            .gte("created_at", since)
+            .limit(10);
+          const recentKinds = new Set((recent ?? []).map((r) => (r as { kind: string }).kind));
+          if (a.volumeRatio >= 1.8 && !recentKinds.has("volume_spike")) {
             newFindings.push({
               recon_bot_id: bot.id,
               bot_name: bot.name,
@@ -146,7 +169,7 @@ export const runReconScan = createServerFn({ method: "POST" })
               is_demo: false,
             });
           }
-          if (Math.abs(a.trendPct) >= 3) {
+          if (Math.abs(a.trendPct) >= 3 && !recentKinds.has("trend_change")) {
             newFindings.push({
               recon_bot_id: bot.id,
               bot_name: bot.name,

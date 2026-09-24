@@ -31,6 +31,10 @@ function fromBase64(value: string): Uint8Array {
   return out;
 }
 
+async function sha256Bytes(message: Uint8Array): Promise<Uint8Array> {
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", message as unknown as ArrayBuffer));
+}
+
 async function hmac(
   keyData: Uint8Array,
   message: Uint8Array,
@@ -44,10 +48,6 @@ async function hmac(
     ["sign"],
   );
   return new Uint8Array(await crypto.subtle.sign("HMAC", key, message as unknown as ArrayBuffer));
-}
-
-async function sha256(message: Uint8Array): Promise<Uint8Array> {
-  return new Uint8Array(await crypto.subtle.digest("SHA-256", message as unknown as ArrayBuffer));
 }
 
 /** Restricción geográfica genérica del exchange (no es un problema de claves). */
@@ -119,7 +119,7 @@ async function testKraken(c: Creds): Promise<ExchangeTestResult> {
   const path = "/0/private/Balance";
   const nonce = Date.now().toString();
   const postData = `nonce=${nonce}`;
-  const hashed = await sha256(enc.encode(nonce + postData));
+  const hashed = await sha256Bytes(enc.encode(nonce + postData));
   const message = new Uint8Array(path.length + hashed.length);
   message.set(enc.encode(path), 0);
   message.set(hashed, path.length);
@@ -223,6 +223,29 @@ async function testKucoin(c: Creds): Promise<ExchangeTestResult> {
   });
 }
 
+/** eToro: portal de socios (OAuth/API key de partner), sin firma HMAC clásica.
+ *  Solo lectura de portafolio/watchlists/datos. Sin trading spot automático. */
+async function testEtoro(c: Creds): Promise<ExchangeTestResult> {
+  if (!c.apiKey || c.apiKey.length < 8) {
+    return {
+      ok: false,
+      restricted: false,
+      code: "etoro_partner_key_required",
+      message:
+        "eToro requiere API key de partner (api-portal.etoro.com) con cuenta verificada. No usa api-secret HMAC como los exchanges cripto.",
+    };
+  }
+  // Sin endpoint público de saldos sin OAuth de socio: validamos formato y
+  // dejamos el estado como pendiente de verificación OAuth del partner.
+  return {
+    ok: false,
+    restricted: false,
+    code: "etoro_oauth_required",
+    message:
+      "Clave de partner detectada. Completa el OAuth de eToro y usa /portfolios y /watchlists en modo solo lectura. Trading automático no soportado.",
+  };
+}
+
 /** Prueba de solo lectura: consulta saldos, nunca crea órdenes ni mueve fondos. */
 export async function testExchange(exchange: ExchangeId, creds: Creds): Promise<ExchangeTestResult> {
   try {
@@ -237,6 +260,8 @@ export async function testExchange(exchange: ExchangeId, creds: Creds): Promise<
         return await testOkx(creds);
       case "kucoin":
         return await testKucoin(creds);
+      case "etoro":
+        return await testEtoro(creds);
       default:
         return {
           ok: false,

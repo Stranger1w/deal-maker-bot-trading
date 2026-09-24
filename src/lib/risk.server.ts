@@ -35,12 +35,25 @@ export async function evaluatePromotionCore(botId: string): Promise<PromotionChe
   const capital = Number(bot.capital) || 1;
   const botReturnPct = Number(((Number(bot.pnl) / capital) * 100).toFixed(2));
 
-  const { data: prices } = await db
-    .from("market_prices")
-    .select("price,recorded_on")
-    .eq("symbol", bot.pair)
-    .gte("recorded_on", since.toISOString().slice(0, 10))
-    .order("recorded_on", { ascending: true });
+  // Nube sin PART7 (sin tabla market_prices): benchmark 0 en vez de romper
+  // la validación; tras pegar PART7 se compara contra buy-and-hold real.
+  let prices: { price: number; recorded_on: string }[] | null = null;
+  try {
+    const res = await db
+      .from("market_prices")
+      .select("price,recorded_on")
+      .eq("symbol", bot.pair)
+      .gte("recorded_on", since.toISOString().slice(0, 10))
+      .order("recorded_on", { ascending: true });
+    if (!res.error) {
+      prices = (res.data ?? []) as { price: number; recorded_on: string }[];
+    } else if (!/PGRST205|42P01|42703|does not exist|could not find/i.test(`${res.error.code ?? ""} ${res.error.message}`)) {
+      throw new Error(res.error.message);
+    }
+  } catch (e) {
+    if (!/PGRST205|42P01|42703|does not exist|could not find/i.test(e instanceof Error ? e.message : "")) throw e;
+    prices = null;
+  }
 
   const first = prices && prices.length > 0 ? Number(prices[0]!.price) : null;
   const last = prices && prices.length > 0 ? Number(prices[prices.length - 1]!.price) : null;

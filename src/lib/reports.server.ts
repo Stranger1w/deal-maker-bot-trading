@@ -104,13 +104,27 @@ export async function profitSweep() {
   const client = await db();
   const { data: settings } = await client
     .from("automation_settings")
-    .select("id, profit_policy, profit_reserve_pct, last_profit_sweep_on")
+    .select("id, profit_policy, profit_reserve_pct")
     .limit(1)
     .maybeSingle();
   if (!settings) throw new Error("No hay configuración del motor");
 
+  // last_profit_sweep_on solo existe con PART7; sin ella se ejecuta siempre
+  // (sin idempotencia diaria) en vez de romper el mantenimiento semanal.
+  let lastSweep: string | null = null;
+  try {
+    const res = await client
+      .from("automation_settings")
+      .select("last_profit_sweep_on")
+      .eq("id", (settings as { id: string }).id)
+      .maybeSingle();
+    if (!res.error) lastSweep = (res.data as { last_profit_sweep_on?: string } | null)?.last_profit_sweep_on ?? null;
+  } catch {
+    lastSweep = null;
+  }
+
   const today = day(new Date());
-  if (settings.last_profit_sweep_on === today) {
+  if (lastSweep === today) {
     return { ok: true, skipped: "ya_ejecutado_hoy" as const, moved: 0 };
   }
 
@@ -150,10 +164,18 @@ export async function profitSweep() {
     }
   }
 
-  await client
-    .from("automation_settings")
-    .update({ last_profit_sweep_on: today, updated_at: new Date().toISOString() })
-    .eq("id", settings.id);
+  try {
+    await client
+      .from("automation_settings")
+      .update({ last_profit_sweep_on: today, updated_at: new Date().toISOString() })
+      .eq("id", settings.id);
+  } catch {
+    // Nube sin PART7: se actualiza solo el timestamp para no romper el sweep.
+    await client
+      .from("automation_settings")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", settings.id);
+  }
 
   await client.from("audit_events").insert({
     action: "capital.profit_sweep",

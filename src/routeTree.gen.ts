@@ -21,6 +21,7 @@ import { Route as ReconocimientoRouteImport } from './routes/reconocimiento'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as ApiPublicAutomationTickRouteImport } from './routes/api/public/automation-tick'
+import { Route as ApiPublicEngineHealthRouteImport } from './routes/api/public/engine-health'
 import { Route as ApiPublicMaintenanceRouteImport } from './routes/api/public/maintenance'
 
 const IndexRoute = IndexRouteImport.update({
@@ -84,6 +85,11 @@ const ApiPublicAutomationTickRoute = ApiPublicAutomationTickRouteImport.update({
   path: '/api/public/automation-tick',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicEngineHealthRoute = ApiPublicEngineHealthRouteImport.update({
+  id: '/api/public/engine-health',
+  path: '/api/public/engine-health',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicMaintenanceRoute = ApiPublicMaintenanceRouteImport.update({
   id: '/api/public/maintenance',
   path: '/api/public/maintenance',
@@ -103,6 +109,7 @@ export interface FileRoutesByFullPath {
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
+  '/api/public/engine-health': typeof ApiPublicEngineHealthRoute
   '/api/public/maintenance': typeof ApiPublicMaintenanceRoute
 }
 export interface FileRoutesByTo {
@@ -118,6 +125,7 @@ export interface FileRoutesByTo {
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
+  '/api/public/engine-health': typeof ApiPublicEngineHealthRoute
   '/api/public/maintenance': typeof ApiPublicMaintenanceRoute
 }
 export interface FileRoutesById {
@@ -134,6 +142,7 @@ export interface FileRoutesById {
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
+  '/api/public/engine-health': typeof ApiPublicEngineHealthRoute
   '/api/public/maintenance': typeof ApiPublicMaintenanceRoute
 }
 export interface FileRouteTypes {
@@ -151,6 +160,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource'
     | '/.lovable/oauth/consent'
     | '/api/public/automation-tick'
+    | '/api/public/engine-health'
     | '/api/public/maintenance'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -166,6 +176,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource'
     | '/.lovable/oauth/consent'
     | '/api/public/automation-tick'
+    | '/api/public/engine-health'
     | '/api/public/maintenance'
   id:
     | '__root__'
@@ -181,6 +192,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource'
     | '/.lovable/oauth/consent'
     | '/api/public/automation-tick'
+    | '/api/public/engine-health'
     | '/api/public/maintenance'
   fileRoutesById: FileRoutesById
 }
@@ -197,6 +209,7 @@ export interface RootRouteChildren {
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   ApiPublicAutomationTickRoute: typeof ApiPublicAutomationTickRoute
+  ApiPublicEngineHealthRoute: typeof ApiPublicEngineHealthRoute
   ApiPublicMaintenanceRoute: typeof ApiPublicMaintenanceRoute
 }
 
@@ -286,6 +299,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicAutomationTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/engine-health': {
+      id: '/api/public/engine-health'
+      path: '/api/public/engine-health'
+      fullPath: '/api/public/engine-health'
+      preLoaderRoute: typeof ApiPublicEngineHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/maintenance': {
       id: '/api/public/maintenance'
       path: '/api/public/maintenance'
@@ -310,6 +330,7 @@ const rootRouteChildren: RootRouteChildren = {
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   ApiPublicAutomationTickRoute: ApiPublicAutomationTickRoute,
+  ApiPublicEngineHealthRoute: ApiPublicEngineHealthRoute,
   ApiPublicMaintenanceRoute: ApiPublicMaintenanceRoute,
 }
 export const routeTree = rootRouteImport

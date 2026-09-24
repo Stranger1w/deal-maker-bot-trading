@@ -1,5 +1,8 @@
 {
-  "name": "tanstack_start_ts",
+  "name": "deal-maker",
+  "version": "1.0.0",
+  "description": "Deal Maker — panel de bots de trading y minería",
+  "author": "Deal Maker",
   "private": true,
   "sideEffects": false,
   "type": "module",
@@ -8,6 +11,10 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
+    "desktop:build": "cross-env DESKTOP=1 vite build",
+    "desktop:dev": "electron desktop/main.cjs",
+    "dist:win": "npm run desktop:build && electron-builder --win nsis --publish never",
+    "dist:win:portable": "npm run desktop:build && electron-builder --win portable --publish never",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
@@ -86,7 +93,51 @@
     "nitro": "3.0.260603-beta",
     "prettier": "^3.7.3",
     "typescript": "^5.8.3",
+    "cross-env": "^7.0.3",
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8",
     "typescript-eslint": "^8.56.1",
     "vite": "8.1.5"
+  },
+  "main": "desktop/main.cjs",
+  "build": {
+    "appId": "com.dealmaker.app",
+    "productName": "Deal Maker",
+    "files": [
+      "desktop/**/*",
+      ".output/**/*",
+      "public/**/*",
+      ".env"
+    ],
+    "extraResources": [
+      {
+        "from": ".output/server",
+        "to": "server"
+      },
+      {
+        "from": ".output/public",
+        "to": "public"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "public/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Deal Maker",
+      "packElevateHelper": false
+    }
+  },
+  "allowScripts": {
+    "electron@33.4.11": true,
+    "esbuild@0.27.7": true
   }
 }

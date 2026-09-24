@@ -1,0 +1,12 @@
+
+C:\Users\Usuario\Downloads\deal-maker-bot-trading-main\src\routes\index.tsx
+   34:17  error  Insert `ÔÅÄ┬À┬À┬À┬À┬À┬À┬À┬À┬À`                                                                                                                                                                                                                                         prettier/prettier
+   59:43  error  Replace `(a)┬À=>┬Àa.severity┬À===┬À"critical"┬À&&┬À!a.acknowledged` with `ÔÅÄ┬À┬À┬À┬À(a)┬À=>┬Àa.severity┬À===┬À"critical"┬À&&┬À!a.acknowledged,ÔÅÄ┬À┬À`                                                                                                                           prettier/prettier
+  127:17  error  Replace `binance.data┬À?┬À`Clave┬ÀÔÇóÔÇóÔÇóÔÇó┬À${binance.data.api_key_last4}`┬À:┬À"Conecta┬Àtu┬Àcuenta┬Àde┬ÀBinance"` with `ÔÅÄ┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬Àbinance.dataÔÅÄ┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À?┬À`Clave┬ÀÔÇóÔÇóÔÇóÔÇó┬À${binance.data.api_key_last4}`ÔÅÄ┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À:┬À"Conecta┬Àtu┬Àcuenta┬Àde┬ÀBinance"ÔÅÄ┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À`  prettier/prettier
+  184:66  error  Replace `{h.ok┬À?┬À"bien"┬À:┬À"revisar"}` with `ÔÅÄ┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À{h.ok┬À?┬À"bien"┬À:┬À"revisar"}ÔÅÄ┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À`                                                                                                                                            prettier/prettier
+  218:25  error  Insert `{"┬À"}ÔÅÄ┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À`                                                                                                                                                                                                                            prettier/prettier
+  313:71  error  Replace `{dateTime(e.created_at)}` with `ÔÅÄ┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À{dateTime(e.created_at)}ÔÅÄ┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À┬À`                                                                                                                                                          prettier/prettier
+
+Ô£û 6 problems (6 errors, 0 warnings)
+  6 errors and 0 warnings potentially fixable with the `--fix` option.
+

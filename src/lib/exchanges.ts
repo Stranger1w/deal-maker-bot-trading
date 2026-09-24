@@ -1,6 +1,13 @@
 // Catálogo de exchanges soportados. Client-safe: aquí no hay claves ni firmas.
 
-export type ExchangeId = "binance" | "coinbase" | "kraken" | "bybit" | "okx" | "kucoin";
+export type ExchangeId =
+  | "binance"
+  | "coinbase"
+  | "kraken"
+  | "bybit"
+  | "okx"
+  | "kucoin"
+  | "etoro";
 
 export type ExchangeMeta = {
   id: ExchangeId;
@@ -11,6 +18,7 @@ export type ExchangeMeta = {
   ipWhitelist: boolean;
   markets: string;
   docs: string;
+  apiDocs: string;
   notes: string;
 };
 
@@ -22,6 +30,7 @@ export const EXCHANGES: ExchangeMeta[] = [
     ipWhitelist: true,
     markets: "Spot · Futures",
     docs: "https://developers.binance.com/docs",
+    apiDocs: "https://developers.binance.com/docs/binance-spot-api-docs",
     notes: "Configurado en la tarjeta principal de esta página.",
   },
   {
@@ -31,6 +40,7 @@ export const EXCHANGES: ExchangeMeta[] = [
     ipWhitelist: true,
     markets: "Spot",
     docs: "https://docs.cdp.coinbase.com/advanced-trade/docs/welcome",
+    apiDocs: "https://docs.cdp.coinbase.com/advanced-trade/docs/welcome",
     notes: "Usa claves de Advanced Trade con permisos de ver y operar; nunca de transferir.",
   },
   {
@@ -39,7 +49,8 @@ export const EXCHANGES: ExchangeMeta[] = [
     needsPassphrase: false,
     ipWhitelist: true,
     markets: "Spot · Futures",
-    docs: "https://docs.kraken.com/rest/",
+    docs: "https://docs.kraken.com/api/",
+    apiDocs: "https://docs.kraken.com/api/",
     notes: "Permisos: consultar saldos y crear/cancelar órdenes. Nunca «Withdraw funds».",
   },
   {
@@ -49,6 +60,7 @@ export const EXCHANGES: ExchangeMeta[] = [
     ipWhitelist: true,
     markets: "Spot · Futuros · Perpetuos",
     docs: "https://bybit-exchange.github.io/docs/v5/intro",
+    apiDocs: "https://bybit-exchange.github.io/docs/v5/intro",
     notes: "Un solo set de endpoints para spot y derivados. Permiso de retiro desactivado.",
   },
   {
@@ -58,6 +70,7 @@ export const EXCHANGES: ExchangeMeta[] = [
     ipWhitelist: true,
     markets: "Spot · Futuros · Opciones",
     docs: "https://www.okx.com/docs-v5/en/",
+    apiDocs: "https://www.okx.com/docs-v5/en/",
     notes: "Requiere passphrase creada al generar la clave. Permisos: leer y operar.",
   },
   {
@@ -67,7 +80,19 @@ export const EXCHANGES: ExchangeMeta[] = [
     ipWhitelist: true,
     markets: "Spot · Futuros",
     docs: "https://www.kucoin.com/docs/beginners/introduction",
+    apiDocs: "https://www.kucoin.com/docs/beginners/introduction",
     notes: "Claves API v2 con passphrase. Permisos: General y Trade, nunca Transfer.",
+  },
+  {
+    id: "etoro",
+    label: "eToro (solo lectura)",
+    needsPassphrase: false,
+    ipWhitelist: false,
+    markets: "Acciones · ETFs · Cripto · Portfolios",
+    docs: "https://api-portal.etoro.com/",
+    apiDocs: "https://api-portal.etoro.com/",
+    notes:
+      "Portal de socios: requiere API key de partner, NO api-key/api-secret clásico. No hace trading spot con HMAC; se usa para portafolios, watchlists y datos sociales.",
   },
 ];
 

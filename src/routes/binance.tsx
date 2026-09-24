@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Globe2, Lock, PlugZap, ShieldAlert } from "lucide-react";
 
@@ -18,22 +18,36 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { saveBinanceCredentials, testBinanceConnection } from "@/lib/dealmaker.functions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Switch } from "@/components/ui/switch";
+import { saveBinanceCredentials, saveExchangeCredentials, testBinanceConnection, testExchangeConnection } from "@/lib/dealmaker.functions";
+import { resolveTradingEnv, setAccountMode } from "@/lib/dealmaker.functions";
 import { checkBackendRegion } from "@/lib/region.functions";
 import { GEO_RESTRICTED_HINTS, GEO_RESTRICTED_MESSAGE } from "@/lib/binance-region";
+import { EXCHANGES, type ExchangeId, type ExchangeMeta } from "@/lib/exchanges";
 import { dateTime } from "@/lib/format";
-import { binanceQuery, regionProbeQuery } from "@/lib/queries";
+import { binanceQuery, exchangesQuery, regionProbeQuery, type ExchangeCredential } from "@/lib/queries";
 
 export const Route = createFileRoute("/binance")({
   head: () => ({
     meta: [
-      { title: "API Keys de Binance — Deal Maker" },
+      { title: "Cuentas conectadas — Deal Maker" },
       {
         name: "description",
         content:
-          "Guarda tus claves de Binance con cifrado en reposo, prueba la conexión de solo lectura y elige Spot, Futures o ambos.",
+          "Conecta tus cuentas de Binance, Coinbase, Kraken, Bybit, OKX, KuCoin y eToro. Las claves se prueban en solo lectura y se guardan cifradas.",
       },
-      { property: "og:title", content: "API Keys de Binance — Deal Maker" },
+      { property: "og:title", content: "Cuentas conectadas — Deal Maker" },
       {
         property: "og:description",
         content: "Credenciales cifradas en el backend; el frontend solo ve los últimos 4 caracteres.",
@@ -45,11 +59,126 @@ export const Route = createFileRoute("/binance")({
 
 type Market = "spot" | "futures" | "both";
 
+type TradingEnv = "testnet" | "production";
+
+/**
+ * Interruptor Real/Demo del entorno de trading, visible en todo momento.
+ * Pasar a Real exige confirmación explícita en un diálogo (nunca se activa de un clic).
+ */
+function TradingModeSwitch({
+  onToggle,
+  busy,
+}: {
+  onToggle: (next: TradingEnv, confirmed: boolean) => void;
+  busy: boolean;
+}) {
+  const envQuery = useQuery({
+    queryKey: ["trading_env"],
+    queryFn: () => resolveTradingEnv(),
+    staleTime: 15000,
+  });
+  const mode: TradingEnv = envQuery.data === "production" ? "production" : "testnet";
+  const isReal = mode === "production";
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Card className={isReal ? "border-destructive/50 bg-destructive/5" : undefined}>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+          Modo de operación
+          <StatusPill tone={isReal ? "danger" : "success"}>
+            {envQuery.isLoading ? "Leyendo…" : isReal ? "Real · producción" : "Demo · testnet"}
+          </StatusPill>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <p className="text-muted-foreground">
+          {isReal
+            ? "El motor envía órdenes con dinero real a Binance. Los límites de riesgo y la parada de emergencia siguen activos."
+            : "El motor opera con dinero de prueba (testnet de Binance). Ninguna orden toca tus fondos reales."}
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <Label className="text-muted-foreground">Real</Label>
+          {isReal ? (
+            <AlertDialog open={open} onOpenChange={setOpen}>
+              <AlertDialogTrigger asChild>
+                <Switch checked disabled={busy} aria-label="Cambiar a modo Demo" />
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>¿Volver a modo Demo?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    El motor dejará de enviar órdenes a producción y volverá al testnet de Binance.
+                    Las posiciones que ya estén abiertas en producción no se cierran solas.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => onToggle("testnet", true)}>
+                    Sí, volver a Demo
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          ) : (
+            <AlertDialog open={open} onOpenChange={setOpen}>
+              <AlertDialogTrigger asChild>
+                <Switch checked={false} disabled={busy} aria-label="Cambiar a modo Real" />
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>¿Activar el modo Real?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Desde este momento el motor puede enviar órdenes reales a Binance con tu
+                    capital. Requisitos: credenciales verificadas (estado «ok»), permisos de
+                    trading activos y sin permiso de retiro. Puedes volver a Demo cuando quieras.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={() => onToggle("production", true)}
+                  >
+                    Entiendo, activar Real
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+          <span className="text-muted-foreground">Demo</span>
+          {busy && <span className="text-xs text-muted-foreground">Aplicando cambio…</span>}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function BinancePage() {
   const qc = useQueryClient();
   const settings = useQuery(binanceQuery);
   const test = useServerFn(testBinanceConnection);
   const save = useServerFn(saveBinanceCredentials);
+  const switchMode = useServerFn(setAccountMode);
+  const [modeBusy, setModeBusy] = useState(false);
+
+  const toggleTradingMode = async (next: TradingEnv, confirmed: boolean) => {
+    setModeBusy(true);
+    try {
+      const result = await switchMode({
+        data: { mode: next, ...(confirmed ? { confirmed: "confirmed" as const } : {}) },
+      });
+      toast.success(
+        result.mode === "production" ? "Modo Real activado" : "Modo Demo activado (testnet)",
+      );
+      void qc.invalidateQueries({ queryKey: ["trading_env"] });
+      void qc.invalidateQueries({ queryKey: ["audit_events"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo cambiar el modo");
+    } finally {
+      setModeBusy(false);
+    }
+  };
 
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
@@ -104,9 +233,11 @@ function BinancePage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Configuración · API Keys de Binance"
-        subtitle="Todo el trading real se ejecuta vía Binance. El secreto se cifra en reposo, nunca se expone al navegador ni se escribe en logs; solo el backend lo descifra para firmar solicitudes."
+        title="Cuentas conectadas"
+        subtitle="Conecta tus cuentas de Binance, Coinbase, Kraken, Bybit, OKX, KuCoin y eToro. Todo se prueba en solo lectura y se guarda cifrado; el navegador solo ve los últimos 4 caracteres."
       />
+
+      <TradingModeSwitch onToggle={toggleTradingMode} busy={modeBusy} />
 
       <Card className="border-warning/40 bg-warning/5">
         <CardHeader className="pb-2">
@@ -127,68 +258,109 @@ function BinancePage() {
 
       <RegionCard restricted={saved?.geo_restricted === true || tested?.restricted === true} />
 
+      <ExchangesGrid />
+
 
 
 
 
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Lock className="size-4 text-primary" /> Credenciales
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="api-key">API Key</Label>
-              <Input
-                id="api-key"
-                value={apiKey}
-                autoComplete="off"
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Pega tu API Key de Binance"
+                {/* Credenciales: cuando está conectado, oculto el formulario y muestro el badge. */}
+        {saved?.connection_status === "ok" ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Lock className="size-4 text-primary" /> Credenciales
+                </span>
+                <StatusPill tone={"success"}>Conectada</StatusPill>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <Row label="API Key" value={`•••• ${saved.api_key_last4}`} />
+              <Row label="API Secret" value={`•••• ${saved.api_secret_last4}`} />
+              <Row label="Mercados" value={saved.market_mode.toUpperCase()} />
+              <Row
+                label="Última conexión"
+                value={saved.last_tested_at ? dateTime(saved.last_tested_at) : "—"}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="api-secret">API Secret</Label>
-              <Input
-                id="api-secret"
-                type="password"
-                autoComplete="new-password"
-                value={apiSecret}
-                onChange={(e) => setApiSecret(e.target.value)}
-                placeholder="••••••••••••••••"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Mercados habilitados</Label>
-              <Select value={market} onValueChange={(v) => setMarket(v as Market)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="spot">Spot</SelectItem>
-                  <SelectItem value="futures">Futures</SelectItem>
-                  <SelectItem value="both">Spot + Futures</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" onClick={runTest} disabled={busy}>
-                <PlugZap className="size-4" /> Probar conexión (solo lectura)
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setApiKey("");
+                  setApiSecret("");
+                  setTested(null);
+                  void qc.invalidateQueries({ queryKey: ["binance_settings"] });
+                }}
+              >
+                Reconectar con otras credenciales
               </Button>
-              <Button onClick={runSave} disabled={busy}>
-                Guardar cifrado
-              </Button>
-            </div>
-            {tested && !tested.restricted && (
-              <p className={tested.ok ? "text-sm text-success" : "text-sm text-destructive"}>
-                {tested.message}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lock className="size-4 text-primary" /> Credenciales
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="api-key">API Key</Label>
+                <Input
+                  id="api-key"
+                  value={apiKey}
+                  autoComplete="off"
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="Pega tu API Key de Binance"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="api-secret">API Secret</Label>
+                <Input
+                  id="api-secret"
+                  type="password"
+                  autoComplete="new-password"
+                  value={apiSecret}
+                  onChange={(e) => setApiSecret(e.target.value)}
+                  placeholder="••••••••••••••••"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Mercados habilitados</Label>
+                <Select value={market} onValueChange={(v) => setMarket(v as Market)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="spot">Spot</SelectItem>
+                    <SelectItem value="futures">Futures</SelectItem>
+                    <SelectItem value="both">Spot + Futures</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={runTest} disabled={busy}>
+                  <PlugZap className="size-4" /> Probar permisos (lectura + trading)
+                </Button>
+                <Button onClick={runSave} disabled={busy}>
+                  Guardar cifrado
+                </Button>
+              </div>
+              <p className="rounded-md border border-border bg-secondary/40 p-3 text-xs text-muted-foreground">
+                La prueba lee <b>canTrade / canWithdraw</b> de tu key: necesitas <b>Spot Trade ON</b> y{" "}
+                <b>Withdraw OFF</b>. Sin trading, los bots reales quedan bloqueados.
               </p>
-            )}
-            {tested?.restricted && <GeoRestrictedNotice />}
-          </CardContent>
-        </Card>
+              {tested && !tested.restricted && (
+                <p className={tested.ok ? "text-sm text-success" : "text-sm text-destructive"}>
+                  {tested.message}
+                </p>
+              )}
+              {tested?.restricted && <GeoRestrictedNotice />}
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
@@ -228,19 +400,143 @@ function BinancePage() {
               El secreto se almacena cifrado con AES-GCM y una clave que vive solo en el servidor.
               El navegador nunca recibe el valor completo.
             </p>
-          </CardContent>
-        </Card>
+                    </CardContent>
+                </Card>
       </div>
     </div>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function ExchangesGrid() {
+  const qc = useQueryClient();
+  const saved = useQuery(exchangesQuery);
+  const byId = new Map((saved.data ?? []).map((r) => [r.exchange, r]));
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="tabular">{value}</span>
+    <div className="space-y-4">
+      <PageHeader
+        title="Otras plataformas — conecta tu cuenta"
+        subtitle="Pega tu API Key de cada plataforma (solo lectura + trading, nunca retiros). Se prueba sin mover fondos y se guarda cifrada."
+      />
+      <div className="grid gap-4 lg:grid-cols-2">
+        {EXCHANGES.filter((e) => e.id !== "binance").map((meta) => (
+          <ExchangeCard key={meta.id} meta={meta} saved={byId.get(meta.id)} onSaved={() => {
+            void qc.invalidateQueries({ queryKey: ["exchange_credentials"] });
+          }} />
+        ))}
+      </div>
     </div>
+  );
+}
+
+function ExchangeCard({
+  meta,
+  saved,
+  onSaved,
+}: {
+  meta: ExchangeMeta;
+  saved?: ExchangeCredential | undefined;
+  onSaved: () => void;
+}) {
+  const test = useServerFn(testExchangeConnection);
+  const save = useServerFn(saveExchangeCredentials);
+  const [apiKey, setApiKey] = useState("");
+  const [apiSecret, setApiSecret] = useState("");
+  const [passphrase, setPassphrase] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const needPass = meta.needsPassphrase;
+  const valid = apiKey.length >= 8 && (meta.id === "etoro" || apiSecret.length >= 8) && (!needPass || passphrase.length >= 1);
+  const runTest = async () => {
+    if (!valid) {
+      toast.error("Completa API Key, Secret y passphrase si aplica");
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await test({ data: { exchange: meta.id, apiKey, apiSecret, passphrase: needPass ? passphrase : undefined } });
+      setResult(r);
+      r.ok ? toast.success(r.message) : toast.error(r.message);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Error probando");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const runSave = async () => {
+    if (!valid) {
+      toast.error("Completa API Key, Secret y passphrase si aplica");
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await save({ data: { exchange: meta.id, apiKey, apiSecret, passphrase: needPass ? passphrase : undefined } });
+      setResult(r.connection);
+      setApiKey("");
+      setApiSecret("");
+      setPassphrase("");
+      toast.success(`${meta.label}: cuenta conectada y cifrada`);
+      onSaved();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between gap-2 text-base">
+          <span>{meta.label}</span>
+          {saved && (
+            <StatusPill tone={statusTone(saved.connection_status)}>
+              {saved.connection_status === "ok" ? "Conectada" : saved.connection_status}
+            </StatusPill>
+          )}
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">
+          {meta.markets} · <a className="underline" href={meta.apiDocs} target="_blank" rel="noreferrer">Docs API</a>
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <p className="text-xs text-muted-foreground">{meta.notes}</p>
+        <div className="space-y-2">
+          <Label>API Key{meta.id === "etoro" ? " (partner key)" : ""}</Label>
+          <Input value={apiKey} autoComplete="off" onChange={(e) => setApiKey(e.target.value)} placeholder={`Pega tu key de ${meta.label}`} />
+        </div>
+        {meta.id !== "etoro" && (
+          <div className="space-y-2">
+            <Label>API Secret</Label>
+            <Input type="password" autoComplete="new-password" value={apiSecret} onChange={(e) => setApiSecret(e.target.value)} placeholder="••••••••••••••••" />
+          </div>
+        )}
+        {needPass && (
+          <div className="space-y-2">
+            <Label>Passphrase</Label>
+            <Input type="password" autoComplete="new-password" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} placeholder="Frase de la key" />
+          </div>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" size="sm" onClick={runTest} disabled={busy || !valid}>Probar (solo lectura)</Button>
+          <Button size="sm" onClick={runSave} disabled={busy || !valid}>Conectar cuenta</Button>
+        </div>
+        {result && <p className={result.ok ? "text-xs text-success" : "text-xs text-destructive"}>{result.message}</p>}
+        {saved && (
+          <div className="space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
+            <Row label="Guardada" value={`•••• ${saved.api_key_last4}`} />
+            <Row label="Probada" value={saved.last_tested_at ? dateTime(saved.last_tested_at) : "—"} />
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function Row({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <p className="flex items-center justify-between gap-2">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="tabular font-medium text-foreground">{value}</span>
+    </p>
   );
 }
 

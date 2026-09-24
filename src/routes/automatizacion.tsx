@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/PageHeader";
+import { FieldHelp } from "@/components/HelpTip";
 import { SortableTable, type Column } from "@/components/SortableTable";
 import { StatusPill, statusTone } from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,11 @@ export const Route = createFileRoute("/automatizacion")({
   component: AutomationPage,
 });
 
+import type { Database } from "@/integrations/supabase/types";
+
+type EngineRunRow = Database["public"]["Tables"]["engine_runs"]["Row"];
+type LastEngineRun = Pick<EngineRunRow, "status" | "notes" | "bots_processed" | "orders_created" | "started_at">;
+
 function AutomationPage() {
   const qc = useQueryClient();
   const settings = useQuery(automationQuery);
@@ -63,6 +69,9 @@ function AutomationPage() {
       allowRealTrading?: boolean;
       tickIntervalSeconds?: number;
       globalMaxDailyLoss?: number;
+      globalMaxCapital?: number;
+      globalMaxDrawdownPct?: number;
+      globalMaxWeeklyDrawdownPct?: number;
     }) => updateFn({ data }),
     onSuccess: () => {
       toast.success("Configuración del motor actualizada");
@@ -74,7 +83,14 @@ function AutomationPage() {
   const tick = useMutation({
     mutationFn: () => tickFn({}),
     onSuccess: (r) => {
-      toast.success(`Ciclo ${r.status}: ${r.botsProcessed} bots · ${r.ordersCreated} órdenes`);
+      const lastRun = (r.lastRun ?? null) as LastEngineRun | null;
+      const lastStatus = lastRun?.status ?? "?";
+      const lastNotes = lastRun?.notes ?? "sin notas";
+      const extra =
+        r.botsProcessed === 0
+          ? ` Motor: ${r.settings?.engine_enabled ? "ON" : "OFF"} · Kill: ${r.settings?.kill_switch ? "ON" : "OFF"} · Bots running+auto: ${(r.bots ?? []).filter((b) => b.status === "running").length}/${(r.bots ?? []).length} · Último ciclo: ${lastStatus} (${lastNotes})`
+          : "";
+      toast.success(`Ciclo ${r.status}: ${r.botsProcessed} bots · ${r.ordersCreated} órdenes.${extra}`);
       invalidate();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -83,6 +99,9 @@ function AutomationPage() {
   const s = settings.data;
   const [globalLoss, setGlobalLoss] = useState<string>("");
   const [interval, setIntervalValue] = useState<string>("");
+  const [globalCapital, setGlobalCapital] = useState<string>("");
+  const [drawdown, setDrawdown] = useState<string>("");
+  const [weeklyDrawdown, setWeeklyDrawdown] = useState<string>("");
 
   const heartbeatAge = s?.last_heartbeat_at
     ? Math.round((Date.now() - new Date(s.last_heartbeat_at).getTime()) / 1000)
@@ -157,8 +176,8 @@ function AutomationPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Automatización 24/7"
-        subtitle="El motor corre en la nube mediante un worker programado: no requiere que tu PC ni la app de escritorio estén abiertas."
+        title="Piloto automático (tus bots trabajan solos)"
+        subtitle="Enciéndelo y tus bots operan día y noche sin que tu PC esté abierta. Tú pones los límites de seguridad, ellos obedecen."
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -215,21 +234,21 @@ function AutomationPage() {
         <CardContent className="space-y-5">
           <div className="grid gap-4 md:grid-cols-3">
             <ToggleRow
-              label="Motor de automatización"
-              hint="Activa la ejecución programada en la nube."
+              label={<FieldHelp label="Motor de automatización" term="piloto automático" />}
+              hint="Apagado = tus bots descansan. Encendido = operan solos con tus límites."
               checked={!!s?.engine_enabled}
               onChange={(v) => update.mutate({ engineEnabled: v })}
             />
             <ToggleRow
-              label="Kill switch global"
-              hint="Detiene todos los bots inmediatamente."
+              label={<FieldHelp label="Botón rojo de pánico" term="kill switch" />}
+              hint="Lo detiene TODO de golpe si el mercado se vuelve loco."
               checked={!!s?.kill_switch}
               danger
               onChange={(v) => update.mutate({ killSwitch: v })}
             />
             <ToggleRow
-              label="Permitir trading real"
-              hint="Requiere API Keys de Binance verificadas."
+              label={<FieldHelp label="Permitir dinero real" term="real" />}
+              hint="Apagado = solo practica. Encenderlo requiere Binance + código del celular."
               checked={!!s?.allow_real_trading}
               danger
               onChange={(v) => update.mutate({ allowRealTrading: v })}
@@ -238,14 +257,47 @@ function AutomationPage() {
 
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-1.5">
-              <Label htmlFor="loss">Pérdida diaria máxima global (USD)</Label>
+              <Label htmlFor="capital">Capital global maximo (USD)</Label>
+              <Input
+                id="capital"
+                type="number"
+                value={globalCapital}
+                placeholder={String(s?.global_max_capital ?? 1000)}
+                onChange={(e) => setGlobalCapital(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="dd">Drawdown global maximo (%)</Label>
+              <Input
+                id="dd"
+                type="number"
+                value={drawdown}
+                placeholder={String(s?.global_max_drawdown_pct ?? 8)}
+                onChange={(e) => setDrawdown(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="wdd">Drawdown semanal escuadron (%)</Label>
+              <Input
+                id="wdd"
+                type="number"
+                value={weeklyDrawdown}
+                placeholder={String(s?.global_max_weekly_drawdown_pct ?? 12)}
+                onChange={(e) => setWeeklyDrawdown(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="loss">Perdida diaria maxima global (USD)</Label>
               <Input
                 id="loss"
                 type="number"
                 value={globalLoss}
-                placeholder={String(s?.global_max_daily_loss ?? 0)}
+                placeholder={String(s?.global_max_daily_loss ?? 100)}
                 onChange={(e) => setGlobalLoss(e.target.value)}
               />
+              <p className="text-[11px] text-muted-foreground">Actual: {s?.global_max_daily_loss ?? "—"} USD · kill switch automatico al alcanzar el tope.</p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="interval">Intervalo de tick (segundos)</Label>
@@ -263,11 +315,14 @@ function AutomationPage() {
                   update.mutate({
                     ...(globalLoss ? { globalMaxDailyLoss: Number(globalLoss) } : {}),
                     ...(interval ? { tickIntervalSeconds: Number(interval) } : {}),
+                    ...(globalCapital ? { globalMaxCapital: Number(globalCapital) } : {}),
+                    ...(drawdown ? { globalMaxDrawdownPct: Number(drawdown) } : {}),
+                    ...(weeklyDrawdown ? { globalMaxWeeklyDrawdownPct: Number(weeklyDrawdown) } : {}),
                   })
                 }
-                disabled={update.isPending || (!globalLoss && !interval)}
+                disabled={update.isPending || (!globalLoss && !interval && !globalCapital && !drawdown && !weeklyDrawdown)}
               >
-                Guardar límites
+                Guardar limites
               </Button>
               <Button variant="secondary" onClick={() => tick.mutate()} disabled={tick.isPending}>
                 Ejecutar ciclo ahora
@@ -276,9 +331,10 @@ function AutomationPage() {
           </div>
 
           <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
-            Para operar con fondos reales se requiere autenticación con 2FA reales, claves de Binance con permisos
-            mínimos y sin retiro, despliegue Cloud activo y revisión humana de riesgos. Deal Maker no promete
-            rentabilidad.
+            Motor 24/7 en produccion: verifica el cron con <b>POST /api/public/automation-tick</b> (Bearer
+            LOVABLE_CRON_SECRET) y el heartbeat en <b>GET /api/public/engine-health</b>. Sin heartbeat
+            reciente, el motor NO esta corriendo aunque el .exe este abierto. Para dinero real: 2FA, keys
+            con Spot Trade y sin retiros, limites configurados y prueba con montos minimos primero.
           </p>
         </CardContent>
       </Card>
@@ -323,7 +379,7 @@ function ToggleRow({
   onChange,
   danger,
 }: {
-  label: string;
+  label: React.ReactNode;
   hint: string;
   checked: boolean;
   onChange: (v: boolean) => void;

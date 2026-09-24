@@ -207,6 +207,27 @@ export type Database = {
           id?: string
           platform?: string
         }
+                Relationships: []
+      }
+      app_settings: {
+        Row: {
+          key: string
+          value: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          key: string
+          value: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          key?: string
+          value?: string
+          notes?: string | null
+          updated_at?: string
+        }
         Relationships: []
       }
       binance_credentials: {
@@ -791,6 +812,132 @@ export type Database = {
           usd_value?: number
         }
         Relationships: []
+      }
+      mining_sandboxes: {
+        Row: {
+          ai_notes: string | null
+          best_coin: string | null
+          best_pool: string | null
+          coins: string[]
+          created_at: string
+          date_from: string
+          date_to: string
+          estimated_daily_usd: number | null
+          id: string
+          name: string
+          pools: string[]
+          power_cost_usd_kwh: number
+          simulated_hash_rate: number
+          simulated_hash_unit: string
+          speed: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          ai_notes?: string | null
+          best_coin?: string | null
+          best_pool?: string | null
+          coins?: string[]
+          created_at?: string
+          date_from: string
+          date_to: string
+          estimated_daily_usd?: number | null
+          id?: string
+          name: string
+          pools?: string[]
+          power_cost_usd_kwh?: number
+          simulated_hash_rate?: number
+          simulated_hash_unit?: string
+          speed?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          ai_notes?: string | null
+          best_coin?: string | null
+          best_pool?: string | null
+          coins?: string[]
+          created_at?: string
+          date_from?: string
+          date_to?: string
+          estimated_daily_usd?: number | null
+          id?: string
+          name?: string
+          pools?: string[]
+          power_cost_usd_kwh?: number
+          simulated_hash_rate?: number
+          simulated_hash_unit?: string
+          speed?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      mining_training_runs: {
+        Row: {
+          coin: string
+          created_at: string
+          gross_daily_usd: number
+          hash_rate: number
+          hash_unit: string
+          id: string
+          net_daily_usd: number
+          pool: string
+          power_daily_usd: number
+          promoted: boolean
+          sandbox_id: string
+          suggested_params: Json
+          worker_id: string | null
+          worker_name: string
+        }
+        Insert: {
+          coin: string
+          created_at?: string
+          gross_daily_usd?: number
+          hash_rate?: number
+          hash_unit?: string
+          id?: string
+          net_daily_usd?: number
+          pool: string
+          power_daily_usd?: number
+          promoted?: boolean
+          sandbox_id: string
+          suggested_params?: Json
+          worker_id?: string | null
+          worker_name: string
+        }
+        Update: {
+          coin?: string
+          created_at?: string
+          gross_daily_usd?: number
+          hash_rate?: number
+          hash_unit?: string
+          id?: string
+          net_daily_usd?: number
+          pool?: string
+          power_daily_usd?: number
+          promoted?: boolean
+          sandbox_id?: string
+          suggested_params?: Json
+          worker_id?: string | null
+          worker_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mining_training_runs_sandbox_id_fkey"
+            columns: ["sandbox_id"]
+            isOneToOne: false
+            referencedRelation: "mining_sandboxes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mining_training_runs_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "mining_workers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       mining_workers: {
         Row: {

@@ -75,7 +75,30 @@ export const saveBotRisk = createServerFn({ method: "POST" })
         updated_at: new Date().toISOString(),
       })
       .eq("id", data.botId);
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (!/42703|does not exist|could not find/i.test(`${error.code ?? ""} ${error.message}`)) {
+        throw new Error(error.message);
+      }
+      const { error: fallbackError } = await db
+        .from("bots")
+        .update({
+          automation_enabled: data.automationEnabled,
+          stop_loss_pct: data.stopLossPct,
+          max_daily_loss: data.maxDailyLoss,
+          max_drawdown_pct: data.maxDrawdownPct,
+          max_capital: data.maxCapital,
+          max_trades_per_day: data.maxTradesPerDay,
+          auto_stop_reason: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", data.botId);
+      if (fallbackError) throw new Error(fallbackError.message);
+      await audit("risk.bot_limits_updated", "bot", data.botId, {
+        ...data,
+        nota: "Guardado parcial: take-profit y drawdown semanal requieren PART7 en Supabase.",
+      });
+      return { ok: true, parcial: true as const };
+    }
     await audit("risk.bot_limits_updated", "bot", data.botId, { ...data });
     return { ok: true };
   });
@@ -101,6 +124,8 @@ export const saveSquadRisk = createServerFn({ method: "POST" })
     const db = await admin();
     const { data: settings } = await db.from("automation_settings").select("id").limit(1).maybeSingle();
     if (!settings) throw new Error("No hay configuración del motor");
+    // Intento completo (nube con PART7). En nube vieja se guardan solo los
+    // límites básicos que existen y se avisa qué quedó pendiente de PART7.
     const { error } = await db
       .from("automation_settings")
       .update({
@@ -115,7 +140,27 @@ export const saveSquadRisk = createServerFn({ method: "POST" })
         updated_at: new Date().toISOString(),
       })
       .eq("id", settings.id);
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (!/42703|does not exist|could not find/i.test(`${error.code ?? ""} ${error.message}`)) {
+        throw new Error(error.message);
+      }
+      const { error: fallbackError } = await db
+        .from("automation_settings")
+        .update({
+          global_max_daily_loss: data.globalMaxDailyLoss,
+          global_max_drawdown_pct: data.globalMaxDrawdownPct,
+          global_max_weekly_drawdown_pct: data.globalMaxWeeklyDrawdownPct,
+          global_max_capital: data.globalMaxCapital,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", settings.id);
+      if (fallbackError) throw new Error(fallbackError.message);
+      await audit("risk.squad_limits_updated", "automation_settings", settings.id, {
+        ...data,
+        nota: "Guardado parcial: concentración por par y criterios demo requieren PART7 en Supabase.",
+      });
+      return { ok: true, parcial: true as const };
+    }
     await audit("risk.squad_limits_updated", "automation_settings", settings.id, { ...data });
     return { ok: true };
   });
@@ -178,13 +223,25 @@ export const triggerKillSwitch = createServerFn({ method: "POST" })
         kill_switch: data.active,
         engine_enabled: false,
         engine_status: data.active ? "halted" : "stopped",
-        kill_switch_reason: data.reason,
-        kill_switch_actor: data.actor,
-        kill_switch_at: now,
         updated_at: now,
       })
       .eq("id", settings.id);
     if (error) throw new Error(error.message);
+
+    // Metadatos de auditoría (solo con PART7); best-effort sin romper el kill.
+    try {
+      await db
+        .from("automation_settings")
+        .update({
+          kill_switch_reason: data.reason,
+          kill_switch_actor: data.actor,
+          kill_switch_at: now,
+          updated_at: now,
+        })
+        .eq("id", settings.id);
+    } catch {
+      // Nube sin PART7: el kill ya quedó aplicado arriba.
+    }
 
     let botsStopped = 0;
     let workersStopped = 0;

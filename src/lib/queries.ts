@@ -6,6 +6,18 @@ const unwrap = <T>(res: { data: unknown; error: { message: string } | null }): T
   return (res.data ?? []) as T;
 };
 
+/**
+ * Tablas creadas por PART7 que pueden no existir aún en nubes viejas
+ * (solo PART1-5). En ese caso devuelven [] en vez de romper la página;
+ * tras pegar PART7 fluyen los datos reales.
+ */
+const unwrapOrEmpty = <T>(res: { data: unknown; error: { message: string; code?: string } | null }): T => {
+  if (!res.error) return (res.data ?? []) as T;
+  const msg = `${res.error.code ?? ""} ${res.error.message}`;
+  if (/PGRST205|42P01|42703|does not exist|could not find/i.test(msg)) return [] as T;
+  throw new Error(res.error.message);
+};
+
 export type FundAccount = {
   id: string;
   label: string;
@@ -125,6 +137,36 @@ export type Payout = {
   paid_at: string;
 };
 
+export type MiningSandbox = {
+  id: string;
+  name: string;
+  coins: string[];
+  pools: string[];
+  simulated_hash_rate: number;
+  simulated_hash_unit: string;
+  power_cost_usd_kwh: number;
+  date_from: string;
+  date_to: string;
+  speed: number;
+  status: string;
+  best_coin: string | null;
+  best_pool: string | null;
+  estimated_daily_usd: number | null;
+  ai_notes: string | null;
+};
+
+export type MiningTrainingRun = {
+  id: string;
+  sandbox_id: string;
+  worker_name: string;
+  coin: string;
+  pool: string;
+  gross_daily_usd: number;
+  power_daily_usd: number;
+  net_daily_usd: number;
+  promoted: boolean;
+};
+
 export type BinanceSettings = {
   id: string;
   api_key_last4: string;
@@ -196,17 +238,38 @@ export const auditQuery = queryOptions({
     ),
 });
 
+const BOTS_FULL_SELECT =
+  "id,name,strategy,pair,capital,status,mode,demo_engine,exchange,pnl,win_rate,automation_enabled,stop_loss_pct,take_profit_pct,max_daily_loss,max_drawdown_pct,max_weekly_drawdown_pct,max_capital,max_trades_per_day,trades_today,daily_loss,weekly_loss,demo_since,demo_trades,auto_stop_reason";
+const BOTS_BASE_SELECT =
+  "id,name,strategy,pair,capital,status,mode,demo_engine,exchange,pnl,win_rate,automation_enabled,stop_loss_pct,max_daily_loss,max_drawdown_pct,max_capital,max_trades_per_day,trades_today,daily_loss,auto_stop_reason";
+
 export const botsQuery = queryOptions({
   queryKey: ["bots"],
-  queryFn: async () =>
-    unwrap<Bot[]>(
-      await supabase
-        .from("bots")
-        .select(
-          "id,name,strategy,pair,capital,status,mode,demo_engine,exchange,pnl,win_rate,automation_enabled,stop_loss_pct,take_profit_pct,max_daily_loss,max_drawdown_pct,max_weekly_drawdown_pct,max_capital,max_trades_per_day,trades_today,daily_loss,weekly_loss,demo_since,demo_trades,auto_stop_reason",
-        )
-        .order("created_at", { ascending: true }),
-    ),
+  queryFn: async () => {
+    // Intento completo (nube con PART7). En nube vieja se reintenta con el
+    // subset básico y se rellenan defaults para no romper dashboard/escuadrón.
+    const full = await supabase
+      .from("bots")
+      .select(BOTS_FULL_SELECT)
+      .order("created_at", { ascending: true });
+    if (!full.error) return (full.data ?? []) as Bot[];
+    if (!/42703|does not exist|could not find/i.test(`${full.error.code ?? ""} ${full.error.message}`)) {
+      throw new Error(full.error.message);
+    }
+    const base = await supabase
+      .from("bots")
+      .select(BOTS_BASE_SELECT)
+      .order("created_at", { ascending: true });
+    if (base.error) throw new Error(base.error.message);
+    return ((base.data ?? []) as Partial<Bot>[]).map((b) => ({
+      take_profit_pct: 3,
+      max_weekly_drawdown_pct: 20,
+      weekly_loss: 0,
+      demo_since: null,
+      demo_trades: 0,
+      ...b,
+    })) as Bot[];
+  },
 });
 
 export const botLogsQuery = queryOptions({
@@ -265,6 +328,54 @@ export const payoutsQuery = queryOptions({
         .select("id,coin,pool,amount,usd_value,paid_at")
         .order("paid_at", { ascending: false })
         .limit(40),
+    ),
+});
+
+export const miningSandboxesQuery = queryOptions({
+  queryKey: ["mining_sandboxes"],
+  queryFn: async () =>
+    unwrap<MiningSandbox[]>(
+      await supabase
+        .from("mining_sandboxes")
+        .select(
+          "id,name,coins,pools,simulated_hash_rate,simulated_hash_unit,power_cost_usd_kwh,date_from,date_to,speed,status,best_coin,best_pool,estimated_daily_usd,ai_notes",
+        )
+        .order("created_at", { ascending: false }),
+    ),
+});
+
+export const miningRunsQuery = (sandboxId: string | null) =>
+  queryOptions({
+    queryKey: ["mining_training_runs", sandboxId ?? "all"],
+    queryFn: async () => {
+      let q = supabase
+        .from("mining_training_runs")
+        .select("id,sandbox_id,worker_name,coin,pool,gross_daily_usd,power_daily_usd,net_daily_usd,promoted")
+        .order("net_daily_usd", { ascending: false })
+        .limit(24);
+      if (sandboxId) q = q.eq("sandbox_id", sandboxId);
+      return unwrap<MiningTrainingRun[]>(await q);
+    },
+  });
+
+export type ExchangeCredential = {
+  id: string;
+  exchange: string;
+  label: string;
+  api_key_last4: string;
+  connection_status: string;
+  last_tested_at: string | null;
+  last_error_message: string | null;
+};
+
+export const exchangesQuery = queryOptions({
+  queryKey: ["exchange_credentials"],
+  queryFn: async () =>
+    unwrap<ExchangeCredential[]>(
+      await supabase
+        .from("exchange_credentials")
+        .select("id,exchange,label,api_key_last4,connection_status,last_tested_at,last_error_message")
+        .order("exchange", { ascending: true }),
     ),
 });
 
@@ -411,7 +522,7 @@ export const engineRunsQuery = queryOptions({
   queryKey: ["engine_runs"],
   refetchInterval: 15000,
   queryFn: async () =>
-    unwrap<EngineRun[]>(
+    unwrapOrEmpty<EngineRun[]>(
       await supabase
         .from("engine_runs")
         .select(
@@ -425,7 +536,7 @@ export const engineRunsQuery = queryOptions({
 export const hashrateHistoryQuery = queryOptions({
   queryKey: ["mining_hashrate_history"],
   queryFn: async () =>
-    unwrap<HashratePoint[]>(
+    unwrapOrEmpty<HashratePoint[]>(
       await supabase
         .from("mining_hashrate_history")
         .select("worker_name,coin,recorded_on,hash_rate,hash_unit")
@@ -436,7 +547,7 @@ export const hashrateHistoryQuery = queryOptions({
 export const marketPricesQuery = queryOptions({
   queryKey: ["market_prices"],
   queryFn: async () =>
-    unwrap<PricePoint[]>(
+    unwrapOrEmpty<PricePoint[]>(
       await supabase
         .from("market_prices")
         .select("symbol,recorded_on,price")
@@ -447,7 +558,7 @@ export const marketPricesQuery = queryOptions({
 export const botPerformanceQuery = queryOptions({
   queryKey: ["bot_performance_history"],
   queryFn: async () =>
-    unwrap<BotPerfPoint[]>(
+    unwrapOrEmpty<BotPerfPoint[]>(
       await supabase
         .from("bot_performance_history")
         .select("bot_name,recorded_on,pnl,return_pct,capital")
@@ -596,7 +707,7 @@ export const reconFindingsQuery = queryOptions({
 export const reconObservationsQuery = queryOptions({
   queryKey: ["recon_observations"],
   queryFn: async () =>
-    unwrap<ReconObservation[]>(
+    unwrapOrEmpty<ReconObservation[]>(
       await supabase
         .from("recon_observations")
         .select("id,source,symbol,metric,value,is_demo,observed_at")
