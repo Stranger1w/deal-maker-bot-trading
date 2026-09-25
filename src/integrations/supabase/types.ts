@@ -59,16 +59,19 @@ export type Database = {
       app_settings: {
         Row: {
           key: string
+          notes: string | null
           value: string
           updated_at: string
         }
         Insert: {
           key: string
+          notes?: string | null
           value: string
           updated_at?: string
         }
         Update: {
           key?: string
+          notes?: string | null
           value?: string
           updated_at?: string
         }
