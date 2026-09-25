@@ -106,6 +106,7 @@ export type Database = {
       }
       automation_settings: {
         Row: {
+          allow_live_orders: boolean
           allow_real_trading: boolean
           engine_enabled: boolean
           engine_status: string
@@ -135,6 +136,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          allow_live_orders?: boolean
           allow_real_trading?: boolean
           engine_enabled?: boolean
           engine_status?: string
@@ -164,6 +166,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          allow_live_orders?: boolean
           allow_real_trading?: boolean
           engine_enabled?: boolean
           engine_status?: string
@@ -1158,7 +1161,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      bot_apply_execution: {
+        Args: {
+          p_bot_id: string
+          p_is_demo: boolean
+          p_loss_delta: number
+          p_pnl_delta: number
+          p_today: string
+          p_week_start: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
