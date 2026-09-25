@@ -290,6 +290,8 @@ export type AutomationSettings = {
   engine_enabled: boolean;
   kill_switch: boolean;
   allow_real_trading: boolean;
+  /** Segundo desbloqueo: sin el, el modo Real se omite (dry-run) y no envia ordenes. */
+  allow_live_orders?: boolean;
   tick_interval_seconds: number;
   global_max_daily_loss: number;
   global_max_drawdown_pct: number;

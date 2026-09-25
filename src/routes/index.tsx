@@ -155,7 +155,12 @@ function Dashboard() {
                 : "apagado"}
           </StatusPill>
           <span className="text-xs text-muted-foreground">
-            Operar con dinero real: {engine.data?.allow_real_trading ? "permitido" : "bloqueado"}
+            Operar con dinero real:{" "}
+            {!engine.data?.allow_real_trading
+              ? "bloqueado"
+              : !engine.data?.allow_live_orders
+                ? "habilitado en dry-run (sin enviar órdenes)"
+                : "permitido (requiere 2FA y límites)"}
           </span>
           <span className="text-xs text-muted-foreground">
             Última señal de vida:{" "}

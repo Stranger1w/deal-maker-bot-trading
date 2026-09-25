@@ -331,7 +331,16 @@ function SquadTab() {
       </span>
     ) },
     { key: "mode", label: "Modo", value: (b) => b.mode, render: (b) => (
-      <StatusPill tone={b.mode === "real" ? "danger" : "neutral"}>{b.mode}</StatusPill>
+      <div className="space-y-1">
+        <StatusPill tone={b.mode === "real" ? "danger" : "neutral"}>{b.mode}</StatusPill>
+        {b.mode === "real" && !settings.data?.allow_live_orders && (
+          <p className="text-[11px] text-warning">
+            Modo Real habilitado pero en dry-run: allow_live_orders está desactivado, así que no se
+            están enviando órdenes reales a Binance y el ciclo Real se omite sin generar P&amp;L.
+            Activa allow_live_orders solo cuando quieras operar con fondos reales.
+          </p>
+        )}
+      </div>
     ) },
     { key: "exchange", label: "Exchange", value: (b) => b.exchange, render: (b) => b.exchange },
     { key: "capital", label: "Capital", align: "right", value: (b) => Number(b.capital), render: (b) => money(Number(b.capital)) },

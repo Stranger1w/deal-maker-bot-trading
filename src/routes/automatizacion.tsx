@@ -42,6 +42,20 @@ export const Route = createFileRoute("/automatizacion")({
   component: AutomationPage,
 });
 
+/**
+ * Estado del trading real en tres niveles. El modo Real exige doble autorización:
+ * `allow_real_trading` habilita la intención y `allow_live_orders` es el segundo
+ * desbloqueo que realmente permite enviar órdenes a Binance. Sin el segundo flag
+ * el ciclo Real se omite (dry-run) y no genera P&L.
+ */
+function tradingRealStatus(
+  s: { allow_real_trading?: boolean; allow_live_orders?: boolean } | null | undefined,
+) {
+  if (!s?.allow_real_trading) return { label: "Bloqueado", className: "text-success" };
+  if (!s?.allow_live_orders) return { label: "Dry-run", className: "text-warning" };
+  return { label: "Autorizado", className: "text-destructive" };
+}
+
 function AutomationPage() {
   const qc = useQueryClient();
   const settings = useQuery(automationQuery);
@@ -191,10 +205,16 @@ function AutomationPage() {
             <CardTitle className="text-sm text-muted-foreground">Trading real</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className={`text-2xl font-semibold ${s?.allow_real_trading ? "text-destructive" : "text-success"}`}>
-              {s?.allow_real_trading ? "Autorizado" : "Bloqueado"}
+            <p className={`text-2xl font-semibold ${tradingRealStatus(s).className}`}>
+              {tradingRealStatus(s).label}
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">Desactivado por defecto</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {!s?.allow_real_trading
+                ? "Desactivado por defecto"
+                : !s?.allow_live_orders
+                  ? "Real habilitado pero sin enviar órdenes (allow_live_orders desactivado)"
+                  : "Enviando órdenes reales a Binance"}
+            </p>
           </CardContent>
         </Card>
         <Card>
