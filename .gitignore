@@ -16,6 +16,12 @@ dist-ssr
 .nitro
 *.local
 
+# Secretos: nunca commitear .env (contiene SUPABASE_SERVICE_ROLE_KEY,
+# CREDENTIALS_ENCRYPTION_KEY y LOVABLE_CRON_SECRET).
+.env
+.env.*
+!.env.example
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
