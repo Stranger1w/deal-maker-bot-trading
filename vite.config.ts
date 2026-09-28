@@ -17,6 +17,14 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
-  vite: { plugins: [mcpPlugin()] },
+  vite: {
+    // mcpPlugin() falla al arrancar en Windows: assertContains() compara el
+    // projectRoot normalizado a "/" contra la ruta devuelta por path.resolve()
+    // con separadores nativos "\", y nunca coinciden. Solo se registra donde
+    // funciona; en Windows las rutas MCP ya generadas (src/routes/mcp.ts y
+    // src/routes/[.well-known]/oauth-protected-resource.ts) siguen en el repo
+    // y sirven /mcp igual, solo deja de regenerarlas.
+    plugins: process.platform === "win32" ? [] : [mcpPlugin()],
+  },
   ...(isDesktop ? { nitro: { preset: "node-server" as const } } : {}),
 });
