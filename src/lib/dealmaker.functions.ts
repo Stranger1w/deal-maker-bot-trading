@@ -76,13 +76,24 @@ async function binancePing(apiKey: string, apiSecret: string) {
   const { signBinanceQuery } = await import("./crypto.server");
   const { isBinanceGeoRestricted, safeBinanceError, GEO_RESTRICTED_MESSAGE, GEO_RESTRICTED_CODE } =
     await import("./binance-region");
+  // Valida contra el host del entorno configurado: en testnet las claves de
+  // testnet se comprueban contra testnet.binance.vision y no contra
+  // produccion, donde nunca serian validas.
+  const { BINANCE_HOSTS, resolveBinanceTradingEnv } = await import("./binance-trading.server");
+  const env = await resolveBinanceTradingEnv();
   const query = `timestamp=${Date.now()}&recvWindow=5000`;
   const signature = await signBinanceQuery(query, apiSecret);
-  const res = await fetch(`https://api.binance.com/api/v3/account?${query}&signature=${signature}`, {
+  const res = await fetch(`${BINANCE_HOSTS[env]}/api/v3/account?${query}&signature=${signature}`, {
     headers: { "X-MBX-APIKEY": apiKey },
   });
   if (res.ok)
-    return { ok: true as const, restricted: false, code: null as string | null, message: "Conexión de solo lectura verificada" };
+    return {
+      ok: true as const,
+      restricted: false,
+      code: null as string | null,
+      message: `Conexión verificada contra ${env}`,
+      env,
+    };
   const raw = await res.text().catch(() => "");
   let msg = "";
   try {
@@ -97,6 +108,7 @@ async function binancePing(apiKey: string, apiSecret: string) {
       code: GEO_RESTRICTED_CODE,
       message: GEO_RESTRICTED_MESSAGE,
       detail: safeBinanceError(res.status, msg || raw),
+      env,
     };
   }
   return {
@@ -104,6 +116,7 @@ async function binancePing(apiKey: string, apiSecret: string) {
     restricted: false,
     code: `http_${res.status}`,
     message: msg || `Binance respondió ${res.status}`,
+    env,
   };
 }
 
