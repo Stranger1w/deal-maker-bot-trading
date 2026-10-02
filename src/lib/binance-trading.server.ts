@@ -149,6 +149,7 @@ export type BinanceOrderRequest = {
 export type BinanceOrderResult = {
   ok: boolean;
   env: BinanceTradingEnv;
+  /** Estado real devuelto por Binance (FILLED, PARTIALLY_FILLED, CANCELED...). */
   status: string | null;
   orderId: string | null;
   executedQty: number;
@@ -161,6 +162,12 @@ export type BinanceOrderResult = {
   errorCode: string | null;
   errorMessage: string | null;
   geoRestricted: boolean;
+  /**
+   * true si Binance报告显示 PARTIALLY_FILLED: se ejecutó parte de la orden.
+   * La posición resultante es menor que la solicitada y hay que reflejarlo
+   * explícitamente en bot_logs; nunca tratarla como una orden completa.
+   */
+  partiallyFilled: boolean;
 };
 
 function fail(
@@ -181,6 +188,7 @@ function fail(
     errorCode: code,
     errorMessage: message.replace(/\s+/g, " ").slice(0, 300),
     geoRestricted,
+    partiallyFilled: false,
   };
 }
 
@@ -316,10 +324,15 @@ export async function placeBinanceOrder(req: BinanceOrderRequest): Promise<Binan
     return sum + Number(f.commission ?? 0);
   }, 0);
 
+  // Estado real de Binance, sin forzarlo a FILLED: un PARTIALLY_FILLED deja una
+  // posicion menor que la solicitada y debe quedar registrado como tal.
+  const rawStatus = (payload.status ?? "FILLED").toUpperCase();
+  const partiallyFilled = rawStatus === "PARTIALLY_FILLED";
+
   return {
     ok: true,
     env,
-    status: payload.status ?? "FILLED",
+    status: rawStatus,
     orderId: payload.orderId ? String(payload.orderId) : null,
     executedQty,
     quoteQty,
@@ -328,6 +341,7 @@ export async function placeBinanceOrder(req: BinanceOrderRequest): Promise<Binan
     errorCode: null,
     errorMessage: null,
     geoRestricted: false,
+    partiallyFilled,
   };
 }
 

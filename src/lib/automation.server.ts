@@ -116,7 +116,10 @@ type RealOrderOutcome = {
   quantity: number;
   price: number;
   pnl: number;
-  status: "filled" | "error";
+  /** `filled` completo, `partially_filled` si Binance solo ejecuto parte. */
+  status: "filled" | "partially_filled" | "error";
+  /** true cuando Binance ejecuta solo una fraccion de la orden solicitada. */
+  partial: boolean;
   error: string | null;
   stopLoss: boolean;
   takeProfit: boolean;
@@ -174,6 +177,7 @@ async function realCycleOrder(
       price: 0,
       pnl: 0,
       status: "error",
+      partial: false,
       error: "live_orders_disabled",
       stopLoss: false,
       takeProfit: false,
@@ -204,7 +208,9 @@ async function realCycleOrder(
     .select("side,quantity,price")
     .eq("bot_id", bot.id)
     .eq("symbol", symbol)
-    .in("status", ["filled", "simulated"])
+    // `partially_filled` tambien abre posicion: si se omitiera, el motor creeria
+    // que no hay posicion abierta y abriria una segunda entrada duplicada.
+    .in("status", ["filled", "simulated", "partially_filled"])
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -231,6 +237,7 @@ async function realCycleOrder(
         price: 0,
         pnl: 0,
         status: "error",
+        partial: false,
         error: `${order.errorCode ?? "sin_codigo"}: ${order.errorMessage ?? "sin detalle"}`,
         stopLoss: false,
         takeProfit: false,
@@ -245,12 +252,15 @@ async function realCycleOrder(
       quantity: order.executedQty,
       price: order.price,
       pnl: 0,
-      status: "filled",
+      status: order.partiallyFilled ? "partially_filled" : "filled",
+      partial: order.partiallyFilled,
       error: null,
       stopLoss: false,
       takeProfit: false,
       env,
-      note: `entrada ejecutada en ${env}`,
+      note: order.partiallyFilled
+        ? `entrada PARCIAL en ${env}: solo ${order.executedQty} de ${size} ${rules.quote} se ejecutaron`
+        : `entrada ejecutada en ${env}`,
       orderId: order.orderId,
       dryRun: false,
     };
@@ -290,6 +300,7 @@ async function realCycleOrder(
       price,
       pnl: 0,
       status: "error",
+      partial: false,
       error: `${order.errorCode ?? "sin_codigo"}: ${order.errorMessage ?? "sin detalle"}`,
       stopLoss: hitStopLoss,
       takeProfit: hitTakeProfit,
@@ -306,12 +317,15 @@ async function realCycleOrder(
     quantity: order.executedQty,
     price: order.price,
     pnl,
-    status: "filled",
+    status: order.partiallyFilled ? "partially_filled" : "filled",
+    partial: order.partiallyFilled,
     error: null,
     stopLoss: hitStopLoss,
     takeProfit: hitTakeProfit,
     env,
-    note: `${hitStopLoss ? "stop-loss" : "take-profit"} ejecutado en ${env} (movimiento ${movePct.toFixed(2)}%)`,
+    note: order.partiallyFilled
+      ? `${hitStopLoss ? "stop-loss" : "take-profit"} PARCIAL en ${env}: solo ${order.executedQty} de ${quantity} seVendieron; queda posicion abierta`
+      : `${hitStopLoss ? "stop-loss" : "take-profit"} ejecutado en ${env} (movimiento ${movePct.toFixed(2)}%)`,
     orderId: order.orderId,
     dryRun: false,
   };
@@ -612,7 +626,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         let side: "buy" | "sell";
         let quantity: number;
         let price = 0;
-        let execStatus: "filled" | "simulated" | "error";
+        let execStatus: "filled" | "partially_filled" | "simulated" | "error";
         let execError: string | null = null;
         let hitStopLoss = false;
         let hitTakeProfit = false;
@@ -691,6 +705,25 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           execStatus === "error" ? "error" : "info",
           `Orden ${side} ${quantity} ${bot.pair} @ ${price} · ${note}${execError ? ` · ${execError}` : ""}`,
         );
+
+        // Fill parcial: no es silencioso. Queda constancia explicita de que la
+        // posicion resultante es menor que la ordenada y requiere reconciliacion.
+        if (execStatus === "partially_filled") {
+          await log(
+            db,
+            bot.id,
+            "warn",
+            `FILL PARCIAL de Binance: se ejecutaron ${quantity} de los ${size} ${bot.pair} solicitados. La posicion se registro con el importe real; revisar en el panel de Binance.`,
+          );
+          await audit(db, "bot.order_partially_filled", bot.id, {
+            exchangeOrderId,
+            symbol: bot.pair,
+            side,
+            executed_quantity: quantity,
+            requested: size,
+            price,
+          });
+        }
 
         // Orden rechazada por Binance: no se altera el P&L del bot ni se cuenta la
         // operación como creada (la ejecución queda registrada con su error).
