@@ -8,8 +8,12 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 import { mcpPlugin } from "@lovable.dev/mcp-js/stacks/tanstack/vite";
 
 // DESKTOP=1 builds the Node server bundle that the Electron app boots locally.
-// Without it the build stays identical to the web/cloud build.
+// NITRO_PRESET=node-server does the same for Railway/VPS: those run a Node
+// process, but Nitro defaults to the Cloudflare preset, whose entry exports
+// fetch() (a worker) and cannot be started with `node`.
 const isDesktop = process.env["DESKTOP"] === "1";
+const isNodeServer =
+  process.env["NITRO_PRESET"] === "node-server" || Boolean(process.env["RAILWAY_ENVIRONMENT"]);
 
 export default defineConfig({
   tanstackStart: {
@@ -26,5 +30,5 @@ export default defineConfig({
     // y sirven /mcp igual, solo deja de regenerarlas.
     plugins: process.platform === "win32" ? [] : [mcpPlugin()],
   },
-  ...(isDesktop ? { nitro: { preset: "node-server" as const } } : {}),
+  ...(isDesktop || isNodeServer ? { nitro: { preset: "node-server" as const } } : {}),
 });
