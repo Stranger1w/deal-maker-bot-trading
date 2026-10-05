@@ -1,0 +1,19 @@
+# Normaliza finales de linea a LF en todo el repositorio, en el indice y en
+# los checkouts. Necesario porque core.autocrlf=true (Windows) convertia a
+# CRLF al hacer checkout y Prettier reportaba "Delete CR" en cada linea.
+* text=auto eol=lf
+
+# Los scripts de Windows necesitan CRLF para ejecutarse.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binarios: git no debe tocar finales de linea.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
