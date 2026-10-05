@@ -18,8 +18,13 @@ declare module "bun:test" {
     toBeFalsy(): void;
     toContain(expected: unknown): void;
     toBeGreaterThan(expected: number): void;
+    toBeGreaterThanOrEqual(expected: number): void;
     toBeLessThan(expected: number): void;
+    toBeLessThanOrEqual(expected: number): void;
     toBeCloseTo(expected: number, precision?: number): void;
+    toBeInstanceOf(expected: unknown): void;
+    toHaveLength(expected: number): void;
+    toMatch(expected: string | RegExp): void;
     toThrow(expected?: unknown): void;
     not: {
       toBe(expected: unknown): void;
@@ -27,6 +32,10 @@ declare module "bun:test" {
       toBeNull(): void;
       toBeUndefined(): void;
       toContain(expected: unknown): void;
+      toBeGreaterThan(expected: number): void;
+      toBeLessThan(expected: number): void;
+      toBeLessThanOrEqual(expected: number): void;
+      toBeInstanceOf(expected: unknown): void;
       toThrow(expected?: unknown): void;
     };
   };

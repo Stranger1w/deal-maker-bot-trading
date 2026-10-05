@@ -33,6 +33,27 @@ export const TEXTOS = {
     sinTick: "Sin tick recientes",
     tickAtrasado: "Sin tick desde hace más de 2 intervalos",
   },
+  /**
+   * Avisos al mezclar indicadores de TENDENCIA y de REVERSION.
+   *
+   * No es un error combinarlos: es una advertencia. Los indicadores de
+   * tendencia esperan que el precio siga, los de reversion esperan que gire, asi
+   * que se contradicen y la senal combinada solo sale cuando coinciden todos.
+   * El resultado habitual es que el motor opera mucho menos de lo que parece.
+   */
+  mezclaTipos: {
+    titulo: "Estás mezclando indicadores de tendencia y de reversión",
+    tendencia: "Tendencia",
+    reversion: "Reversión",
+    detalle:
+      "Los indicadores de tendencia buscan que el precio siga en su dirección. Los de reversión buscan que gire tras llegar a un extremo. Si mezclas ambos, se contradicen: la señal solo saldrá cuando todos coincidan, así que el motor operará bastante menos de lo que parece.",
+    soloTendencia:
+      "Has seleccionado solo indicadores de tendencia. El motor esperará confirmaciones de continuación y puede pasar varias velas sin operar en mercados laterales.",
+    soloReversion:
+      "Has seleccionado solo indicadores de reversión. El motor buscará giros y puede abrir operaciones contrarias a una tendencia en curso.",
+    aiNoCuadra:
+      "El AI Indicator puntúa tu propio historial por par, hora e indicador. Si el contexto actual puntúa bajo, deja de intervenir: los otros indicadores son los que mandan.",
+  },
   confirmaciones: {
     iniciarReal:
       "Vas a operar con dinero real en la cuenta Real. ¿Confirmas que entiendes el riesgo?",

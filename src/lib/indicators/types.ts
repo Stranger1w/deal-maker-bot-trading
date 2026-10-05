@@ -9,7 +9,18 @@
  *    varios seleccionados: esa combinacion vive en `combineSignals`.
  */
 
-/** Direccion de una senal. `null` significa "sin senal" (se mantiene la posicion). */
+/**
+ * Direccion de una senal. `null` significa "sin senal" (se mantiene la posicion).
+ *
+ * ATENCION (relevante para la Fase 3, integracion en el motor):
+ * en Binance SPOT una senal `sell` significa CERRAR una posicion larga que ya
+ * existe. NO abre una posicion corta: el spot no permite vender algo que no
+ * tienes. Si el bot no tiene posicion abierta, un `sell` NO DEBE generar una
+ * orden de venta, sino omitirse.
+ *
+ * Los indicadores no saben nada del estado del bot (son funciones puras sobre
+ * precios): es el motor quien debe aplicar esta regla al consumir la senal.
+ */
 export type SignalDirection = "buy" | "sell" | null;
 
 /** Parametro editable de un indicador. */
@@ -36,10 +47,25 @@ export type IndicatorFailure =
   | "ruido"
   | "ninguno";
 
+/**
+ * Familia del indicador, para avisar cuando se mezclan estilos opuestos.
+ *
+ *  - TENDENCIA: busca continuacion (MACD, Precio de cierre).
+ *  - REVERSION: busca giro tras un extremo (RSI, Bollinger, Estocastico, CCI).
+ *  - FILTRO:    no genera senal propia; modula a los demas (AI Indicator).
+ *
+ * Mezclar TENDENCIA con REVERSION hace que las senales se contradigan y el
+ * motor se quede quieto, asi que el modal avisa. Los de tipo FILTRO quedan
+ * fuera de ese aviso: no se oponen a nadie.
+ */
+export type IndicatorTipo = "tendencia" | "reversion" | "filtro";
+
 /** Ficha completa de un indicador tecnico. */
 export type IndicatorDef = {
   id: string;
   nombre: string;
+  /** Familia del indicador. Determina el aviso al mezclar. */
+  tipo: IndicatorTipo;
   /** Una linea, tal cual aparece en la tarjeta. */
   descripcionCorta: string;
   /** Que mide, como genera la senal, cuando falla. Se despliega en "Mostrar detalles". */
@@ -51,16 +77,20 @@ export type IndicatorDef = {
   };
   parametros: IndicatorParam[];
   /**
-   * Funcion pura. `closes` son cierres ordenados de mas antiguo a mas reciente.
-   * Solo usa los ultimos `lookback` valores que necesite cada indicador.
+   * Funcion pura. Recibe la serie OHLCV (solo velas CERRADAS) y los parametros,
+   * y devuelve la senal. Cada indicador usa lo que necesita: RSI/MACD/Bollinger
+   * solo cierres, Estocastico y CCI tambien highs/lows.
+   *
+   * Regla de datos: la serie NUNCA debe incluir la vela en curso. Quien la
+   * construye ya la descarta con `cerradas()`.
    */
-  signal: (closes: number[], params: Record<string, number>) => SignalDirection;
+  signal: (series: PriceSeries, params: Record<string, number>) => SignalDirection;
   /**
    * Diagnostico del contexto actual: por que la senal es debil o inexistente.
    * Opcional: no todos los indicadores saben autodiagnosticarse.
    */
   diagnose?: (
-    closes: number[],
+    series: PriceSeries,
     params: Record<string, number>,
   ) => { failure: IndicatorFailure; detalle: string };
   /** Minimo de velas necesarias. Si hay menos, no hay senal. */
@@ -71,12 +101,24 @@ export type IndicatorDef = {
   minMuestras?: number;
 };
 
-/** Serie de precio compartida por todos los indicadores. */
+/**
+ * Serie de precio compartida por todos los indicadores.
+ *
+ * IMPORTANTE: solo velas CERRADAS. La vela en curso se descarta antes de
+ * llegar aqui (ver `cerradas()` en helpers.ts) porque un cierre provisional
+ * puede cambiar y falsearia la senal.
+ *
+ * `highs`/`lows` son obligatorios solo para Estocastico y CCI. Si faltan, esos
+ * indicadores devuelven `null` en vez de inventar un valor.
+ */
 export type PriceSeries = {
+  /** Aperturas, mismo indice que el resto. No las usa ningun indicador por ahora. */
+  open: number[];
+  /** Cierres, de mas antiguo a mas reciente. Base de RSI, MACD y Bollinger. */
   closes: number[];
+  highs: number[];
+  lows: number[];
   volumes?: number[];
-  highs?: number[];
-  lows?: number[];
-  /** Marca de tiempo de cada cierre (ISO), para el AI Indicator (hora del dia). */
+  /** Marca de tiempo de cada vela (ISO), para el AI Indicator (hora del dia). */
   times?: string[];
 };
