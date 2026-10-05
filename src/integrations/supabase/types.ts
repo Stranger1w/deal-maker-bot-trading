@@ -557,6 +557,58 @@ export type Database = {
         }
         Relationships: []
       }
+      engine_sessions: {
+        Row: {
+          close_reason: string | null
+          created_at: string
+          errors_count: number
+          id: string
+          last_tick_at: string | null
+          mode: string
+          orders_count: number
+          pnl_total: number
+          runs_count: number
+          session_ends_at: string | null
+          session_started_at: string
+          session_stopped_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          close_reason?: string | null
+          created_at?: string
+          errors_count?: number
+          id?: string
+          last_tick_at?: string | null
+          mode: string
+          orders_count?: number
+          pnl_total?: number
+          runs_count?: number
+          session_ends_at?: string | null
+          session_started_at?: string
+          session_stopped_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          close_reason?: string | null
+          created_at?: string
+          errors_count?: number
+          id?: string
+          last_tick_at?: string | null
+          mode?: string
+          orders_count?: number
+          pnl_total?: number
+          runs_count?: number
+          session_ends_at?: string | null
+          session_started_at?: string
+          session_stopped_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+
       exchange_credentials: {
         Row: {
           api_key_cipher: string
