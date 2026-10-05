@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { AlertTriangle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -147,6 +148,10 @@ function MotorPage() {
     queryFn: (): Promise<EngineSession[]> => listarFn({ data: { limit: 50 } }),
   });
 
+  // La sesión más reciente que cerró con posiciones de bots ya sin gestionar
+  // (snapshot guardado en cerrarSesion): si existe, se muestra la alerta.
+  const conSinGestion = (sesiones.data ?? []).find((x) => (x.unmanaged_positions?.length ?? 0) > 0);
+
   const [ahora, setAhora] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setAhora(Date.now()), 1000);
@@ -239,6 +244,67 @@ function MotorPage() {
         title="Motor"
         subtitle="Sesiones con Temporizador o 24/7: el motor solo opera dentro de una sesión iniciada desde esta pestaña."
       />
+
+      {conSinGestion?.unmanaged_positions && conSinGestion.unmanaged_positions.length > 0 && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="size-4 shrink-0" aria-hidden />
+              Sesión cerrada con {conSinGestion.unmanaged_positions.length} posición
+              {conSinGestion.unmanaged_positions.length === 1 ? "" : "es"} sin gestionar
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Sesión iniciada {dateTime(conSinGestion.session_started_at)}
+              {conSinGestion.session_stopped_at
+                ? `, cerrada ${dateTime(conSinGestion.session_stopped_at)}`
+                : ""}
+              {conSinGestion.close_reason
+                ? ` con motivo «${MOTIVOS[conSinGestion.close_reason] ?? conSinGestion.close_reason}»`
+                : ""}
+              : estas entradas quedaron sin gestión (bots detenidos, con la automatización apagada o
+              parados todos por el Kill Switch) y nadie les aplica TP/SL.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-muted-foreground">
+                    <th className="py-1 pr-3 font-medium">Bot</th>
+                    <th className="py-1 pr-3 font-medium">Par</th>
+                    <th className="py-1 pr-3 font-medium">Lado</th>
+                    <th className="py-1 pr-3 font-medium">Cantidad</th>
+                    <th className="py-1 pr-3 font-medium">Precio</th>
+                    <th className="py-1 pr-3 font-medium">Abierta</th>
+                    <th className="py-1 font-medium">Estado del bot</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {conSinGestion.unmanaged_positions.map((p, i) => (
+                    <tr key={`${p.bot_id}-${i}`} className="border-t border-destructive/20">
+                      <td className="py-1 pr-3 font-medium">{p.bot_name}</td>
+                      <td className="py-1 pr-3">{p.symbol}</td>
+                      <td className="py-1 pr-3">{p.side === "buy" ? "compra" : "venta"}</td>
+                      <td className="py-1 pr-3 tabular">{p.quantity}</td>
+                      <td className="py-1 pr-3 tabular">{money(p.price)}</td>
+                      <td className="py-1 pr-3 tabular">{dateTime(p.opened_at)}</td>
+                      <td className="py-1">
+                        {p.bot_status}
+                        {p.auto_stop_reason ? ` · ${p.auto_stop_reason}` : ""}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Revisa estas posiciones en Binance (o reinicia el bot para que vuelva a gestionar
+              TP/SL): mientras el bot siga detenido, el motor no puede hacer nada con ellas. El
+              estado mostrado es el del momento del cierre.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>

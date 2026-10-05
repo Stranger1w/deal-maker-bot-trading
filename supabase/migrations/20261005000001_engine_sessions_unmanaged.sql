@@ -1,0 +1,11 @@
+-- FASE 1+ · Columna unmanaged_positions en public.engine_sessions
+--
+-- La tabla ya existe en la nube (20261005000000 aplicada tal cual), asi que
+-- la columna nueva se anade por separado con IF NOT EXISTS (idempotente).
+-- Snapshot que guarda cerrarSesion al finalizar la sesion
+-- (src/lib/engine-sessions.server.ts): posiciones abiertas cuyo bot ya no las
+-- gestiona; con motivo kill_switch, TODAS las abiertas (al parar los bots
+-- todas quedan sin gestionar). Array de objetos [{bot_id, bot_name, symbol,
+-- side, quantity, price, opened_at, bot_status, auto_stop_reason}];
+-- NULL = cierre sin snapshot. Ver tipos en src/integrations/supabase/types.ts.
+ALTER TABLE public.engine_sessions ADD COLUMN IF NOT EXISTS unmanaged_positions jsonb;

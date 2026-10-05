@@ -572,6 +572,7 @@ export type Database = {
           session_started_at: string
           session_stopped_at: string | null
           status: string
+          unmanaged_positions: Json | null
           updated_at: string
         }
         Insert: {
@@ -588,6 +589,7 @@ export type Database = {
           session_started_at?: string
           session_stopped_at?: string | null
           status?: string
+          unmanaged_positions?: Json | null
           updated_at?: string
         }
         Update: {
@@ -604,6 +606,7 @@ export type Database = {
           session_started_at?: string
           session_stopped_at?: string | null
           status?: string
+          unmanaged_positions?: Json | null
           updated_at?: string
         }
         Relationships: []

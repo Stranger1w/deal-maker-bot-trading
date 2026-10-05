@@ -10,6 +10,7 @@ import {
   listarSesiones,
   marcarSesionParaCierre,
   obtenerSesionActiva,
+  posicionesSinGestionar,
   registrarTickSesion,
   resumenPnl,
   type EngineSession,
@@ -30,6 +31,8 @@ function crearFakeDb(opts: {
   bots?: Fila[];
   pnlEjecuciones?: Fila[];
   insertaConFLICTO?: boolean;
+  /** Simula una columna que aun no existe en la BD: rechaza el UPDATE. */
+  updateRechazaColumna?: { key: string; code: string };
 }) {
   const sesiones: Fila[] = (opts.sesiones ?? []).map((f) => ({ ...f }));
   const bots: Fila[] = (opts.bots ?? []).map((f) => ({ ...f }));
@@ -99,6 +102,17 @@ function crearFakeDb(opts: {
         return resultado(fila);
       }
       if (op === "update") {
+        if (opts.updateRechazaColumna && payload && opts.updateRechazaColumna.key in payload) {
+          // Como en la nube con la columna sin migrar: PGRST204/42703 y no se
+          // afecta ninguna fila.
+          return {
+            data: null,
+            error: {
+              code: opts.updateRechazaColumna.code,
+              message: `column "${opts.updateRechazaColumna.key}" does not exist`,
+            },
+          };
+        }
         const [primera] = aplicarFiltros(sesiones);
         if (!primera) return { data: null, error: null };
         Object.assign(primera, payload);
@@ -601,4 +615,154 @@ describe("aperturasPermitidas", () => {
       false,
     );
   });
+});
+
+// ── Posiciones sin gestionar: snapshot de cierre para la alerta del Motor ──
+
+const BOTS_SG: Fila[] = [
+  {
+    id: "b-det",
+    name: "Detenido por riesgo",
+    pair: "BTCUSDT",
+    status: "stopped",
+    automation_enabled: true,
+    auto_stop_reason: "maximo_operaciones_diarias",
+  },
+  {
+    id: "b-run",
+    name: "Corriendo",
+    pair: "ETHUSDT",
+    status: "running",
+    automation_enabled: true,
+    auto_stop_reason: null,
+  },
+  {
+    id: "b-off",
+    name: "Automation apagada",
+    pair: "SOLUSDT",
+    status: "running",
+    automation_enabled: false,
+    auto_stop_reason: null,
+  },
+];
+
+function ejecSG(botId: string, symbol: string, extra: Fila = {}): Fila {
+  return {
+    bot_id: botId,
+    symbol,
+    side: "buy",
+    status: "filled",
+    quantity: 1,
+    price: 100,
+    pnl: 0,
+    created_at: "2026-10-05T10:00:00.000Z",
+    ...extra,
+  };
+}
+
+describe("posicionesSinGestionar", () => {
+  test("incluye bots no gestionados con entrada abierta y excluye los gestionados", async () => {
+    const { db } = crearFakeDb({
+      bots: BOTS_SG,
+      pnlEjecuciones: [
+        ejecSG("b-det", "BTCUSDT", { quantity: 0.01, price: 60000 }),
+        ejecSG("b-run", "ETHUSDT"),
+        ejecSG("b-off", "SOLUSDT", { status: "partially_filled" }),
+      ],
+    });
+    const res = await posicionesSinGestionar(db);
+    expect(res.map((p) => p.bot_id)).toEqual(["b-det", "b-off"]);
+    expect(res[0]).toEqual({
+      bot_id: "b-det",
+      bot_name: "Detenido por riesgo",
+      symbol: "BTCUSDT",
+      side: "buy",
+      quantity: 0.01,
+      price: 60000,
+      opened_at: "2026-10-05T10:00:00.000Z",
+      bot_status: "stopped",
+      auto_stop_reason: "maximo_operaciones_diarias",
+    });
+  });
+
+  test("un bot no gestionado ya plano (ultima ejecucion es venta) no se incluye", async () => {
+    const { db } = crearFakeDb({
+      bots: [BOTS_SG[0]!],
+      pnlEjecuciones: [
+        ejecSG("b-det", "BTCUSDT"),
+        ejecSG("b-det", "BTCUSDT", { side: "sell", created_at: "2026-10-05T11:00:00.000Z" }),
+      ],
+    });
+    expect(await posicionesSinGestionar(db)).toEqual([]);
+  });
+
+  test("entradas simulated (demo) no cuentan como posiciones sin gestionar", async () => {
+    const { db } = crearFakeDb({
+      bots: [BOTS_SG[0]!],
+      pnlEjecuciones: [ejecSG("b-det", "BTCUSDT", { status: "simulated" })],
+    });
+    expect(await posicionesSinGestionar(db)).toEqual([]);
+  });
+});
+
+describe("cerrarSesion con unmanaged_positions", () => {
+  const cerrada = () => ({ ...SESION_BASE, status: "closing", session_stopped_at: null });
+
+  test("guarda en la sesion el snapshot de los bots ya sin gestionar", async () => {
+    const { db, sesiones } = crearFakeDb({
+      sesiones: [cerrada() as unknown as Fila],
+      bots: BOTS_SG,
+      pnlEjecuciones: [
+        ejecSG("b-det", "BTCUSDT", { quantity: 0.01, price: 60000 }),
+        ejecSG("b-run", "ETHUSDT"),
+        ejecSG("b-off", "SOLUSDT", { status: "partially_filled" }),
+      ],
+    });
+    const s = await cerrarSesion(db, "s1", "timer");
+    expect(s?.status).toBe("closed");
+    expect(s?.unmanaged_positions?.map((p) => p.bot_id)).toEqual(["b-det", "b-off"]);
+    expect(sesiones[0]!["status"]).toBe("closed");
+    expect(sesiones[0]!["unmanaged_positions"]).toHaveLength(2);
+  });
+
+  test("kill_switch incluye tambien los bots todavia running: todas quedan sin gestionar", async () => {
+    const { db, sesiones } = crearFakeDb({
+      sesiones: [cerrada() as unknown as Fila],
+      bots: BOTS_SG,
+      pnlEjecuciones: [
+        ejecSG("b-det", "BTCUSDT", { quantity: 0.01, price: 60000 }),
+        ejecSG("b-run", "ETHUSDT"),
+        ejecSG("b-off", "SOLUSDT", { status: "partially_filled" }),
+      ],
+    });
+    const s = await cerrarSesion(db, "s1", "kill_switch");
+    // b-run sigue 'running' al tomarse el snapshot (stopAllBots viene despues)
+    // y aun asi se incluye: al Kill Switch todas las posiciones quedan sin gestionar.
+    expect(s?.unmanaged_positions?.map((p) => p.bot_id)).toEqual(["b-det", "b-run", "b-off"]);
+    expect(s?.close_reason).toBe("kill_switch");
+    expect(sesiones[0]!["close_reason"]).toBe("kill_switch");
+    expect(sesiones[0]!["unmanaged_positions"]).toHaveLength(3);
+  });
+
+  test("sin posiciones sin gestionar guarda un array vacio", async () => {
+    const { db, sesiones } = crearFakeDb({ sesiones: [cerrada() as unknown as Fila] });
+    const s = await cerrarSesion(db, "s1", "manual");
+    expect(s?.unmanaged_positions).toEqual([]);
+    expect(sesiones[0]!["unmanaged_positions"]).toEqual([]);
+  });
+
+  for (const code of ["PGRST204", "42703"]) {
+    test(`si unmanaged_positions no existe en la BD (${code}) la sesion se cierra sin snapshot`, async () => {
+      const { db, sesiones } = crearFakeDb({
+        sesiones: [cerrada() as unknown as Fila],
+        bots: BOTS_SG,
+        pnlEjecuciones: [ejecSG("b-det", "BTCUSDT")],
+        updateRechazaColumna: { key: "unmanaged_positions", code },
+      });
+      const s = await cerrarSesion(db, "s1", "timer");
+      expect(s?.status).toBe("closed");
+      expect(sesiones[0]!["status"]).toBe("closed");
+      expect(sesiones[0]!["unmanaged_positions"]).toBeUndefined();
+    });
+  }
 });

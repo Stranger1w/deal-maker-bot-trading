@@ -27,6 +27,22 @@ export type SessionMode = "timer" | "24x7";
 export type SessionStatus = "active" | "closing" | "closed";
 export type CloseReason = "timer" | "kill_switch" | "manual" | "error";
 
+/** Una posicion abierta de un bot que ya no gestiona el motor (orfana). */
+export type PosicionSinGestion = {
+  bot_id: string;
+  bot_name: string;
+  symbol: string;
+  side: string;
+  quantity: number;
+  price: number;
+  /** created_at de la ejecucion de entrada. */
+  opened_at: string;
+  /** Estado del bot en el momento del cierre (stopped, etc.). */
+  bot_status: string;
+  /** Motivo de parada del bot si lo tenia (limite de riesgo, etc.). */
+  auto_stop_reason: string | null;
+};
+
 export type EngineSession = {
   id: string;
   mode: SessionMode;
@@ -40,6 +56,14 @@ export type EngineSession = {
   errors_count: number;
   pnl_total: number;
   last_tick_at: string | null;
+  /**
+   * Snapshot tomado en cerrarSesion: posiciones abiertas cuyo bot ya no las
+   * gestionaba (detenido o automation apagado); con motivo kill_switch, todas
+   * las abiertas, porque al parar los bots todas quedan sin gestionar.
+   * null/ausente = sin snapshot (o migracion 20261005000001_engine_sessions_unmanaged.sql
+   * sin aplicar).
+   */
+  unmanaged_positions?: PosicionSinGestion[] | null;
 };
 
 /** Suma los pnl de las ejecuciones de un rango, redondeados a 2 decimales. */
@@ -125,7 +149,10 @@ export async function marcarSesionParaCierre(
  * closing -> closed (idempotente): el UPDATE filtra WHERE status='closing', asi
  * que una segunda llamada sobre una sesion ya cerrada afecta 0 filas. Al cerrar
  * calcula el P&L por rango ([session_started_at, session_stopped_at] sobre
- * bot_executions.pnl) y lo guarda en pnl_total.
+ * bot_executions.pnl) y lo guarda en pnl_total, y registra en
+ * unmanaged_positions el snapshot de posiciones abiertas de bots que ya nadie
+ * gestiona (detenidos o con automation apagado). El snapshot es best-effort:
+ * si falla (o la columna aun no existe en la BD), la sesion se cierra igual.
  */
 export async function cerrarSesion(
   db: Db,
@@ -133,18 +160,50 @@ export async function cerrarSesion(
   reason: CloseReason,
 ): Promise<EngineSession | null> {
   const ahora = new Date().toISOString();
-  const { data, error } = await db
+
+  let sinGestion: PosicionSinGestion[] = [];
+  try {
+    // kill_switch: este cierre ocurre justo antes de stopAllBots, asi que los
+    // bots aun 'running' quedaran sin gestionar en cuanto se detengan; se
+    // incluyen TODAS las posiciones abiertas.
+    sinGestion = await posicionesSinGestionar(db, { todas: reason === "kill_switch" });
+  } catch {
+    sinGestion = [];
+  }
+
+  const cierre: {
+    status: "closed";
+    close_reason: CloseReason;
+    session_stopped_at: string;
+    updated_at: string;
+    unmanaged_positions?: PosicionSinGestion[];
+  } = {
+    status: "closed",
+    close_reason: reason,
+    session_stopped_at: ahora,
+    updated_at: ahora,
+    unmanaged_positions: sinGestion,
+  };
+  let { data, error } = await db
     .from("engine_sessions")
-    .update({
-      status: "closed",
-      close_reason: reason,
-      session_stopped_at: ahora,
-      updated_at: ahora,
-    })
+    .update(cierre)
     .eq("id", sessionId)
     .eq("status", "closing")
     .select("*")
     .maybeSingle();
+  if (error?.code === "42703" || error?.code === "PGRST204") {
+    // Migracion engine_sessions anterior a unmanaged_positions: se cierra sin
+    // snapshot en vez de fallar (el aviso de la pestana Motor no aparecera
+    // hasta aplicar la columna nueva).
+    delete cierre.unmanaged_positions;
+    ({ data, error } = await db
+      .from("engine_sessions")
+      .update(cierre)
+      .eq("id", sessionId)
+      .eq("status", "closing")
+      .select("*")
+      .maybeSingle());
+  }
   if (error) throw new Error(`No se pudo cerrar la sesion: ${error.message}`);
   const sesion = (data as EngineSession | null) ?? null;
   if (!sesion) return null; // ya cerrada u otra transicion: sin efecto.
@@ -236,6 +295,72 @@ export async function contarPosicionesAbiertas(db: Db): Promise<number> {
     if (await botTienePosicionAbierta(db, fila)) abiertas++;
   }
   return abiertas;
+}
+
+/**
+ * Posiciones abiertas cuyo bot ya NO las gestiona: bots detenidos o con
+ * automation_enabled apagado que siguen con una entrada (buy) sin salida.
+ * Es el complemento del conjunto de contarPosicionesAbiertas (running +
+ * automation_enabled): esas posiciones quedan huerfanas — nadie les aplica
+ * TP/SL — y por eso cerrarSesion las guarda como snapshot (unmanaged_positions)
+ * para que la pestana Motor las muestre en una alerta.
+ *
+ * Con `todas: true` (cierre por kill_switch) tambien se incluyen los bots
+ * gestionados: el snapshot se toma antes de stopAllBots, asi que al detenerlos
+ * TODAS las posiciones abiertas quedan sin gestionar.
+ */
+export async function posicionesSinGestionar(
+  db: Db,
+  opts: { todas?: boolean } = {},
+): Promise<PosicionSinGestion[]> {
+  const { data: bots, error } = await db
+    .from("bots")
+    .select("id, name, pair, status, automation_enabled, auto_stop_reason");
+  if (error) throw new Error(`No se pudieron leer los bots del cierre: ${error.message}`);
+  const sinGestion: PosicionSinGestion[] = [];
+  for (const bot of bots ?? []) {
+    const fila = bot as {
+      id: string;
+      name: string;
+      pair: string;
+      status: string;
+      automation_enabled: boolean;
+      auto_stop_reason: string | null;
+    };
+    // Gestionado (running + automation): se excluye salvo en kill_switch.
+    if (!opts.todas && fila.status === "running" && fila.automation_enabled === true) continue;
+    const { data: ultima, error: errorEjec } = await db
+      .from("bot_executions")
+      .select("side, symbol, quantity, price, created_at")
+      .eq("bot_id", fila.id)
+      .eq("symbol", fila.pair)
+      .in("status", ["filled", "partially_filled"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (errorEjec)
+      throw new Error(`No se pudo comprobar la posicion del bot ${fila.id}: ${errorEjec.message}`);
+    const ejec = ultima as {
+      side?: string;
+      symbol?: string;
+      quantity?: number;
+      price?: number;
+      created_at?: string;
+    } | null;
+    if (ejec?.side !== "buy") continue;
+    sinGestion.push({
+      bot_id: fila.id,
+      bot_name: fila.name,
+      symbol: ejec.symbol ?? fila.pair,
+      side: ejec.side,
+      quantity: Number(ejec.quantity ?? 0),
+      price: Number(ejec.price ?? 0),
+      opened_at: ejec.created_at ?? "",
+      bot_status: fila.status,
+      auto_stop_reason: fila.auto_stop_reason ?? null,
+    });
+  }
+  return sinGestion;
 }
 
 /**
