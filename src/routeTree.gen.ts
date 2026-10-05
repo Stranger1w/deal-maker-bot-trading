@@ -17,6 +17,7 @@ import { Route as EscuadronRouteImport } from './routes/escuadron'
 import { Route as FondosRouteImport } from './routes/fondos'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as MineriaRouteImport } from './routes/mineria'
+import { Route as MotorRouteImport } from './routes/motor'
 import { Route as ReconocimientoRouteImport } from './routes/reconocimiento'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
@@ -63,6 +64,11 @@ const MineriaRoute = MineriaRouteImport.update({
   path: '/mineria',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MotorRoute = MotorRouteImport.update({
+  id: '/motor',
+  path: '/motor',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ReconocimientoRoute = ReconocimientoRouteImport.update({
   id: '/reconocimiento',
   path: '/reconocimiento',
@@ -99,6 +105,7 @@ export interface FileRoutesByFullPath {
   '/fondos': typeof FondosRoute
   '/mcp': typeof McpRoute
   '/mineria': typeof MineriaRoute
+  '/motor': typeof MotorRoute
   '/reconocimiento': typeof ReconocimientoRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
@@ -114,6 +121,7 @@ export interface FileRoutesByTo {
   '/fondos': typeof FondosRoute
   '/mcp': typeof McpRoute
   '/mineria': typeof MineriaRoute
+  '/motor': typeof MotorRoute
   '/reconocimiento': typeof ReconocimientoRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
@@ -130,6 +138,7 @@ export interface FileRoutesById {
   '/fondos': typeof FondosRoute
   '/mcp': typeof McpRoute
   '/mineria': typeof MineriaRoute
+  '/motor': typeof MotorRoute
   '/reconocimiento': typeof ReconocimientoRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
@@ -147,6 +156,7 @@ export interface FileRouteTypes {
     | '/fondos'
     | '/mcp'
     | '/mineria'
+    | '/motor'
     | '/reconocimiento'
     | '/.well-known/oauth-protected-resource'
     | '/.lovable/oauth/consent'
@@ -162,6 +172,7 @@ export interface FileRouteTypes {
     | '/fondos'
     | '/mcp'
     | '/mineria'
+    | '/motor'
     | '/reconocimiento'
     | '/.well-known/oauth-protected-resource'
     | '/.lovable/oauth/consent'
@@ -177,6 +188,7 @@ export interface FileRouteTypes {
     | '/fondos'
     | '/mcp'
     | '/mineria'
+    | '/motor'
     | '/reconocimiento'
     | '/.well-known/oauth-protected-resource'
     | '/.lovable/oauth/consent'
@@ -193,6 +205,7 @@ export interface RootRouteChildren {
   FondosRoute: typeof FondosRoute
   McpRoute: typeof McpRoute
   MineriaRoute: typeof MineriaRoute
+  MotorRoute: typeof MotorRoute
   ReconocimientoRoute: typeof ReconocimientoRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
@@ -258,6 +271,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MineriaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/motor': {
+      id: '/motor'
+      path: '/motor'
+      fullPath: '/motor'
+      preLoaderRoute: typeof MotorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reconocimiento': {
       id: '/reconocimiento'
       path: '/reconocimiento'
@@ -305,6 +325,7 @@ const rootRouteChildren: RootRouteChildren = {
   FondosRoute: FondosRoute,
   McpRoute: McpRoute,
   MineriaRoute: MineriaRoute,
+  MotorRoute: MotorRoute,
   ReconocimientoRoute: ReconocimientoRoute,
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,

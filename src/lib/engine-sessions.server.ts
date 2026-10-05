@@ -98,11 +98,24 @@ export async function iniciarSesion(
   throw new Error(`No se pudo iniciar la sesion: ${error?.message ?? "error desconocido"}`);
 }
 
-/** active -> closing. No-op si la sesion no esta 'active' (WHERE status='active'). */
-export async function marcarSesionParaCierre(db: Db, sessionId: string): Promise<void> {
+/**
+ * active -> closing, persistiendo el motivo del cierre (timer/kill_switch/
+ * manual/error) para que el cierre final sepa con que motivo cerrar. No-op si
+ * la sesion no esta 'active' (WHERE status='active'): un cierre ya en curso no
+ * cambia de motivo por esta via.
+ */
+export async function marcarSesionParaCierre(
+  db: Db,
+  sessionId: string,
+  reason: CloseReason,
+): Promise<void> {
   const { error } = await db
     .from("engine_sessions")
-    .update({ status: "closing", updated_at: new Date().toISOString() })
+    .update({
+      status: "closing",
+      close_reason: reason,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", sessionId)
     .eq("status", "active");
   if (error) throw new Error(`No se pudo marcar la sesion para cierre: ${error.message}`);
@@ -165,4 +178,105 @@ export async function calcularPnlPorRango(
   if (error)
     throw new Error(`No se pudo calcular el pnl de la sesion ${sesion.id}: ${error.message}`);
   return resumenPnl((data ?? []).map((fila) => Number((fila as { pnl: number }).pnl)));
+}
+
+/**
+ * Historial de sesiones para la pestana Motor: de mas reciente a mas antigua.
+ * Solo service_role puede leer la tabla, asi que esto se expone via server fn.
+ */
+export async function listarSesiones(db: Db, limit = 50): Promise<EngineSession[]> {
+  const { data, error } = await db
+    .from("engine_sessions")
+    .select("*")
+    .order("session_started_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`No se pudieron listar las sesiones: ${error.message}`);
+  return (data ?? []) as EngineSession[];
+}
+
+/**
+ * true si la ultima ejecucion real del bot es una entrada (buy) sin salida
+ * posterior. Excluye `simulated`: en demo cada ciclo entra y sale en el mismo
+ * tick, asi que una compra simulada no es una posicion abierta.
+ */
+export async function botTienePosicionAbierta(
+  db: Db,
+  bot: { id: string; pair: string },
+): Promise<boolean> {
+  const { data, error } = await db
+    .from("bot_executions")
+    .select("side")
+    .eq("bot_id", bot.id)
+    .eq("symbol", bot.pair)
+    .in("status", ["filled", "partially_filled"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error)
+    throw new Error(`No se pudo comprobar la posicion del bot ${bot.id}: ${error.message}`);
+  return (data as { side?: string } | null)?.side === "buy";
+}
+
+/**
+ * Posiciones abiertas entre los bots que el motor sigue gestionando
+ * (status='running' y automation_enabled): un bot detenido ya no gestiona
+ * TP/SL, asi que contarlo dejaria la sesion en 'closing' para siempre. El
+ * cierre de la sesion exige 0 aqui.
+ */
+export async function contarPosicionesAbiertas(db: Db): Promise<number> {
+  const { data: bots, error } = await db
+    .from("bots")
+    .select("id, pair")
+    .eq("status", "running")
+    .eq("automation_enabled", true);
+  if (error) throw new Error(`No se pudieron leer los bots del cierre: ${error.message}`);
+  let abiertas = 0;
+  for (const bot of bots ?? []) {
+    const fila = bot as { id: string; pair: string };
+    if (await botTienePosicionAbierta(db, fila)) abiertas++;
+  }
+  return abiertas;
+}
+
+/**
+ * Best-effort: registra este tick en la sesion (contadores + last_tick_at).
+ * Los deltas se aplican sobre los valores leidos al empezar el tick; con dos
+ * ticks simultaneos (cron + manual) puede perderse un incremento, aceptable
+ * para estadisticas de historial.
+ */
+export async function registrarTickSesion(
+  db: Db,
+  sesion: Pick<EngineSession, "id" | "runs_count" | "orders_count" | "errors_count">,
+  stats: { runsDelta: number; ordersDelta: number; errorsDelta: number },
+): Promise<void> {
+  const ahora = new Date().toISOString();
+  const { error } = await db
+    .from("engine_sessions")
+    .update({
+      runs_count: sesion.runs_count + stats.runsDelta,
+      orders_count: sesion.orders_count + stats.ordersDelta,
+      errors_count: sesion.errors_count + stats.errorsDelta,
+      last_tick_at: ahora,
+      updated_at: ahora,
+    })
+    .eq("id", sesion.id);
+  if (error) throw new Error(`No se pudo registrar el tick en la sesion: ${error.message}`);
+}
+
+/**
+ * Regla de apertura del tick (Fase 1):
+ *  - engine_enabled apagado nunca abre.
+ *  - Sin tabla de sesiones (migracion pendiente) decide solo engine_enabled,
+ *    para no romper el motor que ya existia.
+ *  - Con sesiones, solo la sesion 'active' abre; 'closing' (corte de timer,
+ *    Detener o Kill Switch) y 'closed' inhiben posiciones nuevas.
+ */
+export function aperturasPermitidas(args: {
+  engineEnabled: boolean;
+  sesion: Pick<EngineSession, "status"> | null;
+  sesionesOk: boolean;
+}): boolean {
+  if (!args.engineEnabled) return false;
+  if (!args.sesionesOk) return true;
+  return args.sesion?.status === "active";
 }

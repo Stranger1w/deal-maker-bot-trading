@@ -145,7 +145,6 @@ export const testBinanceConnection = createServerFn({ method: "POST" })
     return test;
   });
 
-
 export const saveBinanceCredentials = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
     z
@@ -367,9 +366,8 @@ export const runSandbox = createServerFn({ method: "POST" })
     // Capa de IA multi-plataforma (módulo independiente): normaliza las fuentes
     // conectadas y el dataset del Escuadrón de Reconocimiento, y ajusta los
     // parámetros en lugar de repetir el histórico.
-    const { buildMarketSnapshot, suggestStrategyParams, MARKET_DATA_LAYER_VERSION } = await import(
-      "@/lib/market-data.server"
-    );
+    const { buildMarketSnapshot, suggestStrategyParams, MARKET_DATA_LAYER_VERSION } =
+      await import("@/lib/market-data.server");
     const pairs = (sandbox.pairs as string[]) ?? [];
     const snapshot = await buildMarketSnapshot(db, {
       symbols: pairs,
@@ -379,7 +377,8 @@ export const runSandbox = createServerFn({ method: "POST" })
     });
     const usedSources = snapshot.sources.filter((s) => s.points > 0);
 
-    const rand = (min: number, max: number) => Number((Math.random() * (max - min) + min).toFixed(2));
+    const rand = (min: number, max: number) =>
+      Number((Math.random() * (max - min) + min).toFixed(2));
     const runs = candidates.map((bot, i) => {
       const symbol = pairs[i % Math.max(1, pairs.length)] ?? pairs[0] ?? "BTCUSDT";
       const params = suggestStrategyParams(snapshot, symbol, sandbox.dataset);
@@ -539,7 +538,8 @@ export const updateAutomationSettings = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
     z
       .object({
-        engineEnabled: z.boolean().optional(),
+        // engine_enabled ya no se toca aqui: se cambia SOLO desde
+        // iniciarMotor/detenerMotor (pestaña Motor). Ver engine.functions.ts.
         killSwitch: z.boolean().optional(),
         allowRealTrading: z.boolean().optional(),
         tickIntervalSeconds: z.number().int().min(30).max(3600).optional(),
@@ -550,25 +550,32 @@ export const updateAutomationSettings = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const db = await admin();
-    const { data: settings } = await db.from("automation_settings").select("*").limit(1).maybeSingle();
+    const { data: settings } = await db
+      .from("automation_settings")
+      .select("*")
+      .limit(1)
+      .maybeSingle();
     if (!settings) throw new Error("No hay configuración del motor");
 
     if (data.allowRealTrading === true) {
       const { data: creds } = await db.from("binance_credentials").select("connection_status");
       if (!(creds ?? []).some((c) => c.connection_status === "ok")) {
-        throw new Error("Configura y verifica tus API Keys de Binance antes de autorizar trading real");
+        throw new Error(
+          "Configura y verifica tus API Keys de Binance antes de autorizar trading real",
+        );
       }
     }
 
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (data.engineEnabled !== undefined) patch['engine_enabled'] = data.engineEnabled;
-    if (data.killSwitch !== undefined) patch['kill_switch'] = data.killSwitch;
-    if (data.allowRealTrading !== undefined) patch['allow_real_trading'] = data.allowRealTrading;
-    if (data.tickIntervalSeconds !== undefined) patch['tick_interval_seconds'] = data.tickIntervalSeconds;
-    if (data.globalMaxDailyLoss !== undefined) patch['global_max_daily_loss'] = data.globalMaxDailyLoss;
-    if (data.globalMaxDrawdownPct !== undefined) patch['global_max_drawdown_pct'] = data.globalMaxDrawdownPct;
-    if (data.engineEnabled === false || data.killSwitch === true) patch['engine_status'] = "stopped";
+    if (data.killSwitch !== undefined) patch["kill_switch"] = data.killSwitch;
+    if (data.allowRealTrading !== undefined) patch["allow_real_trading"] = data.allowRealTrading;
+    if (data.tickIntervalSeconds !== undefined)
+      patch["tick_interval_seconds"] = data.tickIntervalSeconds;
+    if (data.globalMaxDailyLoss !== undefined)
+      patch["global_max_daily_loss"] = data.globalMaxDailyLoss;
+    if (data.globalMaxDrawdownPct !== undefined)
+      patch["global_max_drawdown_pct"] = data.globalMaxDrawdownPct;
+    if (data.killSwitch === true) patch["engine_status"] = "stopped";
 
     const { error } = await db
       .from("automation_settings")
@@ -579,7 +586,10 @@ export const updateAutomationSettings = createServerFn({ method: "POST" })
     if (data.killSwitch === true) {
       const { data: bots } = await db.from("bots").select("id").eq("status", "running");
       for (const bot of bots ?? []) {
-        await db.from("bots").update({ status: "stopped", auto_stop_reason: "kill_switch_manual" }).eq("id", bot.id);
+        await db
+          .from("bots")
+          .update({ status: "stopped", auto_stop_reason: "kill_switch_manual" })
+          .eq("id", bot.id);
         await db.from("bot_logs").insert({
           bot_id: bot.id,
           level: "error",

@@ -1,11 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import {
+  aperturasPermitidas,
+  botTienePosicionAbierta,
   cerrarSesion,
   calcularPnlPorRango,
+  contarPosicionesAbiertas,
   expiraPorTimer,
   iniciarSesion,
+  listarSesiones,
   marcarSesionParaCierre,
   obtenerSesionActiva,
+  registrarTickSesion,
   resumenPnl,
   type EngineSession,
 } from "./engine-sessions.server";
@@ -22,10 +27,12 @@ type Ops = { tabla: string; op: string; payload?: Fila | undefined; filtros: [st
 
 function crearFakeDb(opts: {
   sesiones?: Fila[];
+  bots?: Fila[];
   pnlEjecuciones?: Fila[];
   insertaConFLICTO?: boolean;
 }) {
   const sesiones: Fila[] = (opts.sesiones ?? []).map((f) => ({ ...f }));
+  const bots: Fila[] = (opts.bots ?? []).map((f) => ({ ...f }));
   const pnlEjecuciones = opts.pnlEjecuciones ?? [];
   const ops: Ops[] = [];
 
@@ -36,6 +43,8 @@ function crearFakeDb(opts: {
     let payload: Fila | undefined;
     const filtros: [string, unknown][] = [];
     const rango: { gte?: unknown; lte?: unknown } = {};
+    let orden: { col: string; asc: boolean } | null = null;
+    let limite: number | null = null;
 
     const registrar = () => ops.push({ tabla, op, payload, filtros: [...filtros] });
 
@@ -61,6 +70,11 @@ function crearFakeDb(opts: {
             rango.gte = args[1];
           } else if (m === "lte") {
             rango.lte = args[1];
+          } else if (m === "order") {
+            const [col, opciones] = args as [string, { ascending?: boolean } | undefined];
+            orden = { col, asc: opciones?.ascending !== false };
+          } else if (m === "limit") {
+            limite = args[0] as number;
           } else if (m === "single" || m === "maybeSingle" || m === "then") {
             // resueltos abajo
           }
@@ -68,7 +82,7 @@ function crearFakeDb(opts: {
         };
       return encadenable;
     };
-    cadena(["insert", "update", "select", "eq", "in", "gte", "lte", "limit"]);
+    cadena(["insert", "update", "select", "eq", "in", "gte", "lte", "order", "limit"]);
 
     const resolver = () => {
       registrar();
@@ -91,24 +105,38 @@ function crearFakeDb(opts: {
         return resultado(primera);
       }
       // select
-      if (tabla === "engine_sessions") {
-        const filas = sesiones.filter((f) =>
-          filtros.every(([col, v]) => {
-            if (Array.isArray(v)) return v.includes(f[col]);
-            return f[col] === v;
-          }),
-        );
-        return resultado(filas);
+      const coincide = (f: Fila) =>
+        filtros.every(([col, v]) => {
+          if (Array.isArray(v)) return v.includes(f[col]);
+          return f[col] === v;
+        });
+      let filas: Fila[];
+      if (tabla === "engine_sessions") filas = sesiones.filter(coincide);
+      else if (tabla === "bots") filas = bots.filter(coincide);
+      else {
+        filas = pnlEjecuciones.filter(coincide);
+        if (rango.gte !== undefined)
+          filas = filas.filter(
+            (f) => Date.parse(String(f["created_at"])) >= Date.parse(String(rango.gte)),
+          );
+        if (rango.lte !== undefined)
+          filas = filas.filter(
+            (f) => Date.parse(String(f["created_at"])) <= Date.parse(String(rango.lte)),
+          );
       }
-      let filas = pnlEjecuciones;
-      if (rango.gte !== undefined)
-        filas = filas.filter(
-          (f) => Date.parse(String(f["created_at"])) >= Date.parse(String(rango.gte)),
-        );
-      if (rango.lte !== undefined)
-        filas = filas.filter(
-          (f) => Date.parse(String(f["created_at"])) <= Date.parse(String(rango.lte)),
-        );
+      if (orden) {
+        const { col, asc } = orden;
+        filas = [...filas].sort((a, b) => {
+          const av = a[col];
+          const bv = b[col];
+          const cmp =
+            typeof av === "number" && typeof bv === "number"
+              ? av - bv
+              : String(av ?? "").localeCompare(String(bv ?? ""));
+          return asc ? cmp : -cmp;
+        });
+      }
+      if (limite !== null) filas = filas.slice(0, limite);
       return resultado(filas);
     };
 
@@ -241,8 +269,18 @@ describe("obtenerSesionActiva", () => {
 describe("marcarSesionParaCierre", () => {
   test("active -> closing", async () => {
     const { db, sesiones } = crearFakeDb({ sesiones: [{ ...SESION_BASE } as unknown as Fila] });
-    await marcarSesionParaCierre(db, "s1");
+    await marcarSesionParaCierre(db, "s1", "manual");
     expect(sesiones[0]!["status"]).toBe("closing");
+    expect(sesiones[0]!["close_reason"]).toBe("manual");
+  });
+
+  test("persiste el motivo del cierre (timer/kill_switch) en la transicion", async () => {
+    for (const motivo of ["timer", "kill_switch"] as const) {
+      const { db, sesiones } = crearFakeDb({ sesiones: [{ ...SESION_BASE } as unknown as Fila] });
+      await marcarSesionParaCierre(db, "s1", motivo);
+      expect(sesiones[0]!["status"]).toBe("closing");
+      expect(sesiones[0]!["close_reason"]).toBe(motivo);
+    }
   });
 
   test("no reabre ni toca una sesion closed (UPDATE exige status='active')", async () => {
@@ -256,8 +294,9 @@ describe("marcarSesionParaCierre", () => {
         } as unknown as Fila,
       ],
     });
-    await marcarSesionParaCierre(db, "s1");
+    await marcarSesionParaCierre(db, "s1", "manual");
     expect(sesiones[0]!["status"]).toBe("closed");
+    expect(sesiones[0]!["close_reason"]).toBe("manual");
   });
 });
 
@@ -326,5 +365,240 @@ describe("calcularPnlPorRango", () => {
   test("rango sin ejecuciones es 0", async () => {
     const { db } = crearFakeDb({ pnlEjecuciones: [] });
     expect(await calcularPnlPorRango(db, sesionRango)).toBe(0);
+  });
+});
+
+describe("listarSesiones", () => {
+  test("ordena de mas reciente a mas antigua y respeta el limite", async () => {
+    const { db } = crearFakeDb({
+      sesiones: [
+        { ...SESION_BASE, id: "s-antigua", session_started_at: "2026-10-05T08:00:00.000Z" },
+        { ...SESION_BASE, id: "s-reciente", session_started_at: "2026-10-05T10:00:00.000Z" },
+        { ...SESION_BASE, id: "s-media", session_started_at: "2026-10-05T09:00:00.000Z" },
+      ] as unknown as Fila[],
+    });
+    const todas = await listarSesiones(db);
+    expect(todas.map((s) => s.id)).toEqual(["s-reciente", "s-media", "s-antigua"]);
+
+    const una = await listarSesiones(db, 1);
+    expect(una.map((s) => s.id)).toEqual(["s-reciente"]);
+  });
+
+  test("devuelve las sesiones cerradas tambien (historial completo)", async () => {
+    const { db } = crearFakeDb({
+      sesiones: [
+        {
+          ...SESION_BASE,
+          id: "s-cerrada",
+          status: "closed",
+          close_reason: "timer",
+          session_stopped_at: AHORA.toISOString(),
+        },
+      ] as unknown as Fila[],
+    });
+    const todas = await listarSesiones(db);
+    expect(todas).toHaveLength(1);
+    expect(todas[0]!.close_reason).toBe("timer");
+  });
+});
+
+describe("botTienePosicionAbierta", () => {
+  test("true si la ultima ejecucion por fecha es una entrada buy", async () => {
+    // Insertada deliberadamente fuera de orden: sin .order(created_at desc)
+    // la primera fila seria la venta y devolveria false.
+    const { db } = crearFakeDb({
+      pnlEjecuciones: [
+        {
+          bot_id: "b1",
+          symbol: "BTCUSDT",
+          side: "sell",
+          status: "filled",
+          created_at: "2026-10-05T10:00:00.000Z",
+        },
+        {
+          bot_id: "b1",
+          symbol: "BTCUSDT",
+          side: "buy",
+          status: "filled",
+          created_at: "2026-10-05T11:00:00.000Z",
+        },
+      ],
+    });
+    expect(await botTienePosicionAbierta(db, { id: "b1", pair: "BTCUSDT" })).toBe(true);
+  });
+
+  test("false tras la venta de salida y tambien en simulated (demo)", async () => {
+    const { db } = crearFakeDb({
+      pnlEjecuciones: [
+        {
+          bot_id: "b1",
+          symbol: "BTCUSDT",
+          side: "buy",
+          status: "filled",
+          created_at: "2026-10-05T10:00:00.000Z",
+        },
+        {
+          bot_id: "b1",
+          symbol: "BTCUSDT",
+          side: "sell",
+          status: "filled",
+          created_at: "2026-10-05T11:00:00.000Z",
+        },
+        {
+          bot_id: "b2",
+          symbol: "ETHUSDT",
+          side: "buy",
+          status: "simulated",
+          created_at: "2026-10-05T11:00:00.000Z",
+        },
+      ],
+    });
+    expect(await botTienePosicionAbierta(db, { id: "b1", pair: "BTCUSDT" })).toBe(false);
+    expect(await botTienePosicionAbierta(db, { id: "b2", pair: "ETHUSDT" })).toBe(false);
+  });
+});
+
+describe("contarPosicionesAbiertas", () => {
+  const bots = [
+    { id: "b1", pair: "BTCUSDT", status: "running", automation_enabled: true },
+    { id: "b2", pair: "ETHUSDT", status: "running", automation_enabled: true },
+    { id: "b3", pair: "SOLUSDT", status: "running", automation_enabled: false },
+    { id: "b4", pair: "XRPUSDT", status: "stopped", automation_enabled: true },
+  ];
+  const ejecuciones = [
+    // b1: entro y salio -> plana.
+    {
+      bot_id: "b1",
+      symbol: "BTCUSDT",
+      side: "buy",
+      status: "filled",
+      created_at: "2026-10-05T10:00:00.000Z",
+    },
+    {
+      bot_id: "b1",
+      symbol: "BTCUSDT",
+      side: "sell",
+      status: "filled",
+      created_at: "2026-10-05T11:00:00.000Z",
+    },
+    // b2: entrada abierta (parcial).
+    {
+      bot_id: "b2",
+      symbol: "ETHUSDT",
+      side: "buy",
+      status: "partially_filled",
+      created_at: "2026-10-05T10:30:00.000Z",
+    },
+    // b3 sin automation y b4 detenido: el motor ya no los gestiona.
+    {
+      bot_id: "b3",
+      symbol: "SOLUSDT",
+      side: "buy",
+      status: "filled",
+      created_at: "2026-10-05T10:30:00.000Z",
+    },
+    {
+      bot_id: "b4",
+      symbol: "XRPUSDT",
+      side: "buy",
+      status: "filled",
+      created_at: "2026-10-05T10:30:00.000Z",
+    },
+  ];
+
+  test("cuenta solo bots running+automation con entrada abierta", async () => {
+    const { db } = crearFakeDb({ bots, pnlEjecuciones: ejecuciones });
+    expect(await contarPosicionesAbiertas(db)).toBe(1);
+  });
+
+  test("compras simuladas (demo) no cuentan: no bloquean el cierre", async () => {
+    const { db } = crearFakeDb({
+      bots: [{ id: "b5", pair: "ADAUSDT", status: "running", automation_enabled: true }],
+      pnlEjecuciones: [
+        {
+          bot_id: "b5",
+          symbol: "ADAUSDT",
+          side: "buy",
+          status: "simulated",
+          created_at: "2026-10-05T10:00:00.000Z",
+        },
+      ],
+    });
+    expect(await contarPosicionesAbiertas(db)).toBe(0);
+  });
+
+  test("sin bots en ejecucion no hay nada abierto", async () => {
+    const { db } = crearFakeDb({ bots: [], pnlEjecuciones: [] });
+    expect(await contarPosicionesAbiertas(db)).toBe(0);
+  });
+});
+
+describe("registrarTickSesion", () => {
+  test("suma contadores y marca last_tick_at", async () => {
+    const { db, sesiones } = crearFakeDb({
+      sesiones: [
+        { ...SESION_BASE, runs_count: 2, orders_count: 3, errors_count: 1 } as unknown as Fila,
+      ],
+    });
+    await registrarTickSesion(db, sesiones[0] as unknown as EngineSession, {
+      runsDelta: 1,
+      ordersDelta: 4,
+      errorsDelta: 2,
+    });
+    expect(sesiones[0]!["runs_count"]).toBe(3);
+    expect(sesiones[0]!["orders_count"]).toBe(7);
+    expect(sesiones[0]!["errors_count"]).toBe(3);
+    expect(sesiones[0]!["last_tick_at"]).not.toBeNull();
+  });
+
+  test("el registro del tick es un UPDATE por id sobre engine_sessions", async () => {
+    const { db, ops } = crearFakeDb({});
+    await registrarTickSesion(
+      db,
+      { ...SESION_BASE },
+      {
+        runsDelta: 1,
+        ordersDelta: 0,
+        errorsDelta: 0,
+      },
+    );
+    expect(ops).toHaveLength(1);
+    expect(ops[0]!["tabla"]).toBe("engine_sessions");
+    expect(ops[0]!["op"]).toBe("update");
+  });
+});
+
+describe("aperturasPermitidas", () => {
+  test("engine_enabled apagado nunca abre", () => {
+    expect(
+      aperturasPermitidas({ engineEnabled: false, sesion: { status: "active" }, sesionesOk: true }),
+    ).toBe(false);
+    expect(aperturasPermitidas({ engineEnabled: false, sesion: null, sesionesOk: true })).toBe(
+      false,
+    );
+  });
+
+  test("con sesiones solo abre la sesion active (closing/closed/null no)", () => {
+    expect(
+      aperturasPermitidas({ engineEnabled: true, sesion: { status: "active" }, sesionesOk: true }),
+    ).toBe(true);
+    expect(
+      aperturasPermitidas({ engineEnabled: true, sesion: { status: "closing" }, sesionesOk: true }),
+    ).toBe(false);
+    expect(
+      aperturasPermitidas({ engineEnabled: true, sesion: { status: "closed" }, sesionesOk: true }),
+    ).toBe(false);
+    expect(aperturasPermitidas({ engineEnabled: true, sesion: null, sesionesOk: true })).toBe(
+      false,
+    );
+  });
+
+  test("sin tabla de sesiones (migracion pendiente) decide solo engine_enabled", () => {
+    expect(aperturasPermitidas({ engineEnabled: true, sesion: null, sesionesOk: false })).toBe(
+      true,
+    );
+    expect(aperturasPermitidas({ engineEnabled: false, sesion: null, sesionesOk: false })).toBe(
+      false,
+    );
   });
 });

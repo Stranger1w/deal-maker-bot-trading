@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
@@ -72,11 +72,11 @@ function AutomationPage() {
 
   const update = useMutation({
     mutationFn: (data: {
-      engineEnabled?: boolean;
       killSwitch?: boolean;
       allowRealTrading?: boolean;
       tickIntervalSeconds?: number;
       globalMaxDailyLoss?: number;
+      globalMaxDrawdownPct?: number;
     }) => updateFn({ data }),
     onSuccess: () => {
       toast.success("Configuración del motor actualizada");
@@ -102,7 +102,11 @@ function AutomationPage() {
     ? Math.round((Date.now() - new Date(s.last_heartbeat_at).getTime()) / 1000)
     : null;
   const healthy =
-    !!s && s.engine_enabled && !s.kill_switch && heartbeatAge !== null && heartbeatAge < (s.tick_interval_seconds ?? 60) * 3;
+    !!s &&
+    s.engine_enabled &&
+    !s.kill_switch &&
+    heartbeatAge !== null &&
+    heartbeatAge < (s.tick_interval_seconds ?? 60) * 3;
 
   const runColumns: Column<EngineRun>[] = [
     {
@@ -118,7 +122,13 @@ function AutomationPage() {
       value: (r) => r.status,
       render: (r) => <StatusPill tone={statusTone(r.status)}>{r.status}</StatusPill>,
     },
-    { key: "bots", label: "Bots", align: "right", value: (r) => r.bots_processed, render: (r) => r.bots_processed },
+    {
+      key: "bots",
+      label: "Bots",
+      align: "right",
+      value: (r) => r.bots_processed,
+      render: (r) => r.bots_processed,
+    },
     {
       key: "orders",
       label: "Órdenes",
@@ -126,8 +136,20 @@ function AutomationPage() {
       value: (r) => r.orders_created,
       render: (r) => r.orders_created,
     },
-    { key: "errors", label: "Errores", align: "right", value: (r) => r.errors, render: (r) => r.errors },
-    { key: "retries", label: "Reintentos", align: "right", value: (r) => r.retries, render: (r) => r.retries },
+    {
+      key: "errors",
+      label: "Errores",
+      align: "right",
+      value: (r) => r.errors,
+      render: (r) => r.errors,
+    },
+    {
+      key: "retries",
+      label: "Reintentos",
+      align: "right",
+      value: (r) => r.retries,
+      render: (r) => r.retries,
+    },
     {
       key: "duration",
       label: "Duración",
@@ -154,7 +176,9 @@ function AutomationPage() {
       align: "right",
       value: (e) => Number(e.pnl),
       render: (e) => (
-        <span className={Number(e.pnl) >= 0 ? "text-success" : "text-destructive"}>{money(Number(e.pnl))}</span>
+        <span className={Number(e.pnl) >= 0 ? "text-success" : "text-destructive"}>
+          {money(Number(e.pnl))}
+        </span>
       ),
     },
     {
@@ -163,7 +187,13 @@ function AutomationPage() {
       value: (e) => e.status,
       render: (e) => <StatusPill tone={statusTone(e.status)}>{e.status}</StatusPill>,
     },
-    { key: "attempts", label: "Intentos", align: "right", value: (e) => e.attempts, render: (e) => e.attempts },
+    {
+      key: "attempts",
+      label: "Intentos",
+      align: "right",
+      value: (e) => e.attempts,
+      render: (e) => e.attempts,
+    },
   ];
 
   const automated = (bots.data ?? []).filter((b) => b.status === "running").length;
@@ -197,7 +227,9 @@ function AutomationPage() {
             <p className={`text-2xl font-semibold ${healthy ? "text-success" : "text-warning"}`}>
               {healthy ? "Saludable" : "Inactivo"}
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">Tick cada {s?.tick_interval_seconds ?? 60}s</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Tick cada {s?.tick_interval_seconds ?? 60}s
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -223,7 +255,9 @@ function AutomationPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-semibold">{automated}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{s?.last_error ?? "Sin errores recientes"}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {s?.last_error ?? "Sin errores recientes"}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -234,12 +268,21 @@ function AutomationPage() {
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="grid gap-4 md:grid-cols-3">
-            <ToggleRow
-              label="Motor de automatización"
-              hint="Activa la ejecución programada en la nube."
-              checked={!!s?.engine_enabled}
-              onChange={(v) => update.mutate({ engineEnabled: v })}
-            />
+            <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-secondary/30 px-3 py-3">
+              <div>
+                <p className="text-sm font-medium">Motor de automatización</p>
+                <p className="text-xs text-muted-foreground">
+                  Se enciende y apaga solo desde la pestaña{" "}
+                  <Link to="/motor" className="underline underline-offset-2">
+                    Motor
+                  </Link>{" "}
+                  (Iniciar / Detener).
+                </p>
+              </div>
+              <StatusPill tone={s?.engine_enabled ? "success" : "warning"}>
+                {s?.engine_enabled ? "encendido" : "apagado"}
+              </StatusPill>
+            </div>
             <ToggleRow
               label="Kill switch global"
               hint="Detiene todos los bots inmediatamente."
@@ -296,9 +339,9 @@ function AutomationPage() {
           </div>
 
           <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
-            Para operar con fondos reales se requiere autenticación con 2FA reales, claves de Binance con permisos
-            mínimos y sin retiro, despliegue Cloud activo y revisión humana de riesgos. Deal Maker no promete
-            rentabilidad.
+            Para operar con fondos reales se requiere autenticación con 2FA reales, claves de
+            Binance con permisos mínimos y sin retiro, despliegue Cloud activo y revisión humana de
+            riesgos. Deal Maker no promete rentabilidad.
           </p>
         </CardContent>
       </Card>
@@ -352,7 +395,9 @@ function ToggleRow({
   return (
     <div
       className={`flex items-start justify-between gap-3 rounded-md border px-3 py-3 ${
-        danger && checked ? "border-destructive/50 bg-destructive/10" : "border-border bg-secondary/30"
+        danger && checked
+          ? "border-destructive/50 bg-destructive/10"
+          : "border-border bg-secondary/30"
       }`}
     >
       <div>

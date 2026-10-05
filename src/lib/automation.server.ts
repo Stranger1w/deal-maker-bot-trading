@@ -11,6 +11,8 @@
 //  - Protección anti-duplicados por clave de idempotencia única por bot y ciclo.
 //  - Reintentos con backoff y registro de errores.
 
+import type { EngineSession } from "./engine-sessions.server";
+
 type Db = Awaited<ReturnType<typeof getDb>>;
 
 async function getDb() {
@@ -354,8 +356,18 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
     runId = undefined;
   }
 
+  // Fase 1 · estado de la sesión del motor en este tick. Se declaran antes de
+  // finish() para que contadores y cierre funcionen en cualquier salida del
+  // ciclo (incluidos los errores del catch final).
+  let sesion: EngineSession | null = null;
+  let sesionesOk = false;
+  let cierreEnCurso = false;
+
   const finish = async (result: TickResult, engineStatus: string, lastError: string | null) => {
     const durationMs = Date.now() - startedAt.getTime();
+    if (cierreEnCurso && !result.notes.includes("sesión en cierre")) {
+      result.notes += " · sesión en cierre (sin nuevas posiciones)";
+    }
     if (runId) {
       try {
         await db
@@ -384,6 +396,43 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         updated_at: new Date().toISOString(),
       })
       .neq("id", "00000000-0000-0000-0000-000000000000");
+
+    // Fase 1 · sesión: contadores de este tick y cierre final cuando ya no
+    // quedan posiciones abiertas (el motivo lo fijó el corte del tick).
+    if (sesion && sesion.status !== "closed") {
+      try {
+        const sesiones = await import("./engine-sessions.server");
+        await sesiones.registrarTickSesion(db, sesion, {
+          runsDelta: 1,
+          ordersDelta: result.ordersCreated,
+          errorsDelta: result.errors,
+        });
+      } catch {
+        // Best-effort: sin tabla engine_sessions el ciclo no falla.
+      }
+      if (sesion.status === "closing") {
+        try {
+          const sesiones = await import("./engine-sessions.server");
+          if ((await sesiones.contarPosicionesAbiertas(db)) === 0) {
+            // El Kill Switch tiene prioridad sobre timer/manual: si el ciclo
+            // se detiene con el kill switch activo, ese es el motivo de cierre.
+            let motivo = sesion.close_reason ?? "manual";
+            if (engineStatus === "halted") {
+              const { data: actual } = await db
+                .from("automation_settings")
+                .select("kill_switch")
+                .limit(1)
+                .maybeSingle();
+              if (actual?.kill_switch) motivo = "kill_switch";
+            }
+            const cerrada = await sesiones.cerrarSesion(db, sesion.id, motivo);
+            if (cerrada) sesion = cerrada;
+          }
+        } catch {
+          // Best-effort: el próximo tick reintenta el cierre.
+        }
+      }
+    }
     return result;
   };
 
@@ -408,6 +457,52 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
       );
     }
 
+    // ── Fase 1 · corte de sesión (timer / Detener / Kill Switch) ───────────
+    // Va antes de los cortes de kill switch y engine_enabled para que la
+    // sesión quede bien resuelta en cualquier salida del ciclo.
+    const {
+      aperturasPermitidas,
+      botTienePosicionAbierta,
+      cerrarSesion,
+      expiraPorTimer,
+      marcarSesionParaCierre,
+      obtenerSesionActiva,
+    } = await import("./engine-sessions.server");
+    try {
+      sesion = await obtenerSesionActiva(db);
+      sesionesOk = true;
+    } catch {
+      // Sin tabla engine_sessions (migración pendiente): el ciclo sigue como
+      // antes, decidiendo solo con engine_enabled.
+      sesion = null;
+      sesionesOk = false;
+    }
+    if (sesionesOk) {
+      try {
+        if (sesion && settings.kill_switch) {
+          // El Kill Switch tiene prioridad: cierra la sesión ya con ese
+          // motivo. Los bots quedan detenidos en un momento y nada gestionará
+          // las posiciones después, así que no se espera a ponerlas planas.
+          await marcarSesionParaCierre(db, sesion.id, "kill_switch");
+          sesion = await cerrarSesion(db, sesion.id, "kill_switch");
+        } else if (sesion && expiraPorTimer(sesion, new Date())) {
+          // Venció el temporizador: la sesión pasa a 'closing'. Este tick ya
+          // no abre posiciones nuevas y sigue gestionando las abiertas con
+          // TP/SL; se cierra con motivo 'timer' cuando no queden abiertas.
+          await marcarSesionParaCierre(db, sesion.id, "timer");
+          sesion = { ...sesion, status: "closing", close_reason: "timer" };
+        }
+      } catch {
+        // Best-effort: si falla la transición, el próximo tick la reintenta.
+      }
+      cierreEnCurso = sesion?.status === "closing";
+    }
+    const puedeAbrir = aperturasPermitidas({
+      engineEnabled: settings.engine_enabled,
+      sesion,
+      sesionesOk,
+    });
+
     if (settings.kill_switch) {
       await stopAllBots(db, "kill_switch_global");
       return await finish(
@@ -424,7 +519,10 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
       );
     }
 
-    if (!settings.engine_enabled) {
+    // Detener/manual deja engine_enabled apagado, pero mientras la sesión
+    // siga en 'closing' el tick sigue para gestionar TP/SL de lo abierto y
+    // cerrar la sesión cuando no queden posiciones (Fase 1).
+    if (!settings.engine_enabled && !cierreEnCurso) {
       return await finish(
         {
           status: "idle",
@@ -617,6 +715,14 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           });
           continue;
         }
+
+        // Fase 1 · aperturas: sin sesión activa (o en cierre por timer,
+        // Detener o Kill Switch) no se abren posiciones nuevas. Una posición
+        // real abierta sí pasa por realCycleOrder más abajo, que en ese caso
+        // solo hará TP/SL sin entrar de nuevo.
+        const gestionandoAbierta =
+          cierreEnCurso && bot.mode === "real" && (await botTienePosicionAbierta(db, bot));
+        if (!puedeAbrir && !gestionandoAbierta) continue;
 
         // Protección anti-duplicación: como máximo una entrada y su salida por bot
         // y ciclo. Binance además rechaza el duplicado por `newClientOrderId`.
@@ -950,8 +1056,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
     if (!settings.allow_real_trading) {
       notes = "Ciclo completado (solo demo/testnet)";
     } else if (settings.allow_live_orders !== true) {
-      notes =
-        "Ciclo completado (real habilitado pero en dry-run: allow_live_orders desactivado)";
+      notes = "Ciclo completado (real habilitado pero en dry-run: allow_live_orders desactivado)";
     } else if (realAllowed) {
       notes = "Ciclo completado (real autorizado y ejecutando órdenes)";
     } else {

@@ -10,6 +10,7 @@ import {
 import {
   Bot,
   Cpu,
+  Gauge,
   KeyRound,
   LayoutDashboard,
   Pickaxe,
@@ -23,7 +24,6 @@ import { KillSwitchButton } from "@/components/KillSwitchButton";
 import { Toaster } from "@/components/ui/sonner";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-
 
 function NotFoundComponent() {
   return (
@@ -139,6 +139,7 @@ const navGroups = [
     items: [
       { to: "/escuadron", label: "Mis bots", icon: Bot },
       { to: "/reconocimiento", label: "Buscar oportunidades", icon: Radar },
+      { to: "/motor", label: "Motor", icon: Gauge },
       { to: "/automatizacion", label: "Piloto automático", icon: Cpu },
       { to: "/mineria", label: "Minería", icon: Pickaxe },
     ],
@@ -197,4 +198,3 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
-
