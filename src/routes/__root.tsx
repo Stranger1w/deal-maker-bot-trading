@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import {
   Bot,
+  CandlestickChart,
   Cpu,
   Gauge,
   KeyRound,
@@ -139,6 +140,7 @@ const navGroups = [
     items: [
       { to: "/escuadron", label: "Mis bots", icon: Bot },
       { to: "/reconocimiento", label: "Buscar oportunidades", icon: Radar },
+      { to: "/mercados", label: "Mercados", icon: CandlestickChart },
       { to: "/motor", label: "Motor", icon: Gauge },
       { to: "/automatizacion", label: "Piloto automático", icon: Cpu },
       { to: "/mineria", label: "Minería", icon: Pickaxe },

@@ -257,11 +257,40 @@ export const updateBotStrategy = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const db = await admin();
+    const { normalizarSimbolo, decidirCambioPar } = await import("./markets.server");
+    const parNuevo = normalizarSimbolo(data.pair);
+    // Cambiar de par con posición abierta dejaría la posición huérfana (el Cierre
+    // de Posición en Pérdida vende en el par del bot): se bloquea el cambio y se
+    // muestra el motivo. Si el par no cambia, la edición sigue siendo válida.
+    // La comparación usa pares normalizados (BTC/USDT === BTCUSDT).
+    const { data: bot } = await db.from("bots").select("pair").eq("id", data.botId).maybeSingle();
+    const parActual = bot?.pair ? normalizarSimbolo(bot.pair) : "";
+    if (bot?.pair && parActual !== parNuevo) {
+      const { botTienePosicionAbierta } = await import("./engine-sessions.server");
+      const decision = decidirCambioPar(
+        parActual,
+        parNuevo,
+        await botTienePosicionAbierta(db, { id: data.botId, pair: parActual }),
+      );
+      if (!decision.valido) throw new Error(decision.motivo ?? "Cambio de par bloqueado");
+      // El par se valida contra el entorno activo (testnet o producción) con
+      // getBinanceSymbolRules: aquí vale para cualquier pantalla que llame a
+      // updateBotStrategy, no solo para Mercados (que lo pre-valida solo como ayuda).
+      const { getBinanceSymbolRules, resolveBinanceTradingEnv } =
+        await import("./binance-trading.server");
+      const env = await resolveBinanceTradingEnv();
+      const rules = await getBinanceSymbolRules(parNuevo, env);
+      if (rules.fallback) {
+        throw new Error(
+          `Binance no reconoce ${parNuevo} en ${env}: no existe en el entorno activo`,
+        );
+      }
+    }
     const { error } = await db
       .from("bots")
       .update({
         strategy: data.strategy,
-        pair: data.pair.toUpperCase(),
+        pair: parNuevo,
         capital: data.capital,
         updated_at: new Date().toISOString(),
       })
