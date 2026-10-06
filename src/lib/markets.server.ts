@@ -180,6 +180,57 @@ export function normalizarMercado(
 
 const cache = new Map<string, { at: number; snapshot: MercadosSnapshot }>();
 
+/**
+ * Lectura de mercados con la misma caché de 60 s que la server fn, pero como
+ * función normal para reutilizarla desde el tick del motor (Fase 3 · Auto):
+ * el selector no hace llamadas extra a Binance por bot.
+ */
+export async function obtenerSnapshotMercados(): Promise<MercadosSnapshot> {
+  const { BINANCE_HOSTS, resolveBinanceTradingEnv } = await import("./binance-trading.server");
+  const { GEO_RESTRICTED_MESSAGE, isBinanceGeoRestricted, safeBinanceError } =
+    await import("./binance-region");
+  const env = await resolveBinanceTradingEnv();
+
+  const hit = cache.get(env);
+  if (hit && Date.now() - hit.at < TICKER_CACHE_MS) return hit.snapshot;
+
+  const host = BINANCE_HOSTS[env];
+  const fetchedAt = new Date().toISOString();
+  try {
+    const [tickersRes, infoRes] = await Promise.all([
+      fetch(`${host}/api/v3/ticker/24hr`, { signal: AbortSignal.timeout(15_000) }),
+      fetch(`${host}/api/v3/exchangeInfo`, { signal: AbortSignal.timeout(15_000) }),
+    ]);
+    for (const res of [tickersRes, infoRes]) {
+      if (res.ok) continue;
+      const body = await res.text();
+      if (isBinanceGeoRestricted(res.status, body)) throw new Error(GEO_RESTRICTED_MESSAGE);
+      throw new Error(`Binance respondió ${res.status}: ${safeBinanceError(res.status, body)}`);
+    }
+    const tickers = leerTickers(await tickersRes.json());
+    const simbolos = leerSimbolosEntorno(await infoRes.json());
+    const rows = normalizarMercado(tickers, simbolos);
+    const snapshot: MercadosSnapshot = {
+      env,
+      fetchedAt,
+      rows,
+      aviso: rows.length
+        ? null
+        : "Binance no devolvió pares con datos en este entorno; se reintenta en la próxima lectura.",
+    };
+    // Solo se cachea el éxito: un error no debe congelar la página 60 s.
+    cache.set(env, { at: Date.now(), snapshot });
+    return snapshot;
+  } catch (e) {
+    return {
+      env,
+      fetchedAt,
+      rows: [],
+      aviso: e instanceof Error ? e.message : "No se pudieron leer los mercados de Binance.",
+    };
+  }
+}
+
 /* ---------------------------- SERVER FUNCTIONS ---------------------------- */
 
 /**
@@ -187,51 +238,7 @@ const cache = new Map<string, { at: number; snapshot: MercadosSnapshot }>();
  * los que existen realmente en ese entorno. Público: sin API key.
  */
 export const listarMercados = createServerFn({ method: "POST" }).handler(
-  async (): Promise<MercadosSnapshot> => {
-    const { BINANCE_HOSTS, resolveBinanceTradingEnv } = await import("./binance-trading.server");
-    const { GEO_RESTRICTED_MESSAGE, isBinanceGeoRestricted, safeBinanceError } =
-      await import("./binance-region");
-    const env = await resolveBinanceTradingEnv();
-
-    const hit = cache.get(env);
-    if (hit && Date.now() - hit.at < TICKER_CACHE_MS) return hit.snapshot;
-
-    const host = BINANCE_HOSTS[env];
-    const fetchedAt = new Date().toISOString();
-    try {
-      const [tickersRes, infoRes] = await Promise.all([
-        fetch(`${host}/api/v3/ticker/24hr`, { signal: AbortSignal.timeout(15_000) }),
-        fetch(`${host}/api/v3/exchangeInfo`, { signal: AbortSignal.timeout(15_000) }),
-      ]);
-      for (const res of [tickersRes, infoRes]) {
-        if (res.ok) continue;
-        const body = await res.text();
-        if (isBinanceGeoRestricted(res.status, body)) throw new Error(GEO_RESTRICTED_MESSAGE);
-        throw new Error(`Binance respondió ${res.status}: ${safeBinanceError(res.status, body)}`);
-      }
-      const tickers = leerTickers(await tickersRes.json());
-      const simbolos = leerSimbolosEntorno(await infoRes.json());
-      const rows = normalizarMercado(tickers, simbolos);
-      const snapshot: MercadosSnapshot = {
-        env,
-        fetchedAt,
-        rows,
-        aviso: rows.length
-          ? null
-          : "Binance no devolvió pares con datos en este entorno; se reintenta en la próxima lectura.",
-      };
-      // Solo se cachea el éxito: un error no debe congelar la página 60 s.
-      cache.set(env, { at: Date.now(), snapshot });
-      return snapshot;
-    } catch (e) {
-      return {
-        env,
-        fetchedAt,
-        rows: [],
-        aviso: e instanceof Error ? e.message : "No se pudieron leer los mercados de Binance.",
-      };
-    }
-  },
+  async (): Promise<MercadosSnapshot> => obtenerSnapshotMercados(),
 );
 
 /**
