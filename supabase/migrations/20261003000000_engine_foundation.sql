@@ -7,8 +7,8 @@
 --
 -- Aislamiento de account_mode: aqui solo guarda el modo preferido de la
 -- pestana Motor (demo/real) para crear sesiones; NO autoriza ni desbloquea
--- trading. En codigo, src/ no referencia engine_config (git grep engine_config
--- -> 0 hits): los cortes de trading real siguen siendo allow_real_trading +
+-- trading. En codigo, src/ referencia engine_config (src/lib/asset-reevaluate.server.ts
+-- lee auto_symbol_min_volume). Los cortes de trading real siguen siendo allow_real_trading +
 -- allow_live_orders + credenciales verificadas + geo (automation.server.ts) y
 -- app_settings.binance_trading_env, y engine_enabled solo lo escriben
 -- iniciarMotor y detenerMotor. Cambiar account_mode no altera ninguno de
