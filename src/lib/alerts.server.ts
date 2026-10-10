@@ -11,20 +11,14 @@ async function getDb() {
 }
 
 export type AlertInput = {
-  category:
-    | "bot"
-    | "risk"
-    | "engine"
-    | "binance"
-    | "funds"
-    | "mining"
-    | "security"
-    | "report";
+  category: "bot" | "risk" | "engine" | "binance" | "funds" | "mining" | "security" | "report";
   severity: "info" | "warning" | "critical";
   title: string;
   message: string;
   entity?: string;
   entityId?: string | null;
+  /** Dueno de la alerta: lo ve ese usuario (y el administrador). Sin dueno, solo el administrador. */
+  userId?: string | null;
 };
 
 /** Persiste una alerta in-app y calcula el estado real de entrega externa. */
@@ -38,6 +32,7 @@ export async function raiseAlert(db: Db, alert: AlertInput) {
   const emailConfigured =
     settings?.notify_email_enabled === true && !!settings.notify_email?.includes("@");
 
+  // types.ts aun no incluye alerts.user_id: cast.
   await db.from("alerts").insert({
     category: alert.category,
     severity: alert.severity,
@@ -46,7 +41,8 @@ export async function raiseAlert(db: Db, alert: AlertInput) {
     entity: alert.entity ?? null,
     entity_id: alert.entityId ?? null,
     delivery_status: emailConfigured ? "queued_email" : "in_app_only",
-  });
+    user_id: alert.userId ?? null,
+  } as never);
 }
 
 export async function raiseAlertStandalone(alert: AlertInput) {

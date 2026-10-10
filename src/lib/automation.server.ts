@@ -12,6 +12,17 @@
 //  - Reintentos con backoff y registro de errores.
 
 import type { EngineSession } from "./engine-sessions.server";
+import {
+  capitalPorDueno,
+  claveDueno,
+  concentracionPct,
+  duenoDe,
+  duenosQueSuperan,
+  esDelAdmin,
+  perdidaDelAdmin,
+  sumarPerdida,
+  type BotCapital,
+} from "./tick-scope";
 
 type Db = Awaited<ReturnType<typeof getDb>>;
 
@@ -55,6 +66,7 @@ async function raise(
   title: string,
   message: string,
   entityId?: string,
+  userId: string | null = null,
 ) {
   const db = await getDb();
   const { raiseAlert } = await import("./alerts.server");
@@ -65,6 +77,7 @@ async function raise(
     message,
     entity: "automation",
     entityId: entityId ?? null,
+    userId,
   });
 }
 
@@ -103,13 +116,16 @@ async function audit(
   action: string,
   entityId: string | null,
   details: Record<string, unknown>,
+  userId: string | null = null,
 ) {
+  // types.ts aun no incluye audit_events.user_id: cast.
   await db.from("audit_events").insert({
     action,
     entity: "automation",
     entity_id: entityId,
     details: details as never,
-  });
+    user_id: userId,
+  } as never);
 }
 /* ---------------------- ÓRDENES REALES EN BINANCE ---------------------- */
 
@@ -131,11 +147,21 @@ type RealOrderOutcome = {
   dryRun: boolean;
 };
 
-/** Credenciales Binance descifradas en memoria. Nunca se registran ni se devuelven. */
-async function loadBinanceSecret(db: Db): Promise<{ apiKey: string; apiSecret: string } | null> {
+/**
+ * Credenciales Binance descifradas en memoria. Nunca se registran ni se devuelven.
+ * Solo se usan las del dueno del bot: un bot jamas opera con las claves de otro
+ * usuario, y un bot sin dueno no tiene credenciales.
+ */
+async function loadBinanceSecret(
+  db: Db,
+  ownerId: string | null,
+): Promise<{ apiKey: string; apiSecret: string } | null> {
+  if (!ownerId) return null;
   const { data } = await db
     .from("binance_credentials")
     .select("api_key_cipher,api_secret_cipher")
+    // types.ts aun no incluye binance_credentials.user_id: cast.
+    .eq("user_id" as never, ownerId as never)
     .limit(1)
     .maybeSingle();
   const row = data as { api_key_cipher?: string; api_secret_cipher?: string } | null;
@@ -159,7 +185,14 @@ async function loadBinanceSecret(db: Db): Promise<{ apiKey: string; apiSecret: s
  */
 async function realCycleOrder(
   db: Db,
-  bot: { id: string; name: string; pair: string; stop_loss_pct: number; take_profit_pct: number },
+  bot: {
+    id: string;
+    name: string;
+    pair: string;
+    stop_loss_pct: number;
+    take_profit_pct: number;
+    user_id?: string | null;
+  },
   size: number,
   minuteKey: string,
   settings: { allow_live_orders?: boolean },
@@ -189,7 +222,7 @@ async function realCycleOrder(
       dryRun: true,
     };
   }
-  const creds = await loadBinanceSecret(db);
+  const creds = await loadBinanceSecret(db, bot.user_id ?? null);
   if (!creds) {
     await log(
       db,
@@ -457,6 +490,12 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
       );
     }
 
+    // Fase 3 · la fila de automation_settings pertenece al administrador. Sus
+    // limites globales (capital, perdida diaria/semanal, kill switch automatico)
+    // solo se miden con los bots del administrador; los de cada usuario se miden
+    // aparte y nunca frenan los bots ajenos.
+    const adminId = duenoDe(settings);
+
     // ── Fase 1 · corte de sesión (timer / Detener / Kill Switch) ───────────
     // Va antes de los cortes de kill switch y engine_enabled para que la
     // sesión quede bien resuelta en cualquier salida del ciclo.
@@ -537,9 +576,17 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
       );
     }
 
-    const { data: creds } = await db
-      .from("binance_credentials")
-      .select("api_key_cipher,api_secret_cipher,connection_status");
+    const { data: creds } = await db.from("binance_credentials").select("*");
+    // Credenciales verificadas / con claves, por dueno: un bot Real solo puede
+    // operar si SU dueno las tiene (no basta con que las tenga otro usuario).
+    const duenosBinanceOk = new Set<string>();
+    const duenosConClaves = new Set<string>();
+    for (const c of creds ?? []) {
+      const dueno = duenoDe(c);
+      if (!dueno) continue;
+      if (c.connection_status === "ok") duenosBinanceOk.add(dueno);
+      if (c.api_key_cipher && c.api_secret_cipher) duenosConClaves.add(dueno);
+    }
     const binanceOk = (creds ?? []).some((c) => c.connection_status === "ok");
     // Sin claves guardadas y utilizables no se puede enviar ninguna orden real.
     const binanceCredsOk = (creds ?? []).some(
@@ -619,18 +666,17 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
       return d.toISOString().slice(0, 10);
     })();
 
-    const { data: allBots } = await db.from("bots").select("pair, capital");
-    const squadCapital = (allBots ?? []).reduce((s, b) => s + Number(b.capital), 0);
-    const pairCapital = (allBots ?? []).reduce<Record<string, number>>((acc, b) => {
-      acc[b.pair] = (acc[b.pair] ?? 0) + Number(b.capital);
-      return acc;
-    }, {});
+    // Capital y concentracion se miden por dueno: los bots de un usuario no suman
+    // al tope del administrador ni a los de otro usuario.
+    const { data: allBots } = await db.from("bots").select("*");
+    const capitales = capitalPorDueno((allBots ?? []) as unknown as BotCapital[]);
 
-    let globalDailyLoss = 0;
-    let globalWeeklyLoss = 0;
+    const perdidaDia = new Map<string, number>();
+    const perdidaSemana = new Map<string, number>();
 
     for (const bot of bots ?? []) {
       botsProcessed++;
+      const duenoId = duenoDe(bot);
       // Se declaran fuera del try para que el catch pueda auditar una orden real ya
       // ejecutada en Binance cuyo PnL no se aplicó (fallo de la RPC y del fallback).
       let exchangeOrderId: string | null = null;
@@ -660,7 +706,17 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           continue;
         }
 
-        // Tope global de capital del Escuadrón y regla de diversificación.
+        // Fase 3 · defensa en profundidad: el modo Real es solo del administrador
+        // (promoteBotToReal exige admin + 2FA). Un bot Real de otro usuario se
+        // detiene sin operar.
+        if (bot.mode === "real" && !esDelAdmin(claveDueno(duenoId), adminId)) {
+          await stopBot(db, bot.id, bot.name, "real_solo_administrador", {});
+          continue;
+        }
+
+        // Tope global de capital del Escuadrón y regla de diversificación (del dueno).
+        const capitalDueno = capitales.get(claveDueno(duenoId));
+        const squadCapital = capitalDueno?.squad ?? 0;
         if (squadCapital > Number(settings.global_max_capital)) {
           await stopBot(db, bot.id, bot.name, "tope_global_capital_escuadron", {
             squad_capital: squadCapital,
@@ -668,8 +724,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           });
           continue;
         }
-        const pairShare =
-          squadCapital > 0 ? ((pairCapital[bot.pair] ?? 0) / squadCapital) * 100 : 0;
+        const pairShare = concentracionPct(capitalDueno, bot.pair);
         if (pairShare > Number(settings.max_pair_concentration_pct)) {
           await stopBot(db, bot.id, bot.name, "concentracion_excesiva_por_par", {
             pair: bot.pair,
@@ -687,8 +742,13 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           continue;
         }
 
-        // Trading real bloqueado por defecto
-        if (bot.mode === "real" && !realAllowed) {
+        // Trading real bloqueado por defecto (y solo con las credenciales de su dueno)
+        const realPermitido =
+          realAllowed &&
+          duenoId !== null &&
+          duenosBinanceOk.has(duenoId) &&
+          duenosConClaves.has(duenoId);
+        if (bot.mode === "real" && !realPermitido) {
           await log(
             db,
             bot.id,
@@ -821,25 +881,37 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
             "warn",
             `FILL PARCIAL de Binance: se ejecutaron ${quantity} de los ${size} ${bot.pair} solicitados. La posicion se registro con el importe real; revisar en el panel de Binance.`,
           );
-          await audit(db, "bot.order_partially_filled", bot.id, {
-            exchangeOrderId,
-            symbol: bot.pair,
-            side,
-            executed_quantity: quantity,
-            requested: size,
-            price,
-          });
+          await audit(
+            db,
+            "bot.order_partially_filled",
+            bot.id,
+            {
+              exchangeOrderId,
+              symbol: bot.pair,
+              side,
+              executed_quantity: quantity,
+              requested: size,
+              price,
+            },
+            duenoId,
+          );
         }
 
         // Orden rechazada por Binance: no se altera el P&L del bot ni se cuenta la
         // operación como creada (la ejecución queda registrada con su error).
         if (execStatus === "error") {
           errors++;
-          await audit(db, "bot.real_order_rejected", bot.id, {
-            symbol: bot.pair,
-            side,
-            error: execError,
-          });
+          await audit(
+            db,
+            "bot.real_order_rejected",
+            bot.id,
+            {
+              symbol: bot.pair,
+              side,
+              error: execError,
+            },
+            duenoId,
+          );
           continue;
         }
         ordersCreated++;
@@ -858,8 +930,8 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         dailyLoss = Number((dailyLoss + Math.max(0, -pnlDelta)).toFixed(2));
         weeklyLoss = Number((weeklyLoss + Math.max(0, -pnlDelta)).toFixed(2));
         tradesToday += 1;
-        globalDailyLoss += Math.max(0, -pnlDelta);
-        globalWeeklyLoss += Math.max(0, -pnlDelta);
+        sumarPerdida(perdidaDia, duenoId, -pnlDelta);
+        sumarPerdida(perdidaSemana, duenoId, -pnlDelta);
 
         if (!atomic.ok) {
           await withRetry(
@@ -973,12 +1045,18 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         // bot_executions queda sin sincronizar con bots. Se audita para que la
         // discrepancia sea un evento buscable y no una fila silenciosa.
         if (bot.mode === "real" && exchangeOrderId) {
-          await audit(db, "bot.pnl_apply_failed_after_real_order", bot.id, {
-            exchangeOrderId,
-            pnlDelta,
-            symbol: bot.pair,
-            error: error instanceof Error ? error.message : String(error),
-          });
+          await audit(
+            db,
+            "bot.pnl_apply_failed_after_real_order",
+            bot.id,
+            {
+              exchangeOrderId,
+              pnlDelta,
+              symbol: bot.pair,
+              error: error instanceof Error ? error.message : String(error),
+            },
+            duenoId,
+          );
           await log(
             db,
             bot.id,
@@ -988,6 +1066,27 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         }
       }
     }
+
+    // Fase 3 · limites de cada usuario (no administrador): se aplican con los
+    // mismos valores de automation_settings, pero solo detienen SUS bots; nunca
+    // activan el kill switch ni frenan al administrador u otros usuarios.
+    const limiteSemanal =
+      (Number(settings.global_max_weekly_drawdown_pct) * Number(settings.global_max_capital)) / 100;
+    for (const dueno of duenosQueSuperan(perdidaSemana, limiteSemanal, adminId)) {
+      await stopBotsDeDueno(db, dueno, "drawdown_semanal_usuario");
+    }
+    for (const dueno of duenosQueSuperan(
+      perdidaDia,
+      Number(settings.global_max_daily_loss),
+      adminId,
+    )) {
+      await stopBotsDeDueno(db, dueno, "limite_global_perdida_diaria_usuario");
+    }
+
+    // Perdidas del administrador: el kill switch y los limites globales siguen
+    // funcionando como antes, pero solo con los bots del administrador.
+    const globalWeeklyLoss = perdidaDelAdmin(perdidaSemana, adminId);
+    const globalDailyLoss = perdidaDelAdmin(perdidaDia, adminId);
 
     // Límite global de pérdida semanal del Escuadrón
     if (
@@ -1113,18 +1212,35 @@ async function stopBot(
     "error",
     `Bot detenido automáticamente: ${reason} ${JSON.stringify(details)}`,
   );
-  await audit(db, "risk.limit_reached", botName, { reason, ...details });
+  // La auditoria y la alerta quedan a nombre del dueno del bot para que lo vea.
+  const { data: fila } = await db.from("bots").select("*").eq("id", botId).maybeSingle();
+  const duenoId = duenoDe(fila);
+  await audit(db, "risk.limit_reached", botName, { reason, ...details }, duenoId);
   await raise(
     "risk",
     "critical",
     `Bot detenido por límite de riesgo: ${botName}`,
     `Motivo: ${reason}. Detalles: ${JSON.stringify(details)}. No quedan órdenes pendientes: el ciclo se cierra antes de abrir nuevas posiciones.`,
     botId,
+    duenoId,
   );
 }
 
 async function stopAllBots(db: Db, reason: string) {
   const { data: bots } = await db.from("bots").select("id, name").eq("status", "running");
+  for (const bot of bots ?? []) {
+    await stopBot(db, bot.id, bot.name, reason, {});
+  }
+}
+
+/** Detiene solo los bots en ejecucion de un usuario (limite propio alcanzado). */
+async function stopBotsDeDueno(db: Db, duenoClave: string, reason: string) {
+  const { data: bots } = await db
+    .from("bots")
+    .select("id, name")
+    .eq("status", "running")
+    // types.ts aun no incluye bots.user_id: cast.
+    .eq("user_id" as never, duenoClave as never);
   for (const bot of bots ?? []) {
     await stopBot(db, bot.id, bot.name, reason, {});
   }
