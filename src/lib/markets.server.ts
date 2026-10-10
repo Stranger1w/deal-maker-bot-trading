@@ -19,6 +19,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+
 /** Par de 24 h normalizado para la tabla de Mercados. */
 export type ParMercado = {
   symbol: string;
@@ -235,11 +237,11 @@ export async function obtenerSnapshotMercados(): Promise<MercadosSnapshot> {
 
 /**
  * Pares con ticker 24 h del entorno activo (testnet o producción), recortados a
- * los que existen realmente en ese entorno. Público: sin API key.
+ * los que existen realmente en ese entorno. Requiere sesión; no usa API key.
  */
-export const listarMercados = createServerFn({ method: "POST" }).handler(
-  async (): Promise<MercadosSnapshot> => obtenerSnapshotMercados(),
-);
+export const listarMercados = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async (): Promise<MercadosSnapshot> => obtenerSnapshotMercados());
 
 /**
  * Valida un par concreto contra el entorno activo con getBinanceSymbolRules
@@ -247,6 +249,7 @@ export const listarMercados = createServerFn({ method: "POST" }).handler(
  * par a un bot para no aplicar pares que no existan en el entorno activo.
  */
 export const validarParMercado = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ symbol: z.string().min(3).max(24) }).parse(input))
   .handler(async ({ data }) => {
     const { getBinanceSymbolRules, resolveBinanceTradingEnv } =

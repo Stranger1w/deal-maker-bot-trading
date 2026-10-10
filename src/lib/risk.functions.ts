@@ -8,7 +8,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireAdmin } from "@/integrations/supabase/admin-middleware";
 
 async function admin() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -21,19 +21,22 @@ async function audit(
   entityId: string | null,
   details: Record<string, unknown>,
   actor = "operator",
+  userId: string | null = null,
 ) {
   const db = await admin();
+  // types.ts aun no incluye audit_events.user_id (columna anadida a mano): cast.
   await db.from("audit_events").insert({
     action,
     entity,
     entity_id: entityId,
     details: details as never,
     actor,
-  });
+    user_id: userId,
+  } as never);
 }
 
 function assertTwoFactor(claims: Record<string, unknown>) {
-  if (claims['aal'] !== "aal2") {
+  if (claims["aal"] !== "aal2") {
     throw new Error(
       "Se requiere verificación 2FA (TOTP) en la sesión actual. Configura y verifica tu segundo factor en Acceso y seguridad.",
     );
@@ -43,6 +46,7 @@ function assertTwoFactor(claims: Record<string, unknown>) {
 /* ----------------------------- RIESGO POR BOT ---------------------------- */
 
 export const saveBotRisk = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -58,7 +62,7 @@ export const saveBotRisk = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const db = await admin();
     const { error } = await db
       .from("bots")
@@ -76,13 +80,21 @@ export const saveBotRisk = createServerFn({ method: "POST" })
       })
       .eq("id", data.botId);
     if (error) throw new Error(error.message);
-    await audit("risk.bot_limits_updated", "bot", data.botId, { ...data });
+    await audit(
+      "risk.bot_limits_updated",
+      "bot",
+      data.botId,
+      { ...data },
+      "operator",
+      context.userId,
+    );
     return { ok: true };
   });
 
 /* --------------------- RIESGO GLOBAL DEL ESCUADRÓN ----------------------- */
 
 export const saveSquadRisk = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -97,9 +109,13 @@ export const saveSquadRisk = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const db = await admin();
-    const { data: settings } = await db.from("automation_settings").select("id").limit(1).maybeSingle();
+    const { data: settings } = await db
+      .from("automation_settings")
+      .select("id")
+      .limit(1)
+      .maybeSingle();
     if (!settings) throw new Error("No hay configuración del motor");
     const { error } = await db
       .from("automation_settings")
@@ -116,13 +132,21 @@ export const saveSquadRisk = createServerFn({ method: "POST" })
       })
       .eq("id", settings.id);
     if (error) throw new Error(error.message);
-    await audit("risk.squad_limits_updated", "automation_settings", settings.id, { ...data });
+    await audit(
+      "risk.squad_limits_updated",
+      "automation_settings",
+      settings.id,
+      { ...data },
+      "operator",
+      context.userId,
+    );
     return { ok: true };
   });
 
 /* --------------------------- POLÍTICA DE CAPITAL -------------------------- */
 
 export const saveCapitalPolicy = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -133,9 +157,13 @@ export const saveCapitalPolicy = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const db = await admin();
-    const { data: settings } = await db.from("automation_settings").select("id").limit(1).maybeSingle();
+    const { data: settings } = await db
+      .from("automation_settings")
+      .select("id")
+      .limit(1)
+      .maybeSingle();
     if (!settings) throw new Error("No hay configuración del motor");
     const { error } = await db
       .from("automation_settings")
@@ -148,13 +176,21 @@ export const saveCapitalPolicy = createServerFn({ method: "POST" })
       })
       .eq("id", settings.id);
     if (error) throw new Error(error.message);
-    await audit("capital.policy_updated", "automation_settings", settings.id, { ...data });
+    await audit(
+      "capital.policy_updated",
+      "automation_settings",
+      settings.id,
+      { ...data },
+      "operator",
+      context.userId,
+    );
     return { ok: true };
   });
 
 /* ------------------------------ KILL SWITCH ------------------------------ */
 
 export const triggerKillSwitch = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -165,10 +201,14 @@ export const triggerKillSwitch = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const db = await admin();
     const { raiseAlert } = await import("./alerts.server");
-    const { data: settings } = await db.from("automation_settings").select("id").limit(1).maybeSingle();
+    const { data: settings } = await db
+      .from("automation_settings")
+      .select("id")
+      .limit(1)
+      .maybeSingle();
     if (!settings) throw new Error("No hay configuración del motor");
     const now = new Date().toISOString();
 
@@ -234,6 +274,7 @@ export const triggerKillSwitch = createServerFn({ method: "POST" })
       settings.id,
       { reason: data.reason, bots_stopped: botsStopped, workers_stopped: workersStopped, at: now },
       data.actor,
+      context.userId,
     );
 
     return { ok: true, botsStopped, workersStopped };
@@ -242,8 +283,11 @@ export const triggerKillSwitch = createServerFn({ method: "POST" })
 /* -------------------------------- ALERTAS -------------------------------- */
 
 export const acknowledgeAlert = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
-    z.object({ alertId: z.string().uuid().optional(), all: z.boolean().default(false) }).parse(input),
+    z
+      .object({ alertId: z.string().uuid().optional(), all: z.boolean().default(false) })
+      .parse(input),
   )
   .handler(async ({ data }) => {
     const db = await admin();
@@ -260,6 +304,7 @@ export const acknowledgeAlert = createServerFn({ method: "POST" })
 export type { PromotionCheck } from "./risk.server";
 
 export const evaluatePromotion = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) => z.object({ botId: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
     const { evaluatePromotionCore } = await import("./risk.server");
@@ -268,7 +313,7 @@ export const evaluatePromotion = createServerFn({ method: "POST" })
 
 /** Paso Demo→Real: exige sesión autenticada con 2FA verificada (AAL2). */
 export const promoteBotToReal = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
     z.object({ botId: z.string().uuid(), confirmed: z.literal(true) }).parse(input),
   )
@@ -305,6 +350,7 @@ export const promoteBotToReal = createServerFn({ method: "POST" })
       data.botId,
       { two_factor: "aal2_verified", ...check },
       context.userId,
+      context.userId,
     );
     return { ok: true };
   });
@@ -312,7 +358,7 @@ export const promoteBotToReal = createServerFn({ method: "POST" })
 /* ------------------------- RETIRO PROTEGIDO CON 2FA ----------------------- */
 
 export const createSecureWithdrawal = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -366,6 +412,7 @@ export const createSecureWithdrawal = createServerFn({ method: "POST" })
       account.id,
       { amount: data.amount, method: data.method, two_factor: "aal2_verified" },
       context.userId,
+      context.userId,
     );
     return { ok: true };
   });
@@ -373,6 +420,7 @@ export const createSecureWithdrawal = createServerFn({ method: "POST" })
 /* -------------------- REPORTES PERIÓDICOS Y BARRIDO DE GANANCIAS ---------- */
 
 export const generateReports = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
     z.object({ period: z.enum(["daily", "weekly"]) }).parse(input),
   )
@@ -381,7 +429,9 @@ export const generateReports = createServerFn({ method: "POST" })
     return buildReports(data.period);
   });
 
-export const runProfitSweep = createServerFn({ method: "POST" }).handler(async () => {
-  const { profitSweep } = await import("./reports.server");
-  return profitSweep();
-});
+export const runProfitSweep = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
+  .handler(async () => {
+    const { profitSweep } = await import("./reports.server");
+    return profitSweep();
+  });

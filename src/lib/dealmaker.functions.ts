@@ -1,6 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { requireAdmin } from "@/integrations/supabase/admin-middleware";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+
 const ACCOUNT_ID = "11111111-1111-1111-1111-111111111111";
 
 async function admin() {
@@ -13,19 +16,23 @@ async function audit(
   entity: string,
   entityId: string | null,
   details: Record<string, unknown>,
+  userId: string | null = null,
 ) {
   const db = await admin();
+  // types.ts aun no incluye audit_events.user_id (columna anadida a mano): cast.
   await db.from("audit_events").insert({
     action,
     entity,
     entity_id: entityId,
     details: details as never,
-  });
+    user_id: userId,
+  } as never);
 }
 
 /* ------------------------------- FONDOS ------------------------------- */
 
 export const createDeposit = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -35,7 +42,7 @@ export const createDeposit = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const db = await admin();
     const reference = data.reference?.trim() || `DP-${Date.now().toString().slice(-6)}`;
     const { error } = await db.from("fund_transactions").insert({
@@ -47,15 +54,19 @@ export const createDeposit = createServerFn({ method: "POST" })
       reference,
     });
     if (error) throw new Error(error.message);
-    await audit("deposit.created", "fund_transaction", reference, {
-      amount: data.amount,
-      method: data.method,
-    });
+    await audit(
+      "deposit.created",
+      "fund_transaction",
+      reference,
+      { amount: data.amount, method: data.method },
+      context.userId,
+    );
     return { ok: true, reference };
   });
 
 // Flujo antiguo sin 2FA: deshabilitado. Usa createSecureWithdrawal (risk.functions.ts).
 export const createWithdrawal = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -121,19 +132,26 @@ async function binancePing(apiKey: string, apiSecret: string) {
 }
 
 export const testBinanceConnection = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
     z.object({ apiKey: z.string().min(8), apiSecret: z.string().min(8) }).parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const test = await binancePing(data.apiKey.trim(), data.apiSecret.trim());
     if (test.restricted) {
       // Error seguro y auditado: nunca se registran claves ni firmas.
       const { raiseAlertStandalone } = await import("./alerts.server");
-      await audit("binance.geo_restricted", "binance_credentials", null, {
-        source: "test_connection",
-        code: test.code,
-        detail: "detail" in test ? test.detail : null,
-      });
+      await audit(
+        "binance.geo_restricted",
+        "binance_credentials",
+        null,
+        {
+          source: "test_connection",
+          code: test.code,
+          detail: "detail" in test ? test.detail : null,
+        },
+        context.userId,
+      );
       await raiseAlertStandalone({
         category: "binance",
         severity: "critical",
@@ -146,6 +164,7 @@ export const testBinanceConnection = createServerFn({ method: "POST" })
   });
 
 export const saveBinanceCredentials = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -155,7 +174,7 @@ export const saveBinanceCredentials = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const { encryptSecret } = await import("./crypto.server");
     const db = await admin();
     const apiKey = data.apiKey.trim();
@@ -183,19 +202,26 @@ export const saveBinanceCredentials = createServerFn({ method: "POST" })
         .eq("id", existing[0].id as string);
       if (error) throw new Error(error.message);
     } else {
-      const { error } = await db.from("binance_credentials").insert(row);
+      // types.ts aun no incluye binance_credentials.user_id: cast.
+      const { error } = await db
+        .from("binance_credentials")
+        .insert({ ...row, user_id: context.userId } as never);
       if (error) throw new Error(error.message);
     }
-    await audit("binance.credentials_saved", "binance_credentials", null, {
-      market_mode: data.marketMode,
-      connection_status: row.connection_status,
-    });
+    await audit(
+      "binance.credentials_saved",
+      "binance_credentials",
+      null,
+      { market_mode: data.marketMode, connection_status: row.connection_status },
+      context.userId,
+    );
     return { ok: true, connection: test };
   });
 
 /* ------------------------------ ESCUADRÓN ----------------------------- */
 
 export const createBot = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -206,8 +232,10 @@ export const createBot = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const db = await admin();
+    // Siempre demo y pausado: el paso a Real solo existe en promoteBotToReal (admin + 2FA).
+    // types.ts aun no incluye bots.user_id: cast.
     const { error } = await db.from("bots").insert({
       name: data.name,
       strategy: data.strategy,
@@ -215,12 +243,14 @@ export const createBot = createServerFn({ method: "POST" })
       capital: data.capital,
       status: "paused",
       mode: "demo",
-    });
+      user_id: context.userId,
+    } as never);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
 
 export const setBotStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -229,7 +259,9 @@ export const setBotStatus = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const { exigirBotPropio } = await import("./ownership.server");
+    await exigirBotPropio(context.supabase, data.botId);
     const db = await admin();
     const { error } = await db
       .from("bots")
@@ -245,6 +277,7 @@ export const setBotStatus = createServerFn({ method: "POST" })
   });
 
 export const updateBotStrategy = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -255,7 +288,9 @@ export const updateBotStrategy = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const { exigirBotPropio } = await import("./ownership.server");
+    const bot = await exigirBotPropio(context.supabase, data.botId);
     const db = await admin();
     const { normalizarSimbolo, decidirCambioPar } = await import("./markets.server");
     const parNuevo = normalizarSimbolo(data.pair);
@@ -263,9 +298,8 @@ export const updateBotStrategy = createServerFn({ method: "POST" })
     // de Posición en Pérdida vende en el par del bot): se bloquea el cambio y se
     // muestra el motivo. Si el par no cambia, la edición sigue siendo válida.
     // La comparación usa pares normalizados (BTC/USDT === BTCUSDT).
-    const { data: bot } = await db.from("bots").select("pair").eq("id", data.botId).maybeSingle();
-    const parActual = bot?.pair ? normalizarSimbolo(bot.pair) : "";
-    if (bot?.pair && parActual !== parNuevo) {
+    const parActual = bot.pair ? normalizarSimbolo(bot.pair) : "";
+    if (bot.pair && parActual !== parNuevo) {
       const { botTienePosicionAbierta } = await import("./engine-sessions.server");
       const decision = decidirCambioPar(
         parActual,
@@ -300,6 +334,7 @@ export const updateBotStrategy = createServerFn({ method: "POST" })
   });
 
 export const setBotMode = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -309,16 +344,13 @@ export const setBotMode = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     if (!data.confirmed) {
       throw new Error("Se requiere confirmación explícita para cambiar el modo del bot");
     }
+    const { exigirBotPropio } = await import("./ownership.server");
+    const bot = await exigirBotPropio(context.supabase, data.botId);
     const db = await admin();
-    const { data: bot } = await db
-      .from("bots")
-      .select("name, mode")
-      .eq("id", data.botId)
-      .maybeSingle();
     // El paso a Real vive en promoteBotToReal (risk.functions.ts): exige criterios y 2FA.
     const { error } = await db
       .from("bots")
@@ -330,16 +362,20 @@ export const setBotMode = createServerFn({ method: "POST" })
       })
       .eq("id", data.botId);
     if (error) throw new Error(error.message);
-    await audit("bot.mode_changed", "bot", bot?.name ?? data.botId, {
-      from: bot?.mode ?? "demo",
-      to: data.mode,
-    });
+    await audit(
+      "bot.mode_changed",
+      "bot",
+      bot.name ?? data.botId,
+      { from: bot.mode ?? "demo", to: data.mode },
+      context.userId,
+    );
     return { ok: true };
   });
 
 /* --------------------- CAMPO DE ENTRENAMIENTO + IA -------------------- */
 
 export const createSandbox = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -353,9 +389,11 @@ export const createSandbox = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const db = await admin();
+    // types.ts aun no incluye training_sandboxes.user_id: cast del objeto completo.
     const { error } = await db.from("training_sandboxes").insert({
+      user_id: context.userId,
       name: data.name,
       dataset: data.dataset,
       date_from: data.dateFrom,
@@ -368,7 +406,7 @@ export const createSandbox = createServerFn({ method: "POST" })
         { source: "Binance Spot Klines", range: `${data.dateFrom} → ${data.dateTo}` },
         { source: "Binance Futures Funding", range: `${data.dateFrom} → ${data.dateTo}` },
       ] as never,
-    });
+    } as never);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -376,8 +414,14 @@ export const createSandbox = createServerFn({ method: "POST" })
 // Simulación acelerada sin fondos reales. La capa de IA normaliza las fuentes
 // conectadas y devuelve parámetros sugeridos junto al reporte.
 export const runSandbox = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ sandboxId: z.string().uuid() }).parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const { exigirSandboxPropio } = await import("./ownership.server");
+    const propio = await exigirSandboxPropio(context.supabase, data.sandboxId);
+    const duenoId = propio.user_id ?? null;
+    if (!duenoId) throw new Error("El sandbox no tiene dueño asignado");
+
     const db = await admin();
     const { data: sandbox } = await db
       .from("training_sandboxes")
@@ -386,10 +430,13 @@ export const runSandbox = createServerFn({ method: "POST" })
       .single();
     if (!sandbox) throw new Error("Sandbox no encontrado");
 
+    // Solo los bots del dueño del sandbox (antes entraban los de todos).
     const { data: bots } = await db
       .from("bots")
       .select("id, name")
-      .in("status", ["training", "paused"]);
+      .in("status", ["training", "paused"])
+      // types.ts aun no incluye bots.user_id: cast.
+      .eq("user_id" as never, duenoId as never);
     const candidates = (bots ?? []).slice(0, 4);
 
     // Capa de IA multi-plataforma (módulo independiente): normaliza las fuentes
@@ -460,15 +507,14 @@ export const runSandbox = createServerFn({ method: "POST" })
   });
 
 export const promoteRun = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ runId: z.string().uuid() }).parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const { exigirRunPropio, exigirBotPropio } = await import("./ownership.server");
+    const run = await exigirRunPropio(context.supabase, data.runId);
+    // El bot del resultado tambien debe ser visible para quien llama.
+    if (run.bot_id) await exigirBotPropio(context.supabase, run.bot_id);
     const db = await admin();
-    const { data: run } = await db
-      .from("training_runs")
-      .select("bot_id, bot_name")
-      .eq("id", data.runId)
-      .single();
-    if (!run) throw new Error("Resultado no encontrado");
     await db.from("training_runs").update({ promoted: true }).eq("id", data.runId);
     if (run.bot_id) {
       await db
@@ -476,13 +522,20 @@ export const promoteRun = createServerFn({ method: "POST" })
         .update({ mode: "demo", status: "paused", updated_at: new Date().toISOString() })
         .eq("id", run.bot_id);
     }
-    await audit("bot.promoted_to_demo", "bot", run.bot_name, { source: "training_ground" });
+    await audit(
+      "bot.promoted_to_demo",
+      "bot",
+      run.bot_name,
+      { source: "training_ground" },
+      context.userId,
+    );
     return { ok: true };
   });
 
 /* -------------------------------- MINERÍA ----------------------------- */
 
 export const createWorker = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -493,20 +546,23 @@ export const createWorker = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const db = await admin();
+    // types.ts aun no incluye mining_workers.user_id: cast.
     const { error } = await db.from("mining_workers").insert({
       name: data.name,
       coin: data.coin.toUpperCase(),
       pool: data.pool,
       rig_id: data.rigId,
       status: "idle",
-    });
+      user_id: context.userId,
+    } as never);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
 
 export const setWorkerStatus = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -530,6 +586,7 @@ export const setWorkerStatus = createServerFn({ method: "POST" })
 /* --------------------- MOTOR DE AUTOMATIZACIÓN 24/7 ------------------- */
 
 export const updateBotRisk = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -543,7 +600,9 @@ export const updateBotRisk = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const { exigirBotPropio } = await import("./ownership.server");
+    await exigirBotPropio(context.supabase, data.botId);
     const db = await admin();
     const { error } = await db
       .from("bots")
@@ -559,11 +618,12 @@ export const updateBotRisk = createServerFn({ method: "POST" })
       })
       .eq("id", data.botId);
     if (error) throw new Error(error.message);
-    await audit("risk.limits_updated", "bot", data.botId, { ...data });
+    await audit("risk.limits_updated", "bot", data.botId, { ...data }, context.userId);
     return { ok: true };
   });
 
 export const updateAutomationSettings = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -577,7 +637,7 @@ export const updateAutomationSettings = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const db = await admin();
     const { data: settings } = await db
       .from("automation_settings")
@@ -627,12 +687,20 @@ export const updateAutomationSettings = createServerFn({ method: "POST" })
       }
     }
 
-    await audit("automation.settings_updated", "automation_settings", settings.id, { ...data });
+    await audit(
+      "automation.settings_updated",
+      "automation_settings",
+      settings.id,
+      { ...data },
+      context.userId,
+    );
     return { ok: true };
   });
 
 // Ejecuta un ciclo manual del mismo motor que corre en el cron 24/7.
-export const runEngineNow = createServerFn({ method: "POST" }).handler(async () => {
-  const { runEngineTick } = await import("./automation.server");
-  return runEngineTick("manual");
-});
+export const runEngineNow = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
+  .handler(async () => {
+    const { runEngineTick } = await import("./automation.server");
+    return runEngineTick("manual");
+  });

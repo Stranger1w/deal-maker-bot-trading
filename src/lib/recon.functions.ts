@@ -3,22 +3,32 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { requireAdmin } from "@/integrations/supabase/admin-middleware";
+
 async function admin() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   return supabaseAdmin;
 }
 
-async function audit(action: string, entityId: string | null, details: Record<string, unknown>) {
+async function audit(
+  action: string,
+  entityId: string | null,
+  details: Record<string, unknown>,
+  userId: string | null = null,
+) {
   const db = await admin();
+  // types.ts aun no incluye audit_events.user_id (columna anadida a mano): cast.
   await db.from("audit_events").insert({
     action,
     entity: "recon_bot",
     entity_id: entityId,
     details: details as never,
-  });
+    user_id: userId,
+  } as never);
 }
 
 export const createReconBot = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
     z
       .object({
@@ -30,8 +40,9 @@ export const createReconBot = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const db = await admin();
+    // types.ts aun no incluye recon_bots.user_id: cast del objeto.
     const { data: row, error } = await db
       .from("recon_bots")
       .insert({
@@ -41,42 +52,44 @@ export const createReconBot = createServerFn({ method: "POST" })
         focus: data.focus,
         interval_seconds: data.intervalSeconds,
         status: "active",
-      })
+        user_id: context.userId,
+      } as never)
       .select("id")
       .single();
     if (error) throw new Error(error.message);
-    await audit("recon.bot_created", row?.id ?? null, {
-      name: data.name,
-      sources: data.sources,
-      symbols: data.symbols,
-    });
+    await audit(
+      "recon.bot_created",
+      row?.id ?? null,
+      { name: data.name, sources: data.sources, symbols: data.symbols },
+      context.userId,
+    );
     return { ok: true };
   });
 
 export const setReconStatus = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
-    z
-      .object({ botId: z.string().uuid(), status: z.enum(["active", "paused"]) })
-      .parse(input),
+    z.object({ botId: z.string().uuid(), status: z.enum(["active", "paused"]) }).parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const db = await admin();
     const { error } = await db
       .from("recon_bots")
       .update({ status: data.status })
       .eq("id", data.botId);
     if (error) throw new Error(error.message);
-    await audit("recon.status_changed", data.botId, { status: data.status });
+    await audit("recon.status_changed", data.botId, { status: data.status }, context.userId);
     return { ok: true };
   });
 
 export const deleteReconBot = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) => z.object({ botId: z.string().uuid() }).parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const db = await admin();
     const { error } = await db.from("recon_bots").delete().eq("id", data.botId);
     if (error) throw new Error(error.message);
-    await audit("recon.bot_deleted", data.botId, {});
+    await audit("recon.bot_deleted", data.botId, {}, context.userId);
     return { ok: true };
   });
 
@@ -86,10 +99,11 @@ export const deleteReconBot = createServerFn({ method: "POST" })
  * No abre ni cierra ninguna posición.
  */
 export const runReconScan = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
     z.object({ botId: z.string().uuid().optional() }).parse(input ?? {}),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const db = await admin();
     const { buildMarketSnapshot, analyzeSymbol } = await import("@/lib/market-data.server");
     const { raiseAlert } = await import("@/lib/alerts.server");
@@ -202,6 +216,11 @@ export const runReconScan = createServerFn({ method: "POST" })
       }
     }
 
-    await audit("recon.scan", data.botId ?? null, { bots: list.length, observations, findings });
+    await audit(
+      "recon.scan",
+      data.botId ?? null,
+      { bots: list.length, observations, findings },
+      context.userId,
+    );
     return { ok: true, scanned: list.length, findings };
   });
