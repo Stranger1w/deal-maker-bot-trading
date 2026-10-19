@@ -27,6 +27,7 @@ export type Database = {
           message: string
           severity: string
           title: string
+          user_id: string
         }
         Insert: {
           acknowledged?: boolean
@@ -40,6 +41,7 @@ export type Database = {
           message: string
           severity?: string
           title: string
+          user_id: string
         }
         Update: {
           acknowledged?: boolean
@@ -53,6 +55,22 @@ export type Database = {
           message?: string
           severity?: string
           title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      app_admins: {
+        Row: {
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -86,6 +104,7 @@ export type Database = {
           entity: string
           entity_id: string | null
           id: string
+          user_id: string | null
         }
         Insert: {
           action: string
@@ -95,6 +114,7 @@ export type Database = {
           entity: string
           entity_id?: string | null
           id?: string
+          user_id?: string | null
         }
         Update: {
           action?: string
@@ -104,6 +124,7 @@ export type Database = {
           entity?: string
           entity_id?: string | null
           id?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -137,6 +158,7 @@ export type Database = {
           risk_week: string
           tick_interval_seconds: number
           updated_at: string
+          user_id: string
         }
         Insert: {
           allow_live_orders?: boolean
@@ -167,6 +189,7 @@ export type Database = {
           risk_week?: string
           tick_interval_seconds?: number
           updated_at?: string
+          user_id: string
         }
         Update: {
           allow_live_orders?: boolean
@@ -197,6 +220,7 @@ export type Database = {
           risk_week?: string
           tick_interval_seconds?: number
           updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -248,6 +272,7 @@ export type Database = {
           last_tested_at: string | null
           market_mode: string
           updated_at: string
+          user_id: string
         }
         Insert: {
           api_key_cipher: string
@@ -262,6 +287,56 @@ export type Database = {
           last_error_message?: string | null
           last_tested_at?: string | null
           market_mode?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          api_key_cipher?: string
+          api_key_last4?: string
+          api_secret_cipher?: string
+          api_secret_last4?: string
+          connection_status?: string
+          created_at?: string
+          geo_restricted?: boolean
+          id?: string
+          last_error_code?: string | null
+          last_error_message?: string | null
+          last_tested_at?: string | null
+          market_mode?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      binance_credentials_backup_qa: {
+        Row: {
+          api_key_cipher: string
+          api_key_last4: string
+          api_secret_cipher: string
+          api_secret_last4: string
+          connection_status: string
+          created_at: string
+          geo_restricted: boolean
+          id: string
+          last_error_code: string | null
+          last_error_message: string | null
+          last_tested_at: string | null
+          market_mode: string
+          updated_at: string
+        }
+        Insert: {
+          api_key_cipher: string
+          api_key_last4: string
+          api_secret_cipher: string
+          api_secret_last4: string
+          connection_status: string
+          created_at?: string
+          geo_restricted?: boolean
+          id?: string
+          last_error_code?: string | null
+          last_error_message?: string | null
+          last_tested_at?: string | null
+          market_mode: string
           updated_at?: string
         }
         Update: {
@@ -444,6 +519,7 @@ export type Database = {
           take_profit_pct: number
           trades_today: number
           updated_at: string
+          user_id: string
           weekly_loss: number
           win_rate: number
         }
@@ -477,6 +553,7 @@ export type Database = {
           take_profit_pct?: number
           trades_today?: number
           updated_at?: string
+          user_id: string
           weekly_loss?: number
           win_rate?: number
         }
@@ -510,8 +587,63 @@ export type Database = {
           take_profit_pct?: number
           trades_today?: number
           updated_at?: string
+          user_id?: string
           weekly_loss?: number
           win_rate?: number
+        }
+        Relationships: []
+      }
+      engine_config: {
+        Row: {
+          account_mode: string
+          amount_per_trade: number
+          auto_symbol_min_volume: number
+          execution_mode: string
+          horizon_minutes: number
+          id: string
+          indicator_ids: string[]
+          indicator_params: Json
+          loss_limit_amount: number | null
+          loss_limit_enabled: boolean
+          profit_limit_amount: number | null
+          profit_limit_enabled: boolean
+          strategy_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_mode?: string
+          amount_per_trade?: number
+          auto_symbol_min_volume?: number
+          execution_mode?: string
+          horizon_minutes?: number
+          id?: string
+          indicator_ids?: string[]
+          indicator_params?: Json
+          loss_limit_amount?: number | null
+          loss_limit_enabled?: boolean
+          profit_limit_amount?: number | null
+          profit_limit_enabled?: boolean
+          strategy_id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_mode?: string
+          amount_per_trade?: number
+          auto_symbol_min_volume?: number
+          execution_mode?: string
+          horizon_minutes?: number
+          id?: string
+          indicator_ids?: string[]
+          indicator_params?: Json
+          loss_limit_amount?: number | null
+          loss_limit_enabled?: boolean
+          profit_limit_amount?: number | null
+          profit_limit_enabled?: boolean
+          strategy_id?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -528,6 +660,7 @@ export type Database = {
           started_at: string
           status: string
           trigger: string
+          user_id: string | null
         }
         Insert: {
           bots_processed?: number
@@ -541,6 +674,7 @@ export type Database = {
           started_at?: string
           status?: string
           trigger?: string
+          user_id?: string | null
         }
         Update: {
           bots_processed?: number
@@ -554,6 +688,7 @@ export type Database = {
           started_at?: string
           status?: string
           trigger?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -574,6 +709,7 @@ export type Database = {
           status: string
           unmanaged_positions: Json | null
           updated_at: string
+          user_id: string
         }
         Insert: {
           close_reason?: string | null
@@ -591,6 +727,7 @@ export type Database = {
           status?: string
           unmanaged_positions?: Json | null
           updated_at?: string
+          user_id: string
         }
         Update: {
           close_reason?: string | null
@@ -608,10 +745,53 @@ export type Database = {
           status?: string
           unmanaged_positions?: Json | null
           updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
 
+      engine_strategies: {
+        Row: {
+          auto_symbol: boolean
+          auto_symbol_reason: Json
+          auto_symbol_score: number | null
+          auto_symbol_updated_at: string | null
+          bot_id: string
+          consecutive_losses: number
+          consecutive_wins: number
+          locked_accepted_at: string | null
+          martingale_level: number
+          params: Json
+          updated_at: string
+        }
+        Insert: {
+          auto_symbol?: boolean
+          auto_symbol_reason?: Json
+          auto_symbol_score?: number | null
+          auto_symbol_updated_at?: string | null
+          bot_id: string
+          consecutive_losses?: number
+          consecutive_wins?: number
+          locked_accepted_at?: string | null
+          martingale_level?: number
+          params?: Json
+          updated_at?: string
+        }
+        Update: {
+          auto_symbol?: boolean
+          auto_symbol_reason?: Json
+          auto_symbol_score?: number | null
+          auto_symbol_updated_at?: string | null
+          bot_id?: string
+          consecutive_losses?: number
+          consecutive_wins?: number
+          locked_accepted_at?: string | null
+          martingale_level?: number
+          params?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       exchange_credentials: {
         Row: {
           api_key_cipher: string
@@ -629,6 +809,7 @@ export type Database = {
           market_mode: string
           passphrase_cipher: string | null
           updated_at: string
+          user_id: string
         }
         Insert: {
           api_key_cipher: string
@@ -646,6 +827,7 @@ export type Database = {
           market_mode?: string
           passphrase_cipher?: string | null
           updated_at?: string
+          user_id: string
         }
         Update: {
           api_key_cipher?: string
@@ -663,6 +845,7 @@ export type Database = {
           market_mode?: string
           passphrase_cipher?: string | null
           updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -675,6 +858,7 @@ export type Database = {
           in_use_balance: number
           label: string
           updated_at: string
+          user_id: string
         }
         Insert: {
           available_balance?: number
@@ -684,6 +868,7 @@ export type Database = {
           in_use_balance?: number
           label?: string
           updated_at?: string
+          user_id: string
         }
         Update: {
           available_balance?: number
@@ -693,6 +878,7 @@ export type Database = {
           in_use_balance?: number
           label?: string
           updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -776,6 +962,27 @@ export type Database = {
         }
         Relationships: []
       }
+      market_favorites: {
+        Row: {
+          created_at: string
+          exchange: string
+          symbol: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          exchange?: string
+          symbol: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          exchange?: string
+          symbol?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       market_prices: {
         Row: {
           id: string
@@ -852,6 +1059,7 @@ export type Database = {
           paid_at: string
           pool: string
           usd_value: number
+          user_id: string
         }
         Insert: {
           amount: number
@@ -860,6 +1068,7 @@ export type Database = {
           paid_at?: string
           pool: string
           usd_value?: number
+          user_id: string
         }
         Update: {
           amount?: number
@@ -868,6 +1077,121 @@ export type Database = {
           paid_at?: string
           pool?: string
           usd_value?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      mining_sandboxes: {
+        Row: {
+          ai_notes: string | null
+          best_coin: string | null
+          best_pool: string | null
+          coins: string[]
+          created_at: string
+          date_from: string
+          date_to: string
+          estimated_daily_usd: number | null
+          id: string
+          name: string
+          pools: string[]
+          power_cost_usd_kwh: number
+          simulated_hash_rate: number
+          simulated_hash_unit: string
+          speed: number
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ai_notes?: string | null
+          best_coin?: string | null
+          best_pool?: string | null
+          coins?: string[]
+          created_at?: string
+          date_from: string
+          date_to: string
+          estimated_daily_usd?: number | null
+          id?: string
+          name: string
+          pools?: string[]
+          power_cost_usd_kwh?: number
+          simulated_hash_rate?: number
+          simulated_hash_unit?: string
+          speed?: number
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ai_notes?: string | null
+          best_coin?: string | null
+          best_pool?: string | null
+          coins?: string[]
+          created_at?: string
+          date_from?: string
+          date_to?: string
+          estimated_daily_usd?: number | null
+          id?: string
+          name?: string
+          pools?: string[]
+          power_cost_usd_kwh?: number
+          simulated_hash_rate?: number
+          simulated_hash_unit?: string
+          speed?: number
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      mining_training_runs: {
+        Row: {
+          coin: string
+          created_at: string
+          gross_daily_usd: number
+          hash_rate: number
+          hash_unit: string
+          id: string
+          net_daily_usd: number
+          pool: string
+          power_daily_usd: number
+          promoted: boolean
+          sandbox_id: string
+          suggested_params: Json
+          worker_id: string | null
+          worker_name: string
+        }
+        Insert: {
+          coin: string
+          created_at?: string
+          gross_daily_usd: number
+          hash_rate: number
+          hash_unit: string
+          id?: string
+          net_daily_usd: number
+          pool: string
+          power_daily_usd: number
+          promoted?: boolean
+          sandbox_id: string
+          suggested_params?: Json
+          worker_id?: string | null
+          worker_name: string
+        }
+        Update: {
+          coin?: string
+          created_at?: string
+          gross_daily_usd?: number
+          hash_rate?: number
+          hash_unit?: string
+          id?: string
+          net_daily_usd?: number
+          pool?: string
+          power_daily_usd?: number
+          promoted?: boolean
+          sandbox_id?: string
+          suggested_params?: Json
+          worker_id?: string | null
+          worker_name?: string
         }
         Relationships: []
       }
@@ -885,6 +1209,7 @@ export type Database = {
           status: string
           updated_at: string
           uptime_seconds: number
+          user_id: string
         }
         Insert: {
           coin: string
@@ -899,6 +1224,7 @@ export type Database = {
           status?: string
           updated_at?: string
           uptime_seconds?: number
+          user_id: string
         }
         Update: {
           coin?: string
@@ -913,6 +1239,7 @@ export type Database = {
           status?: string
           updated_at?: string
           uptime_seconds?: number
+          user_id?: string
         }
         Relationships: []
       }
@@ -928,6 +1255,7 @@ export type Database = {
           period_start: string
           scope: string
           summary: string
+          user_id: string
         }
         Insert: {
           created_at?: string
@@ -940,6 +1268,7 @@ export type Database = {
           period_start: string
           scope: string
           summary?: string
+          user_id: string
         }
         Update: {
           created_at?: string
@@ -952,6 +1281,7 @@ export type Database = {
           period_start?: string
           scope?: string
           summary?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -970,6 +1300,7 @@ export type Database = {
           status: string
           symbols: string[]
           updated_at: string
+          user_id: string
         }
         Insert: {
           created_at?: string
@@ -985,6 +1316,7 @@ export type Database = {
           status?: string
           symbols?: string[]
           updated_at?: string
+          user_id: string
         }
         Update: {
           created_at?: string
@@ -1000,6 +1332,7 @@ export type Database = {
           status?: string
           symbols?: string[]
           updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -1174,6 +1507,7 @@ export type Database = {
           speed: number
           status: string
           updated_at: string
+          user_id: string
           win_rate: number | null
         }
         Insert: {
@@ -1192,6 +1526,7 @@ export type Database = {
           speed?: number
           status?: string
           updated_at?: string
+          user_id: string
           win_rate?: number | null
         }
         Update: {
@@ -1210,14 +1545,49 @@ export type Database = {
           speed?: number
           status?: string
           updated_at?: string
+          user_id?: string
           win_rate?: number | null
         }
         Relationships: []
       }
     }
     Views: {
-      [_ in never]: never
+      exchange_credentials_public: {
+        Row: {
+          api_key_last4: string | null
+          api_secret_last4: string | null
+          connection_status: string | null
+          created_at: string | null
+          exchange: string | null
+          id: string | null
+          label: string | null
+          last_error_code: string | null
+          last_error_message: string | null
+          last_tested_at: string | null
+          market_mode: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
     }
+      binance_credentials_public: {
+        Row: {
+          api_key_last4: string | null
+          api_secret_last4: string | null
+          connection_status: string | null
+          created_at: string | null
+          geo_restricted: boolean | null
+          id: string | null
+          last_error_code: string | null
+          last_error_message: string | null
+          last_tested_at: string | null
+          market_mode: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
     Functions: {
       bot_apply_execution: {
         Args: {
@@ -1232,7 +1602,6 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never

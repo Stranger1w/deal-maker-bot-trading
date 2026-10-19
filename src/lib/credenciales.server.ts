@@ -30,7 +30,7 @@ export async function loadBinanceSecret(
     .from("binance_credentials")
     .select("api_key_cipher,api_secret_cipher")
     // types.ts aun no incluye binance_credentials.user_id: cast.
-    .eq("user_id" as never, ownerId as never)
+    .eq("user_id", ownerId)
     .limit(1)
     .maybeSingle();
   const row = data as { api_key_cipher?: string; api_secret_cipher?: string } | null;

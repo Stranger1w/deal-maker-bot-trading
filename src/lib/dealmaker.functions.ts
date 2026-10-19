@@ -205,7 +205,7 @@ export const saveBinanceCredentials = createServerFn({ method: "POST" })
     const { data: existing } = await db
       .from("binance_credentials")
       .select("id")
-      .eq("user_id" as never, context.userId as never)
+      .eq("user_id", context.userId)
       .limit(1);
     if (existing && existing.length > 0 && existing[0]) {
       const { error } = await db
@@ -214,10 +214,10 @@ export const saveBinanceCredentials = createServerFn({ method: "POST" })
         .eq("id", existing[0].id as string);
       if (error) throw new Error(error.message);
     } else {
-      // types.ts aun no incluye binance_credentials.user_id: cast.
+      // Sin cast: el compilador exige el dueño (user_id es NOT NULL).
       const { error } = await db
         .from("binance_credentials")
-        .insert({ ...row, user_id: context.userId } as never);
+        .insert({ ...row, user_id: context.userId });
       if (error) throw new Error(error.message);
     }
     await audit(
@@ -448,7 +448,7 @@ export const runSandbox = createServerFn({ method: "POST" })
       .select("id, name")
       .in("status", ["training", "paused"])
       // types.ts aun no incluye bots.user_id: cast.
-      .eq("user_id" as never, duenoId as never);
+      .eq("user_id", duenoId);
     const candidates = (bots ?? []).slice(0, 4);
 
     // Capa de IA multi-plataforma (módulo independiente): normaliza las fuentes
@@ -665,7 +665,7 @@ export const updateAutomationSettings = createServerFn({ method: "POST" })
         ? await db
             .from("binance_credentials")
             .select("connection_status")
-            .eq("user_id" as never, plataforma.adminId as never)
+            .eq("user_id", plataforma.adminId)
         : { data: [] as { connection_status: string }[] };
       if (!(creds.data ?? []).some((c) => c.connection_status === "ok")) {
         throw new Error(

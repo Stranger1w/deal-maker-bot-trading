@@ -102,7 +102,7 @@ export async function leerAjustesDeUsuario(db: Db, userId: string): Promise<Fila
   const { data, error } = await db
     .from("automation_settings")
     .select("*")
-    .eq("user_id" as never, userId as never)
+    .eq("user_id", userId)
     .limit(1)
     .maybeSingle();
   if (error) throw new Error(`No se pudo leer la configuracion del motor: ${error.message}`);
@@ -121,7 +121,7 @@ export async function leerCuentaDeUsuario(
   const { data, error } = await db
     .from("fund_accounts")
     .select("id, available_balance, in_use_balance")
-    .eq("user_id" as never, userId as never)
+    .eq("user_id", userId)
     .limit(1)
     .maybeSingle();
   if (error) throw new Error(`No se pudo leer la cuenta de fondos: ${error.message}`);

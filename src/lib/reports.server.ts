@@ -33,29 +33,26 @@ export async function buildReports(period: "daily" | "weekly") {
   const { data: bots } = await client
     .from("bots")
     .select("name,pnl,capital,win_rate,mode,status")
-    .eq("user_id" as never, duenoId as never);
+    .eq("user_id", duenoId);
   const { data: executions } = await client
     .from("bot_executions")
     .select("pnl,created_at")
     .gte("created_at", start.toISOString())
     .in(
       "bot_id",
-      (
-        await client
-          .from("bots")
-          .select("id")
-          .eq("user_id" as never, duenoId as never)
-      ).data?.map((b) => (b as { id: string }).id) ?? ["__sin_bots__"],
+      (await client.from("bots").select("id").eq("user_id", duenoId)).data?.map(
+        (b) => (b as { id: string }).id,
+      ) ?? ["__sin_bots__"],
     );
   const { data: workers } = await client
     .from("mining_workers")
     .select("hash_rate,estimated_daily_earnings,status")
-    .eq("user_id" as never, duenoId as never);
+    .eq("user_id", duenoId);
   const { data: payouts } = await client
     .from("mining_payouts")
     .select("usd_value,paid_at")
     .gte("paid_at", start.toISOString())
-    .eq("user_id" as never, duenoId as never);
+    .eq("user_id", duenoId);
 
   const squadPnl = (executions ?? []).reduce((s, e) => s + Number(e.pnl), 0);
   const squadCapital = (bots ?? []).reduce((s, b) => s + Number(b.capital), 0);
@@ -100,9 +97,14 @@ export async function buildReports(period: "daily" | "weekly") {
     },
   ];
 
-  const { error } = await client
-    .from("performance_reports")
-    .insert(rows.map((fila) => ({ ...fila, user_id: duenoId })) as never);
+  const { error } = await client.from("performance_reports").insert(
+    rows.map((fila) => ({
+      ...fila,
+      created_at: new Date().toISOString(),
+      is_demo: false,
+      user_id: duenoId,
+    })),
+  );
   if (error) throw new Error(error.message);
 
   await raiseAlert(client, {
@@ -135,10 +137,7 @@ export async function profitSweep() {
 
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const { data: botsDueno } = duenoId
-    ? await client
-        .from("bots")
-        .select("id")
-        .eq("user_id" as never, duenoId as never)
+    ? await client.from("bots").select("id").eq("user_id", duenoId)
     : { data: [] as unknown[] };
   const idsDueno = (botsDueno ?? []).map((b) => (b as { id: string }).id);
   const { data: executions } = await client

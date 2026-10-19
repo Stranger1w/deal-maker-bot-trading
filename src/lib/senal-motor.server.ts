@@ -61,9 +61,9 @@ export async function leerConfigSenales(
   try {
     if (!adminId) return null;
     const { data, error } = await db
-      .from("engine_config" as never)
-      .select("indicator_ids, indicator_params, horizon_minutes" as never)
-      .eq("user_id" as never, adminId as never)
+      .from("engine_config")
+      .select("indicator_ids, indicator_params, horizon_minutes")
+      .eq("user_id", adminId)
       .limit(1)
       .maybeSingle();
     if (error) return null;

@@ -515,7 +515,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         status: "running",
         started_at: startedAt.toISOString(),
         user_id: adminId,
-      } as never)
+      })
       .select("id")
       .single();
     runId = (run as { id?: string } | null)?.id as string | undefined;
@@ -820,9 +820,9 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
     const envTrading = await resolveBinanceTradingEnv();
     const autoSymbolPermitido = envTrading === "testnet";
     const { data: botsAuto } = await db
-      .from("engine_strategies" as never)
-      .select("bot_id" as never)
-      .eq("auto_symbol" as never, true as never);
+      .from("engine_strategies")
+      .select("bot_id")
+      .eq("auto_symbol", true);
     const idsConAuto = new Set(
       ((botsAuto ?? []) as unknown as { bot_id: string }[]).map((b) => b.bot_id),
     );
@@ -1513,7 +1513,7 @@ async function stopBotsDeDueno(db: Db, duenoClave: string, reason: string) {
     .select("id, name")
     .eq("status", "running")
     // types.ts aun no incluye bots.user_id: cast.
-    .eq("user_id" as never, duenoClave as never);
+    .eq("user_id", duenoClave);
   for (const bot of bots ?? []) {
     await stopBot(db, bot.id, bot.name, reason, {});
   }

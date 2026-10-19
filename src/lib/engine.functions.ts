@@ -272,11 +272,9 @@ export const leerConfigMotor = createServerFn({ method: "POST" })
     const plataforma = await leerAjustesPlataforma(db);
     const adminId = plataforma?.adminId ?? context.userId;
     const { data, error } = await db
-      .from("engine_config" as never)
-      .select(
-        "id, indicator_ids, indicator_params, strategy_id, horizon_minutes, amount_per_trade" as never,
-      )
-      .eq("user_id" as never, adminId as never)
+      .from("engine_config")
+      .select("id, indicator_ids, indicator_params, strategy_id, horizon_minutes, amount_per_trade")
+      .eq("user_id", adminId)
       .limit(1)
       .maybeSingle();
     if (error) throw new Error(error.message);
@@ -329,9 +327,9 @@ export const guardarConfigMotor = createServerFn({ method: "POST" })
 
     const ahora = new Date().toISOString();
     const { data: actual } = await db
-      .from("engine_config" as never)
-      .select("id, account_mode, execution_mode, auto_symbol_min_volume" as never)
-      .eq("user_id" as never, adminId as never)
+      .from("engine_config")
+      .select("id, account_mode, execution_mode, auto_symbol_min_volume")
+      .eq("user_id", adminId)
       .limit(1)
       .maybeSingle();
     const fila = actual as {
@@ -341,7 +339,7 @@ export const guardarConfigMotor = createServerFn({ method: "POST" })
       auto_symbol_min_volume?: number;
     } | null;
 
-    const { error } = await db.from("engine_config" as never).upsert(
+    const { error } = await db.from("engine_config").upsert(
       {
         // id = user_id::text (regla de la Fase 2): una fila de configuracion
         // por usuario, con su unica clave de conflicto en user_id.
@@ -355,9 +353,11 @@ export const guardarConfigMotor = createServerFn({ method: "POST" })
         indicator_params: data.indicatorParams ?? {},
         strategy_id: data.strategyId,
         auto_symbol_min_volume: fila?.auto_symbol_min_volume ?? 500000,
+        profit_limit_enabled: false,
+        loss_limit_enabled: false,
         updated_at: ahora,
-      } as never,
-      { onConflict: "user_id" } as never,
+      },
+      { onConflict: "user_id" },
     );
     if (error) throw new Error(error.message);
 

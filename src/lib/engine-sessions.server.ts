@@ -102,7 +102,7 @@ export async function obtenerSesionActiva(
   userId?: string | null,
 ): Promise<EngineSession | null> {
   let consulta = db.from("engine_sessions").select("*").in("status", ["active", "closing"]);
-  if (userId) consulta = consulta.eq("user_id" as never, userId as never);
+  if (userId) consulta = consulta.eq("user_id", userId);
   const { data, error } = await consulta.limit(1).maybeSingle();
   if (error) throw new Error(`No se pudo leer la sesion activa: ${error.message}`);
   return (data as EngineSession | null) ?? null;
@@ -125,8 +125,14 @@ export async function iniciarSesion(
       mode: args.mode,
       status: "active",
       session_ends_at: args.mode === "timer" ? (args.session_ends_at ?? null) : null,
+      runs_count: 0,
+      orders_count: 0,
+      errors_count: 0,
+      pnl_total: 0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
       user_id: args.user_id,
-    } as never)
+    })
     .select("*")
     .single();
   if (!error && data) return data as EngineSession;
@@ -262,7 +268,7 @@ export async function calcularPnlPorRango(
     const { data: bots, error: errorBots } = await db
       .from("bots")
       .select("id")
-      .eq("user_id" as never, userId as never);
+      .eq("user_id", userId);
     if (errorBots)
       throw new Error(`No se pudo calcular el pnl de la sesion ${sesion.id}: ${errorBots.message}`);
     const ids = (bots ?? []).map((b) => (b as { id: string }).id);
@@ -287,7 +293,7 @@ export async function listarSesiones(
   userId?: string | null,
 ): Promise<EngineSession[]> {
   let consulta = db.from("engine_sessions").select("*");
-  if (userId) consulta = consulta.eq("user_id" as never, userId as never);
+  if (userId) consulta = consulta.eq("user_id", userId);
   const { data, error } = await consulta
     .order("session_started_at", { ascending: false })
     .limit(limit);
@@ -330,7 +336,7 @@ export async function contarPosicionesAbiertas(db: Db, userId?: string | null): 
     .select("id, pair")
     .eq("status", "running")
     .eq("automation_enabled", true);
-  if (userId) consulta = consulta.eq("user_id" as never, userId as never);
+  if (userId) consulta = consulta.eq("user_id", userId);
   const { data: bots, error } = await consulta;
   if (error) throw new Error(`No se pudieron leer los bots del cierre: ${error.message}`);
   let abiertas = 0;
@@ -360,7 +366,7 @@ export async function posicionesSinGestionar(
   let consulta = db
     .from("bots")
     .select("id, name, pair, status, automation_enabled, auto_stop_reason");
-  if (opts.userId) consulta = consulta.eq("user_id" as never, opts.userId as never);
+  if (opts.userId) consulta = consulta.eq("user_id", opts.userId);
   const { data: bots, error } = await consulta;
   if (error) throw new Error(`No se pudieron leer los bots del cierre: ${error.message}`);
   const sinGestion: PosicionSinGestion[] = [];

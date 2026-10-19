@@ -48,7 +48,8 @@ export async function raiseAlert(db: Db, alert: AlertInput) {
     emailConfigured = false;
   }
 
-  // types.ts aun no incluye alerts.user_id: cast.
+  // Sin cast: el compilador obliga a escribir el dueño (alerts.user_id es
+  // NOT NULL) y a no dejar campos obligatorios sin rellenar.
   const { error } = await db.from("alerts").insert({
     category: alert.category,
     severity: alert.severity,
@@ -56,9 +57,12 @@ export async function raiseAlert(db: Db, alert: AlertInput) {
     message: alert.message,
     entity: alert.entity ?? null,
     entity_id: alert.entityId ?? null,
+    acknowledged: false,
+    is_demo: false,
     delivery_status: emailConfigured ? "queued_email" : "in_app_only",
+    created_at: new Date().toISOString(),
     user_id: alert.userId,
-  } as never);
+  });
   if (error) {
     throw new Error(`No se pudo guardar la alerta "${alert.title}": ${error.message}`);
   }

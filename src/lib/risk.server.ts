@@ -41,10 +41,7 @@ export async function evaluatePromotionCore(botId: string): Promise<PromotionChe
     settings = (await leerAjustesPlataforma(db))?.fila ?? null;
   }
   const { data: creds } = duenoId
-    ? await db
-        .from("binance_credentials")
-        .select("connection_status")
-        .eq("user_id" as never, duenoId as never)
+    ? await db.from("binance_credentials").select("connection_status").eq("user_id", duenoId)
     : { data: [] as { connection_status: string }[] };
 
   const minDemoDays = Number(settings?.min_demo_days ?? 14);

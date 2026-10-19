@@ -55,7 +55,7 @@ export const createReconBot = createServerFn({ method: "POST" })
         interval_seconds: data.intervalSeconds,
         status: "active",
         user_id: context.userId,
-      } as never)
+      })
       .select("id")
       .single();
     if (error) throw new Error(error.message);

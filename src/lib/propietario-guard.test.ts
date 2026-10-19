@@ -97,3 +97,60 @@ describe("guardian de aislamiento por usuario", () => {
     expect(LECTURAS_DE_UNA_FILA.length).toBeGreaterThanOrEqual(3);
   });
 });
+
+/* ----------------------------- ESCRITURAS --------------------------------- */
+
+/** Tablas cuya fila tiene dueño: al insertar, el user_id es obligatorio. */
+const TABLAS_CON_DUENO = [
+  "alerts",
+  "automation_settings",
+  "binance_credentials",
+  "bots",
+  "engine_config",
+  "engine_sessions",
+  "exchange_credentials",
+  "fund_accounts",
+  "market_favorites",
+  "mining_payouts",
+  "mining_sandboxes",
+  "mining_workers",
+  "performance_reports",
+  "recon_bots",
+  "training_sandboxes",
+];
+
+/**
+ * El compilador ya avisa de un user_id que falte en las tablas tipadas, pero
+ * este test cubre tambien los inserts escritos con `as never` (que el
+ * compilador no puede comprobar) y deja constancia de la regla.
+ */
+function escanearEscrituras(): string[] {
+  const problemas: string[] = [];
+  for (const archivo of archivosServidor(join(process.cwd(), "src"))) {
+    const codigo = readFileSync(archivo, "utf8");
+    for (const tabla of TABLAS_CON_DUENO) {
+      let desde = 0;
+      for (;;) {
+        const i = codigo.indexOf(`.from("${tabla}")`, desde);
+        if (i === -1) break;
+        desde = i + 1;
+        const fin = codigo.indexOf(")", i);
+        const cadena = codigo.slice(i, fin === -1 ? i + 400 : fin);
+        if (!cadena.includes(".insert(") && !cadena.includes(".upsert(")) continue;
+        if (cadena.includes("user_id")) continue;
+        // Un insert que no lleva user_id crea una fila huerfana.
+        problemas.push(
+          `${archivo.replace(process.cwd(), "")} -> ${tabla}: ${cadena.replace(/\s+/g, " ").slice(0, 120)}`,
+        );
+      }
+    }
+  }
+  return problemas;
+}
+
+describe("guardian de escrituras por usuario", () => {
+  test("toda fila nueva de una tabla por usuario lleva su dueño", () => {
+    const problemas = escanearEscrituras();
+    expect(problemas.join("\n")).toBe("");
+  });
+});
