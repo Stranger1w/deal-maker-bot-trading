@@ -8,33 +8,40 @@ Si algo no te cuadra, no sigas: dime y lo miramos.
 
 ---
 
-## 1. Aplicar las 8 migraciones SQL (lo primero)
+## 1. Aplicar las migraciones SQL (lo primero)
 
-Las migraciones son ficheros `.sql` en `supabase/migrations/`. **Las aplicas
-tú** en el SQL Editor de Supabase (Project → SQL Editor → New query → pegar →
-Run). Son idempotentes: si te equivocas y las repites, no se rompe nada.
+Hay **9 migraciones** en `supabase/migrations/`: las tres primeras ya las
+tenías aplicadas a mano el 14-oct (están en el repo para que no se pierdan) y
+**6 son nuevas y las tienes que aplicar**. **Las aplicas tú** en el SQL
+Editor de Supabase (Project → SQL Editor → New query → pegar → Run). Son
+idempotentes: si te equivocas y las repites, no se rompe nada.
 
-**En este orden** (las tres primeras ya las tenías aplicadas a mano el
-14-oct; están aquí para que el repo las tenga):
+**Aplica primero las 6 nuevas, en este orden**:
 
 | #   | Fichero                                            | Qué hace                                                         | ¿Imprescindible?                                            |
 | --- | -------------------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------- |
-| 1   | `20261014000000_app_settings_admin_only.sql`       | `app_settings` solo para el administrador                        | Sí (ya estaba)                                              |
-| 2   | `20261014100000_engine_sessions_por_usuario.sql`   | `engine_sessions` con dueño y **una sesión viva por usuario**    | **Sí, la importante**                                       |
-| 3   | `20261014200000_user_id_not_null.sql`              | `user_id` NOT NULL en las 15 tablas de una fila por usuario      | Sí (ya estaba)                                              |
-| 4   | `20261020000000_app_settings_registro_publico.sql` | Interruptor de registro público (cerrado por defecto)            | Sí                                                          |
-| 5   | `20261021000000_engine_strategies_por_bot.sql`     | Indicadores y estrategia **por bot**                             | Sí (para usarlos)                                           |
-| 6   | `20261022000000_bot_executions_senal.sql`          | Guardar qué señal produjo cada operación                         | Sí (sin esto, el panel de métricas no agrupa por indicador) |
-| 7   | `20261023000000_realismo_ejecucion.sql`            | Tope por riesgo, filtro de régimen, límite por par, enfriamiento | Sí (el motor los usa)                                       |
-| 8   | `20261024000000_auto_symbol_spread.sql`            | Filtro de spread en el selector automático                       | Opcional                                                    |
-| 9   | `20261025000000_engine_cycles.sql`                 | Tabla del diario del motor                                       | Opcional (sin ella el motor va igual, pero no hay diario)   |
+| 1   | `20261020000000_app_settings_registro_publico.sql` | Interruptor de registro público (cerrado por defecto)            | Sí                                                          |
+| 2   | `20261021000000_engine_strategies_por_bot.sql`     | Indicadores y estrategia **por bot**                             | Sí (para usarlos)                                           |
+| 3   | `20261022000000_bot_executions_senal.sql`          | Guardar qué señal produjo cada operación                         | Sí (sin esto, el panel de métricas no agrupa por indicador) |
+| 4   | `20261023000000_realismo_ejecucion.sql`            | Tope por riesgo, filtro de régimen, límite por par, enfriamiento | Sí (el motor los usa)                                       |
+| 5   | `20261024000000_auto_symbol_spread.sql`            | Filtro de spread en el selector automático                       | Opcional                                                    |
+| 6   | `20261025000000_engine_cycles.sql`                 | Tabla del diario del motor                                       | Opcional (sin ella el motor va igual, pero no hay diario)   |
+
+Estas tres las tenías ya aplicadas a mano el 14-oct, pero ahora también están
+en el repo (para que no se pierdan y para que el código y la base encajen):
+
+| #   | Fichero                                          | Qué hace                                                      |
+| --- | ------------------------------------------------ | ------------------------------------------------------------- |
+| 1   | `20261014000000_app_settings_admin_only.sql`     | `app_settings` solo para el administrador                     |
+| 2   | `20261014100000_engine_sessions_por_usuario.sql` | `engine_sessions` con dueño y **una sesión viva por usuario** |
+| 3   | `20261014200000_user_id_not_null.sql`            | `user_id` NOT NULL en las 15 tablas de una fila por usuario   |
 
 Cada fichero lleva su propia **consulta de verificación** al final: pégala
 después de aplicarlo y comprueba que sale lo que dice.
 
-> **Ojo con la nº 2**: cambia el índice de "una sesión viva" de global a
-> **por usuario**. Si tienes el motor corriendo, para el cron antes de
-> aplicarla.
+> **Ojo con la `20261014100000`**: cambia el índice de "una sesión viva" de
+> global a **por usuario**. Si tienes el motor corriendo, para el cron antes
+> de aplicarla.
 
 **Comprobación rápida** de que todo está aplicado:
 
