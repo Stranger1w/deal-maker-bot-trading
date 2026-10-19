@@ -10,11 +10,27 @@ import { SortableTable, type Column } from "@/components/SortableTable";
 import { StatusPill } from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { INDICADORES } from "@/lib/indicators";
 import type { EngineSession } from "@/lib/engine-sessions.server";
-import { detenerMotor, iniciarMotor, listarSesionesMotor } from "@/lib/engine.functions";
+import {
+  detenerMotor,
+  guardarConfigMotor,
+  iniciarMotor,
+  leerConfigMotor,
+  listarSesionesMotor,
+} from "@/lib/engine.functions";
+import { ESTRATEGIAS } from "@/lib/strategies";
 import { dateTime, money } from "@/lib/format";
 import { automationQuery } from "@/lib/queries";
 
@@ -206,6 +222,58 @@ function MotorPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // ── Configuración del motor (indicadores, estrategia, horizonte) ────────
+  const leerConfigFn = useServerFn(leerConfigMotor);
+  const guardarConfigFn = useServerFn(guardarConfigMotor);
+  const config = useQuery({
+    queryKey: ["engine_config"],
+    queryFn: () => leerConfigFn({}),
+  });
+
+  const [selIndicadores, setSelIndicadores] = useState<string[]>([]);
+  const [estrategiaId, setEstrategiaId] = useState<
+    "fixed" | "conservative" | "optimal" | "aggressive"
+  >("fixed");
+  const [horizonte, setHorizonte] = useState(15);
+  const [importe, setImporte] = useState("20");
+
+  // Al cargar la configuración, la pantalla refleja lo guardado.
+  useEffect(() => {
+    const c = config.data;
+    if (!c) return;
+    setSelIndicadores(c.indicator_ids ?? []);
+    setEstrategiaId((c.strategy_id as typeof estrategiaId) ?? "fixed");
+    setHorizonte(c.horizon_minutes ?? 15);
+    setImporte(String(c.amount_per_trade ?? 20));
+  }, [config.data]);
+
+  const alternarIndicador = (id: string, marcar: boolean) => {
+    setSelIndicadores((prev) => {
+      const actual = prev ?? [];
+      if (marcar) return actual.includes(id) ? actual : [...actual, id];
+      return actual.filter((x) => x !== id);
+    });
+  };
+
+  const guardar = useMutation({
+    mutationFn: () =>
+      guardarConfigFn({
+        data: {
+          indicatorIds: selIndicadores ?? [],
+          strategyId: estrategiaId,
+          horizonMinutes: horizonte as 1 | 5 | 15,
+          amountPerTrade: Number(importe) || 20,
+        },
+      }),
+    onSuccess: () => {
+      toast.success(
+        "Configuración guardada. El motor usará estos indicadores desde el próximo tick.",
+      );
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const activa =
     (sesiones.data ?? []).find((x) => x.status === "active" || x.status === "closing") ?? null;
   const engineOn = !!s?.engine_enabled;
@@ -383,6 +451,103 @@ function MotorPage() {
           — revisa el cron <span className="font-mono">POST /api/public/automation-tick</span>.
         </p>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Configuración del motor</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {config.data?.sinFila && (
+            <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              El motor no tiene configuración guardada: sin indicadores no hay señal y{" "}
+              <strong>no abre posiciones</strong>. Guarda una configuración para que empiece a
+              operar.
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Los indicadores son los que deciden comprar y vender. Con varios seleccionados solo se
+            opera cuando <strong>todos</strong> coinciden. El backtest usa exactamente estos mismos
+            indicadores, así que lo que midas ahí es lo que hará el motor.
+          </p>
+
+          <div className="space-y-2">
+            <Label>Indicadores</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {INDICADORES.map((ind) => {
+                const marcado = (selIndicadores ?? []).includes(ind.id);
+                return (
+                  <label
+                    key={ind.id}
+                    className="flex cursor-pointer items-start gap-2 rounded-md border border-border p-2 text-xs"
+                  >
+                    <Checkbox
+                      checked={marcado}
+                      onCheckedChange={(v) => alternarIndicador(ind.id, v === true)}
+                      aria-label={ind.nombre}
+                    />
+                    <span>
+                      <span className="font-medium">{ind.nombre}</span>
+                      <span className="block text-muted-foreground">{ind.descripcionCorta}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1">
+              <Label>Estrategia (tamaño)</Label>
+              <Select
+                value={estrategiaId}
+                onValueChange={(v) => setEstrategiaId(v as typeof estrategiaId)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ESTRATEGIAS.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Horizonte (vela)</Label>
+              <Select value={String(horizonte)} onValueChange={(v) => setHorizonte(Number(v))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1 minuto</SelectItem>
+                  <SelectItem value="5">5 minutos</SelectItem>
+                  <SelectItem value="15">15 minutos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Importe por operación (USDT)</Label>
+              <Input
+                type="number"
+                min={1}
+                step="1"
+                value={importe}
+                onChange={(e) => setImporte(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            disabled={guardar.isPending || (selIndicadores ?? []).length === 0}
+            onClick={() => guardar.mutate()}
+          >
+            {guardar.isPending ? "Guardando..." : "Guardar configuración"}
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

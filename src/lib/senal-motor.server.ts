@@ -50,12 +50,20 @@ export function intervaloDesdeMinutos(minutos: number): string {
  * Configuracion de senales de la plataforma (engine_config).
  * Devuelve null si no hay fila o no hay ningun indicador elegido: sin
  * indicadores no hay senal y el motor no abre posiciones.
+ *
+ * `adminId` es el dueno de la fila de configuracion de la plataforma: se
+ * filtra por el, nunca con .limit(1) a pelo (devolveria la de otro usuario).
  */
-export async function leerConfigSenales(db: Db): Promise<ConfigSenales | null> {
+export async function leerConfigSenales(
+  db: Db,
+  adminId: string | null,
+): Promise<ConfigSenales | null> {
   try {
+    if (!adminId) return null;
     const { data, error } = await db
       .from("engine_config" as never)
       .select("indicator_ids, indicator_params, horizon_minutes" as never)
+      .eq("user_id" as never, adminId as never)
       .limit(1)
       .maybeSingle();
     if (error) return null;

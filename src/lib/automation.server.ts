@@ -764,7 +764,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
     // Configuracion de senales (indicadores y horizonte) de la plataforma.
     // Es la MISMA que usa el backtest: si aqui no hay senal, no se opera.
     const { leerConfigSenales, senalDelBot } = await import("./senal-motor.server");
-    const cfgSenales = await leerConfigSenales(db);
+    const cfgSenales = await leerConfigSenales(db, adminId);
 
     // Capital y concentracion se miden por dueno: los bots de un usuario no suman
     // al tope del administrador ni a los de otro usuario.
