@@ -36,11 +36,29 @@
 - [x] Registro público de usuarios cerrado por defecto (interruptor en `app_settings`
       o variable `PUBLIC_SIGNUP`), con lista cerrada de funciones públicas
 - [x] Selector automático de par enganchado al tick (solo testnet) y "Aplicar" manual
-- [ ] Panel de métricas honestas por indicador, estrategia, par y hora del día
-      (necesita registrar qué señal produjo cada operación: migración + campo)
+- [x] Panel de métricas honestas por indicador, estrategia, par y hora del día
+      (página `/metricas`), con el registro de qué señal produjo cada operación
+      (migración `20261022000000`) y el bloque "lo que estas cifras NO demuestran"
+- [x] `types.ts` con `user_id` en las 17 tablas que lo tienen (y las 6 tablas/vistas
+      que faltaban): el compilador ahora **exige** el dueño en cada insert y en cada
+      filtro, y un test guardián cubre los inserts con `as never`
+- [x] Indicador y estrategia **por bot** (migración `20261021000000`): cada bot usa
+      sus indicadores y su estrategia de tamaño, con su estado de rachas
+- [x] Aviso de riesgo obligatorio antes de activar bots reales (queda auditado con
+      su versión; si el texto cambia, hay que volver a aceptarlo)
+- [x] Take-profit que debe cubrir el coste de ida y vuelta (comisiones + slippage) con
+      margen: se rechaza al configurarlo y el motor para el bot que no lo cumple
+- [x] Realismo de ejecución: tamaño por riesgo con ATR, filtro de régimen de mercado,
+      límite de operaciones por par y enfriamiento tras rachas de pérdidas
+      (migración `20261023000000`)
+- [x] Backtest que funciona **sin internet** (`--archivo` + `scripts/guardar-velas.ts`
+      + dataset de ejemplo en `datos/`)
 - [ ] Idempotencia y reintentos con backoff en el envío de órdenes (parcial: ya hay
-      clave de idempotencia y manejo del 23505; falta reconciliar órdenes pendientes)
-- [ ] Regenerar `types.ts` con `user_id` (ahora mismo el compilador no puede avisar de
-      un `user_id` que falte: todo va con `as never`)
-- [ ] Cron 24/7 y alternativa de nube gratuita para el motor
+      clave de idempotencia, manejo del 23505 y reconciliación de la posición; falta
+      reconciliar órdenes pendientes)
+- [ ] Alertas por Telegram y logs estructurados (canales opcionales: si no hay
+      internet, el motor sigue funcionando y queda en el log)
+- [ ] Cron 24/7: falta elegir dónde corre (la nube, porque el PC no tiene internet)
+- [ ] Prueba de escenario con DOS usuarios de punta a punta (hace falta el usuario de
+      prueba de Supabase)
 - [ ] Fase 7: re-cifrar credenciales reales con la clave nueva y apagar flags
