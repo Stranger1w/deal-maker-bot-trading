@@ -120,7 +120,12 @@ function ChartShell({
           <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
             <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="recorded_on" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} width={56} unit={unit ?? ""} />
+            <YAxis
+              stroke="hsl(var(--muted-foreground))"
+              fontSize={11}
+              width={56}
+              unit={unit ?? ""}
+            />
             <Tooltip
               contentStyle={{
                 background: "hsl(var(--card))",
@@ -164,8 +169,14 @@ export function ComparisonCharts() {
     () => [...new Set((hashrate.data ?? []).map((h) => h.worker_name))],
     [hashrate.data],
   );
-  const pxOptions = useMemo(() => [...new Set((prices.data ?? []).map((p) => p.symbol))], [prices.data]);
-  const botOptions = useMemo(() => [...new Set((perf.data ?? []).map((p) => p.bot_name))], [perf.data]);
+  const pxOptions = useMemo(
+    () => [...new Set((prices.data ?? []).map((p) => p.symbol))],
+    [prices.data],
+  );
+  const botOptions = useMemo(
+    () => [...new Set((perf.data ?? []).map((p) => p.bot_name))],
+    [perf.data],
+  );
 
   const hrData = useMemo(
     () =>
@@ -234,7 +245,9 @@ export function ComparisonCharts() {
               onClick={() => setMetric(m)}
               className={cn(
                 "rounded-md border border-border px-2 py-1 text-xs",
-                metric === m ? "border-primary bg-primary/15 text-primary" : "text-muted-foreground",
+                metric === m
+                  ? "border-primary bg-primary/15 text-primary"
+                  : "text-muted-foreground",
               )}
             >
               {m === "pnl" ? "P&L" : m === "return_pct" ? "Retorno %" : "Capital"}

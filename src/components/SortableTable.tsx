@@ -94,7 +94,10 @@ export function SortableTable<T>({
         </thead>
         <tbody>
           {sorted.map((row) => (
-            <tr key={rowKey(row)} className="border-b border-border/60 last:border-0 hover:bg-secondary/30">
+            <tr
+              key={rowKey(row)}
+              className="border-b border-border/60 last:border-0 hover:bg-secondary/30"
+            >
               {columns.map((col) => (
                 <td
                   key={col.key}

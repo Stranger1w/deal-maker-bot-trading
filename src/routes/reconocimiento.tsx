@@ -12,7 +12,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SortableTable, type Column } from "@/components/SortableTable";
-import { createReconBot, deleteReconBot, runReconScan, setReconStatus } from "@/lib/recon.functions";
+import {
+  createReconBot,
+  deleteReconBot,
+  runReconScan,
+  setReconStatus,
+} from "@/lib/recon.functions";
 import { dateTime } from "@/lib/format";
 import {
   marketSourcesQuery,
@@ -90,8 +95,14 @@ function ReconPage() {
     : list;
 
   const addBot = async () => {
-    const symbols = form.symbols.split(",").map((s) => s.trim()).filter(Boolean);
-    const srcs = form.sources.split(",").map((s) => s.trim()).filter(Boolean);
+    const symbols = form.symbols
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const srcs = form.sources
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
     if (form.name.trim().length < 2 || !symbols.length || !srcs.length) {
       toast.error("Completa nombre, al menos una fuente y un activo");
       return;
@@ -198,7 +209,12 @@ function ReconPage() {
       label: "Acciones",
       render: (b) => (
         <div className="flex gap-1">
-          <Button size="sm" variant="secondary" onClick={() => toggle(b)} aria-label={`Alternar ${b.name}`}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => toggle(b)}
+            aria-label={`Alternar ${b.name}`}
+          >
             {b.status === "active" ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
           </Button>
           <Button
@@ -321,7 +337,9 @@ function ReconPage() {
       label: "Origen",
       value: (o) => String(o.is_demo),
       render: (o) => (
-        <StatusPill tone={o.is_demo ? "warning" : "success"}>{o.is_demo ? "demo" : "real"}</StatusPill>
+        <StatusPill tone={o.is_demo ? "warning" : "success"}>
+          {o.is_demo ? "demo" : "real"}
+        </StatusPill>
       ),
     },
   ];
@@ -344,7 +362,9 @@ function ReconPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Datos en el dataset compartido</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">
+              Datos en el dataset compartido
+            </CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">
             {list.reduce((s, b) => s + Number(b.observations_count), 0).toLocaleString("es-ES")}

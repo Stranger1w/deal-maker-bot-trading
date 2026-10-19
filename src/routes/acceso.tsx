@@ -14,7 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/acceso")({
   validateSearch: (s: Record<string, unknown>) => ({
-    next: typeof s['next'] === "string" ? s['next'] : undefined,
+    next: typeof s["next"] === "string" ? s["next"] : undefined,
   }),
   head: () => ({
     meta: [
@@ -68,9 +68,7 @@ function AccessPage() {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      ...(returnTo
-        ? { options: { emailRedirectTo: `${window.location.origin}${returnTo}` } }
-        : {}),
+      ...(returnTo ? { options: { emailRedirectTo: `${window.location.origin}${returnTo}` } } : {}),
     });
     setBusy(false);
     if (error) {
@@ -80,7 +78,6 @@ function AccessPage() {
     toast.success("Cuenta creada. Revisa tu correo si se requiere confirmación.");
     if (returnTo) window.location.href = returnTo;
   };
-
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -190,7 +187,9 @@ function AccessPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          {session.email ? `Cuenta: ${session.email}` : "Inicia sesión para habilitar operaciones sensibles."}
+          {session.email
+            ? `Cuenta: ${session.email}`
+            : "Inicia sesión para habilitar operaciones sensibles."}
         </CardContent>
       </Card>
 

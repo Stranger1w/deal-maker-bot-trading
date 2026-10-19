@@ -51,7 +51,9 @@ export async function signBinanceQuery(query: string, apiSecret: string): Promis
     false,
     ["sign"],
   );
-  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(query)));
+  const sig = new Uint8Array(
+    await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(query)),
+  );
   return Array.from(sig)
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");

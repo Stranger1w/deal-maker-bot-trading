@@ -15,8 +15,10 @@ export type RegionProbe = {
 
 function detectPlatform(): string {
   const ua = (globalThis as { navigator?: { userAgent?: string } }).navigator?.userAgent ?? "";
-  if (ua.includes("Cloudflare-Workers")) return "Cloudflare Workers (edge gestionado por Lovable Cloud)";
-  if (typeof process !== "undefined" && process.versions?.node) return "Node.js (servidor local/escritorio)";
+  if (ua.includes("Cloudflare-Workers"))
+    return "Cloudflare Workers (edge gestionado por Lovable Cloud)";
+  if (typeof process !== "undefined" && process.versions?.node)
+    return "Node.js (servidor local/escritorio)";
   return "Desconocida";
 }
 

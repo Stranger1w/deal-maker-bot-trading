@@ -31,7 +31,8 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "Deal Maker — Panel de bots y minería" },
       {
         property: "og:description",
-        content: "Fondos, API Keys de Binance, escuadrón de bots y enjambre de minería en un panel.",
+        content:
+          "Fondos, API Keys de Binance, escuadrón de bots y enjambre de minería en un panel.",
       },
     ],
   }),
@@ -56,7 +57,9 @@ function Dashboard() {
   const mining = workerList.filter((w) => w.status === "mining").length;
   const dailyMining = workerList.reduce((s, w) => s + Number(w.estimated_daily_earnings), 0);
   const alertList = alerts.data ?? [];
-  const criticalAlerts = alertList.filter((a) => a.severity === "critical" && !a.acknowledged).length;
+  const criticalAlerts = alertList.filter(
+    (a) => a.severity === "critical" && !a.acknowledged,
+  ).length;
   const stoppedByRisk = botList.filter((b) => b.auto_stop_reason).length;
   const offlineWorkers = workerList.filter((w) => w.status === "offline").length;
   const health: { label: string; ok: boolean; detail: string }[] = [
@@ -124,7 +127,11 @@ function Dashboard() {
                   : "Sin probar"
               : "Sin configurar"
           }
-          hint={binance.data ? `Clave •••• ${binance.data.api_key_last4}` : "Conecta tu cuenta de Binance"}
+          hint={
+            binance.data
+              ? `Clave •••• ${binance.data.api_key_last4}`
+              : "Conecta tu cuenta de Binance"
+          }
           tone={binance.data?.connection_status === "ok" ? "success" : "warning"}
         />
       </div>
@@ -186,7 +193,9 @@ function Dashboard() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium">{h.label}</span>
-                  <StatusPill tone={h.ok ? "success" : "danger"}>{h.ok ? "bien" : "revisar"}</StatusPill>
+                  <StatusPill tone={h.ok ? "success" : "danger"}>
+                    {h.ok ? "bien" : "revisar"}
+                  </StatusPill>
                 </div>
                 <p className="mt-1 text-[11px] text-muted-foreground">{h.detail}</p>
               </div>
@@ -220,7 +229,8 @@ function Dashboard() {
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">{r.summary}</p>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Email: {r.email_status === "no_configurado"
+                  Email:{" "}
+                  {r.email_status === "no_configurado"
                     ? "no configurado"
                     : "pendiente de dominio de envío verificado"}
                 </p>
@@ -315,7 +325,9 @@ function Dashboard() {
               key={e.id}
               className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-secondary/40 px-3 py-2 text-sm"
             >
-              <span className="tabular text-xs text-muted-foreground">{dateTime(e.created_at)}</span>
+              <span className="tabular text-xs text-muted-foreground">
+                {dateTime(e.created_at)}
+              </span>
               <span className="font-medium">{e.action}</span>
               <span className="text-xs text-muted-foreground">{e.entity_id ?? e.entity}</span>
             </div>

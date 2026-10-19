@@ -247,7 +247,11 @@ function FondosPage() {
       value: (t) => t.status,
       render: (t) => (
         <StatusPill tone={statusTone(t.status)}>
-          {t.status === "pending" ? "Pendiente" : t.status === "completed" ? "Completado" : "Fallido"}
+          {t.status === "pending"
+            ? "Pendiente"
+            : t.status === "completed"
+              ? "Completado"
+              : "Fallido"}
         </StatusPill>
       ),
     },
@@ -287,12 +291,16 @@ function FondosPage() {
           </CardHeader>
           <CardContent>
             <p className="tabular text-3xl font-semibold text-warning">{money(inUse)}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{usage.toFixed(1)}% del capital total</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {usage.toFixed(1)}% del capital total
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Capital total</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Capital total
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="tabular text-3xl font-semibold">{money(total)}</p>
@@ -457,7 +465,8 @@ function FondosPage() {
               <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
                 <span className="text-xs text-muted-foreground">
                   Envío por email: requiere dominio de envío verificado. Hasta entonces las alertas
-                  quedan solo in-app y los reportes marcados como pendientes; no se simulan entregas.
+                  quedan solo in-app y los reportes marcados como pendientes; no se simulan
+                  entregas.
                 </span>
                 <Switch
                   checked={currentPolicy.notifyEmailEnabled}
@@ -471,7 +480,8 @@ function FondosPage() {
             </Button>
             <p className="text-xs text-muted-foreground">
               La regla se ejecuta en el backend programado con auditoría. Nunca realiza retiros
-              externos automáticos. Último barrido: {settings.data?.last_profit_sweep_on ?? "sin ejecutar"}.
+              externos automáticos. Último barrido:{" "}
+              {settings.data?.last_profit_sweep_on ?? "sin ejecutar"}.
             </p>
           </CardContent>
         </Card>
@@ -495,7 +505,9 @@ function FondosPage() {
                 {dateTime(event.created_at)}
               </span>
               <span className="font-medium">{event.action}</span>
-              <span className="text-xs text-muted-foreground">{event.entity_id ?? event.entity}</span>
+              <span className="text-xs text-muted-foreground">
+                {event.entity_id ?? event.entity}
+              </span>
               <span className="tabular text-xs text-muted-foreground">
                 {JSON.stringify(event.details)}
               </span>

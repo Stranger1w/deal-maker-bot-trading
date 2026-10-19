@@ -7,7 +7,7 @@ import listBotsTool from "./tools/list-bots";
 import pauseBotTool from "./tools/pause-bot";
 
 // El emisor OAuth debe ser el host directo de Supabase (no el proxy de publicación).
-const projectRef = import.meta.env['VITE_SUPABASE_PROJECT_ID'] ?? "project-ref-unset";
+const projectRef = import.meta.env["VITE_SUPABASE_PROJECT_ID"] ?? "project-ref-unset";
 
 export default defineMcp({
   name: "github-love-project",

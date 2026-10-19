@@ -63,7 +63,9 @@ export function isGeoRestricted(status: number, body: string): boolean {
     "country is not supported",
     "prohibited jurisdiction",
   ];
-  return (status === 403 || status === 401 || status === 400) && hints.some((h) => text.includes(h));
+  return (
+    (status === 403 || status === 401 || status === 400) && hints.some((h) => text.includes(h))
+  );
 }
 
 export const GEO_MESSAGE = (label: string) =>
@@ -87,7 +89,12 @@ async function evaluate(
     if (problem) {
       return { ok: false, restricted: false, code: "api_error", message: problem };
     }
-    return { ok: true, restricted: false, code: null, message: "Conexión de solo lectura verificada" };
+    return {
+      ok: true,
+      restricted: false,
+      code: null,
+      message: "Conexión de solo lectura verificada",
+    };
   }
   if (isGeoRestricted(res.status, raw)) {
     return { ok: false, restricted: true, code: "geo_restricted", message: GEO_MESSAGE(label) };
@@ -173,7 +180,9 @@ async function testBybit(c: Creds): Promise<ExchangeTestResult> {
 async function testOkx(c: Creds): Promise<ExchangeTestResult> {
   const ts = new Date().toISOString();
   const path = "/api/v5/account/balance";
-  const sign = toBase64(await hmac(enc.encode(c.apiSecret), enc.encode(`${ts}GET${path}`), "SHA-256"));
+  const sign = toBase64(
+    await hmac(enc.encode(c.apiSecret), enc.encode(`${ts}GET${path}`), "SHA-256"),
+  );
   const res = await fetch(`https://www.okx.com${path}`, {
     headers: {
       "OK-ACCESS-KEY": c.apiKey,
@@ -224,7 +233,10 @@ async function testKucoin(c: Creds): Promise<ExchangeTestResult> {
 }
 
 /** Prueba de solo lectura: consulta saldos, nunca crea órdenes ni mueve fondos. */
-export async function testExchange(exchange: ExchangeId, creds: Creds): Promise<ExchangeTestResult> {
+export async function testExchange(
+  exchange: ExchangeId,
+  creds: Creds,
+): Promise<ExchangeTestResult> {
   try {
     switch (exchange) {
       case "coinbase":

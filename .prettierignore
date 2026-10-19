@@ -6,3 +6,17 @@ pnpm-lock.yaml
 package-lock.json
 bun.lock
 routeTree.gen.ts
+
+# Generados por Lovable: se reescriben solos y su formato no es nuestro.
+src/integrations/supabase/types.ts
+src/integrations/supabase/auth-middleware.ts
+src/integrations/supabase/auth-attacher.ts
+src/integrations/supabase/client.ts
+src/integrations/supabase/client.server.ts
+src/integrations/supabase/cron-auth.ts
+src/integrations/supabase/previewAuthStorage.ts
+
+# Scripts de trabajo locales (excluidos en .git/info/exclude).
+/*.mjs
+/_probe.ts
+/_fase1-verify/

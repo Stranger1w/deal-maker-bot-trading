@@ -66,8 +66,7 @@ function MiningPage() {
   };
 
   const addWorker = async () => {
-    if (form.name.trim().length < 2 || !form.pool || !form.rigId)
-      {
+    if (form.name.trim().length < 2 || !form.pool || !form.rigId) {
       toast.error("Completa nombre, pool e ID de hardware");
       return;
     }
@@ -89,47 +88,114 @@ function MiningPage() {
     : list;
 
   const workerColumns: Column<Worker>[] = [
-    { key: "name", label: "Worker", value: (w) => w.name, render: (w) => (
-      <div>
-        <p className="font-medium">{w.name}</p>
-        <p className="text-xs text-muted-foreground">{w.rig_id}</p>
-      </div>
-    ) },
-    { key: "status", label: "Estado", value: (w) => w.status, render: (w) => (
-      <StatusPill tone={statusTone(w.status)}>
-        {w.status === "mining" ? "minando" : w.status === "idle" ? "inactivo" : "offline"}
-      </StatusPill>
-    ) },
-    { key: "hash", label: "Hash rate", align: "right", value: (w) => Number(w.hash_rate), render: (w) => `${Number(w.hash_rate).toFixed(2)} ${w.hash_unit}` },
+    {
+      key: "name",
+      label: "Worker",
+      value: (w) => w.name,
+      render: (w) => (
+        <div>
+          <p className="font-medium">{w.name}</p>
+          <p className="text-xs text-muted-foreground">{w.rig_id}</p>
+        </div>
+      ),
+    },
+    {
+      key: "status",
+      label: "Estado",
+      value: (w) => w.status,
+      render: (w) => (
+        <StatusPill tone={statusTone(w.status)}>
+          {w.status === "mining" ? "minando" : w.status === "idle" ? "inactivo" : "offline"}
+        </StatusPill>
+      ),
+    },
+    {
+      key: "hash",
+      label: "Hash rate",
+      align: "right",
+      value: (w) => Number(w.hash_rate),
+      render: (w) => `${Number(w.hash_rate).toFixed(2)} ${w.hash_unit}`,
+    },
     { key: "coin", label: "Moneda", value: (w) => w.coin, render: (w) => w.coin },
     { key: "pool", label: "Pool", value: (w) => w.pool, render: (w) => w.pool },
-    { key: "uptime", label: "Uptime", align: "right", value: (w) => Number(w.uptime_seconds), render: (w) => uptime(Number(w.uptime_seconds)) },
-    { key: "earnings", label: "Est./día", align: "right", value: (w) => Number(w.estimated_daily_earnings), render: (w) => (
-      <span className="text-success">{money(Number(w.estimated_daily_earnings), "USD")}</span>
-    ) },
-    { key: "actions", label: "Acciones", render: (w) => (
-      <div className="flex gap-1">
-        <Button size="sm" variant="secondary" onClick={() => act("start", w.id)} aria-label={`Iniciar ${w.name}`}>
-          <Play className="size-3.5" />
-        </Button>
-        <Button size="sm" variant="secondary" onClick={() => act("stop", w.id)} aria-label={`Detener ${w.name}`}>
-          <Square className="size-3.5" />
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => act("restart", w.id)} aria-label={`Reiniciar ${w.name}`}>
-          <RotateCcw className="size-3.5" />
-        </Button>
-      </div>
-    ) },
+    {
+      key: "uptime",
+      label: "Uptime",
+      align: "right",
+      value: (w) => Number(w.uptime_seconds),
+      render: (w) => uptime(Number(w.uptime_seconds)),
+    },
+    {
+      key: "earnings",
+      label: "Est./día",
+      align: "right",
+      value: (w) => Number(w.estimated_daily_earnings),
+      render: (w) => (
+        <span className="text-success">{money(Number(w.estimated_daily_earnings), "USD")}</span>
+      ),
+    },
+    {
+      key: "actions",
+      label: "Acciones",
+      render: (w) => (
+        <div className="flex gap-1">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => act("start", w.id)}
+            aria-label={`Iniciar ${w.name}`}
+          >
+            <Play className="size-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => act("stop", w.id)}
+            aria-label={`Detener ${w.name}`}
+          >
+            <Square className="size-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => act("restart", w.id)}
+            aria-label={`Reiniciar ${w.name}`}
+          >
+            <RotateCcw className="size-3.5" />
+          </Button>
+        </div>
+      ),
+    },
   ];
 
   const payoutColumns: Column<Payout>[] = [
-    { key: "paid_at", label: "Fecha", value: (p) => new Date(p.paid_at).getTime(), render: (p) => (
-      <span className="tabular text-xs">{dateTime(p.paid_at)}</span>
-    ) },
-    { key: "coin", label: "Moneda", value: (p) => p.coin, render: (p) => <span className="font-medium">{p.coin}</span> },
+    {
+      key: "paid_at",
+      label: "Fecha",
+      value: (p) => new Date(p.paid_at).getTime(),
+      render: (p) => <span className="tabular text-xs">{dateTime(p.paid_at)}</span>,
+    },
+    {
+      key: "coin",
+      label: "Moneda",
+      value: (p) => p.coin,
+      render: (p) => <span className="font-medium">{p.coin}</span>,
+    },
     { key: "pool", label: "Pool", value: (p) => p.pool, render: (p) => p.pool },
-    { key: "amount", label: "Cantidad", align: "right", value: (p) => Number(p.amount), render: (p) => Number(p.amount) },
-    { key: "usd", label: "Valor USD", align: "right", value: (p) => Number(p.usd_value), render: (p) => money(Number(p.usd_value), "USD") },
+    {
+      key: "amount",
+      label: "Cantidad",
+      align: "right",
+      value: (p) => Number(p.amount),
+      render: (p) => Number(p.amount),
+    },
+    {
+      key: "usd",
+      label: "Valor USD",
+      align: "right",
+      value: (p) => Number(p.usd_value),
+      render: (p) => money(Number(p.usd_value), "USD"),
+    },
   ];
 
   return (
@@ -172,7 +238,9 @@ function MiningPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="tabular text-3xl font-semibold text-success">{money(totalEarnings, "USD")}</p>
+            <p className="tabular text-3xl font-semibold text-success">
+              {money(totalEarnings, "USD")}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -207,7 +275,10 @@ function MiningPage() {
           </div>
           <div className="space-y-1.5">
             <Label>ID hardware / rig</Label>
-            <Input value={form.rigId} onChange={(e) => setForm({ ...form, rigId: e.target.value })} />
+            <Input
+              value={form.rigId}
+              onChange={(e) => setForm({ ...form, rigId: e.target.value })}
+            />
           </div>
           <div className="flex items-end">
             <Button className="w-full" onClick={addWorker}>
@@ -268,7 +339,11 @@ function MiningPage() {
         ))}
       </div>
 
-      <AlertsPanel title="Salud y alertas del enjambre" category={["mining", "security"]} limit={5} />
+      <AlertsPanel
+        title="Salud y alertas del enjambre"
+        category={["mining", "security"]}
+        limit={5}
+      />
 
       <Card>
         <CardHeader className="pb-3">

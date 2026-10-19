@@ -36,7 +36,8 @@ export const Route = createFileRoute("/binance")({
       { property: "og:title", content: "API Keys de Binance — Deal Maker" },
       {
         property: "og:description",
-        content: "Credenciales cifradas en el backend; el frontend solo ve los últimos 4 caracteres.",
+        content:
+          "Credenciales cifradas en el backend; el frontend solo ve los últimos 4 caracteres.",
       },
     ],
   }),
@@ -55,13 +56,14 @@ function BinancePage() {
   const [apiSecret, setApiSecret] = useState("");
   const [market, setMarket] = useState<Market>("spot");
   const [busy, setBusy] = useState(false);
-  const [tested, setTested] = useState<null | { ok: boolean; message: string; restricted?: boolean }>(
-    null,
-  );
+  const [tested, setTested] = useState<null | {
+    ok: boolean;
+    message: string;
+    restricted?: boolean;
+  }>(null);
 
   const runTest = async () => {
-    if (apiKey.length < 8 || apiSecret.length < 8)
-      {
+    if (apiKey.length < 8 || apiSecret.length < 8) {
       toast.error("Introduce una API Key y un API Secret válidos");
       return;
     }
@@ -69,7 +71,8 @@ function BinancePage() {
     try {
       const result = await test({ data: { apiKey, apiSecret } });
       setTested(result);
-      result.ok ? toast.success(result.message) : toast.error(result.message);
+      if (result.ok) toast.success(result.message);
+      else toast.error(result.message);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error probando la conexión");
     } finally {
@@ -78,8 +81,7 @@ function BinancePage() {
   };
 
   const runSave = async () => {
-    if (apiKey.length < 8 || apiSecret.length < 8)
-      {
+    if (apiKey.length < 8 || apiSecret.length < 8) {
       toast.error("Introduce una API Key y un API Secret válidos");
       return;
     }
@@ -110,7 +112,9 @@ function BinancePage() {
 
       <Card className="border-warning/40 bg-warning/5">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Checklist obligatorio antes de guardar o probar</CardTitle>
+          <CardTitle className="text-base">
+            Checklist obligatorio antes de guardar o probar
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
@@ -126,10 +130,6 @@ function BinancePage() {
       </Card>
 
       <RegionCard restricted={saved?.geo_restricted === true || tested?.restricted === true} />
-
-
-
-
 
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <Card>

@@ -66,7 +66,9 @@ export function AlertsPanel({
           <div
             key={a.id}
             className={`rounded-md border px-3 py-2 text-sm ${
-              a.acknowledged ? "border-border bg-secondary/30 opacity-70" : "border-border bg-secondary/60"
+              a.acknowledged
+                ? "border-border bg-secondary/30 opacity-70"
+                : "border-border bg-secondary/60"
             }`}
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -74,11 +76,15 @@ export function AlertsPanel({
                 <StatusPill tone={tone(a.severity)}>{a.severity}</StatusPill>
                 {a.title}
               </span>
-              <span className="tabular text-xs text-muted-foreground">{dateTime(a.created_at)}</span>
+              <span className="tabular text-xs text-muted-foreground">
+                {dateTime(a.created_at)}
+              </span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">{a.message}</p>
             <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-              <span>Entrega: {a.delivery_status === "in_app_only" ? "solo in-app" : a.delivery_status}</span>
+              <span>
+                Entrega: {a.delivery_status === "in_app_only" ? "solo in-app" : a.delivery_status}
+              </span>
               {a.is_demo && <span>Datos demo / seed</span>}
               {!a.acknowledged && (
                 <button

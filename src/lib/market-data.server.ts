@@ -8,12 +8,15 @@
 
 import { isBinanceGeoRestricted } from "@/lib/binance-region";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import type { Database } from "@/integrations/supabase/types";
+
 export const MARKET_DATA_LAYER_VERSION = "ai-market-layer/1.2.0";
 export const NORMALIZED_SCHEMA = "ohlcv_v1";
 
-type Db = {
-  from: (table: string) => any;
-};
+/** Cliente de Supabase con los tipos generados (server-only). */
+type Db = SupabaseClient<Database>;
 
 /** Punto normalizado común a todas las plataformas conectadas. */
 export type NormalizedPoint = {
@@ -104,7 +107,15 @@ export async function loadReconDataset(
   if (symbols.length) q = q.in("symbol", symbols);
   if (since) q = q.gte("observed_at", since);
   const { data } = await q;
-  return (data ?? []).map((r: any) => ({
+  return (
+    (data ?? []) as {
+      source: string;
+      symbol: string;
+      metric: string;
+      value: number;
+      observed_at: string;
+    }[]
+  ).map((r) => ({
     source: r.source as string,
     symbol: r.symbol as string,
     metric: r.metric as string,
@@ -154,7 +165,13 @@ export async function buildMarketSnapshot(
     };
   });
 
-  return { version: MARKET_DATA_LAYER_VERSION, schema: NORMALIZED_SCHEMA, points, sources, symbols };
+  return {
+    version: MARKET_DATA_LAYER_VERSION,
+    schema: NORMALIZED_SCHEMA,
+    points,
+    sources,
+    symbols,
+  };
 }
 
 /** Volatilidad relativa y tendencia por activo a partir de los cierres normalizados. */
@@ -167,7 +184,8 @@ export function analyzeSymbol(snapshot: MarketSnapshot, symbol: string) {
     .filter((p) => p.symbol === symbol && p.metric === "volume")
     .map((p) => p.value);
 
-  if (closes.length < 3) return { volatilityPct: 0, trendPct: 0, volumeRatio: 1, samples: closes.length };
+  if (closes.length < 3)
+    return { volatilityPct: 0, trendPct: 0, volumeRatio: 1, samples: closes.length };
 
   const returns = closes.slice(1).map((c, i) => (c - closes[i]!) / closes[i]!);
   const mean = returns.reduce((s, r) => s + r, 0) / returns.length;
