@@ -12,6 +12,7 @@
 //  - Reintentos con backoff y registro de errores.
 
 import type { EngineSession } from "./engine-sessions.server";
+import type { DecisionMotor } from "./motor-decisiones";
 import type { FilaAjustes } from "./propietario.server";
 import {
   capitalPorDueno,
@@ -503,6 +504,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
   // Log estructurado: en un cron de la nube, la salida del proceso es lo
   // unico que se ve si el motor deja de hablar.
   const { logEstructurado } = await import("./log.server");
+  const { resumirCiclo } = await import("./motor-decisiones");
   logEstructurado("tick.inicio", { trigger });
 
   // La configuracion de la plataforma es la fila del ADMINISTRADOR (una fila
@@ -545,6 +547,8 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
   let sesion: EngineSession | null = null;
   let sesionesOk = false;
   let cierreEnCurso = false;
+  // Decisiones de este ciclo (una por bot): el "diario del motor".
+  const decisiones: DecisionMotor[] = [];
 
   const finish = async (result: TickResult, engineStatus: string, lastError: string | null) => {
     const durationMs = Date.now() - startedAt.getTime();
@@ -621,6 +625,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         }
       }
     }
+    const resumen = resumirCiclo(decisiones);
     logEstructurado(
       "tick.fin",
       {
@@ -632,9 +637,33 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         reintentos: result.retries,
         duracionMs: Date.now() - startedAt.getTime(),
         notas: result.notes,
+        decisions: resumen,
       },
       result.status === "failed" ? "error" : "info",
     );
+
+    // Diario del motor: un registro por ciclo con lo que hizo cada bot.
+    // Si la tabla todavia no existe (migracion sin aplicar), se sigue: el
+    // motor no depende de esto para funcionar.
+    try {
+      await db.from("engine_cycles" as never).insert({
+        user_id: adminId,
+        started_at: startedAt.toISOString(),
+        finished_at: new Date().toISOString(),
+        trigger,
+        status: result.status,
+        bots_processed: result.botsProcessed,
+        orders_created: result.ordersCreated,
+        errors: result.errors,
+        duration_ms: Date.now() - startedAt.getTime(),
+        notes: result.notes,
+        decisions: decisiones as never,
+      } as never);
+      void resumen;
+    } catch {
+      // Best-effort: sin diario, el motor sigue igual.
+    }
+
     return result;
   };
 
@@ -918,6 +947,29 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
       const duenoId = duenoDe(bot);
       const configBot = configPorBot.get(bot.id) ?? null;
 
+      // ── Diario del motor: una linea por bot y ciclo ──────────────────
+      // Para que se vea POR QUE el bot no opera (senal ausente, filtro de
+      // regimen, enfriamiento, limite por par, sesion cerrada...). Es lo que
+      // se muestra en la pestana Motor.
+      const registrarDecision = (
+        accion: DecisionMotor["accion"],
+        detalle: string | null = null,
+        motivo: string = accion,
+      ) => {
+        decisiones.push({
+          bot_id: bot.id,
+          bot: bot.name,
+          simbolo: bot.pair ?? null,
+          accion,
+          motivo,
+          detalle,
+        });
+      };
+      const omitir = (motivo: string, detalle: string | null = null) =>
+        registrarDecision("omitido", detalle, motivo);
+      const detener = (motivo: string, detalle: string | null = null) =>
+        registrarDecision("detenido", detalle, motivo);
+
       // ── Reevaluacion del par (Auto) ──────────────────────────────────
       // Va antes de la senal: si cambia el par, la senal y la operacion de
       // este ciclo usan el par NUEVO. Nunca cambia con una posicion abierta
@@ -1000,6 +1052,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
               "info",
               `Ciclo omitido por filtro de régimen: ${veredicto.motivo} ${analisis.detalle}`,
             );
+            omitir("filtro_regimen", veredicto.motivo);
             continue;
           }
         }
@@ -1022,6 +1075,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
               "info",
               `Ciclo omitido: límite de ${maxPorPar} operaciones por día en ${bot.pair} alcanzado.`,
             );
+            omitir("limite_por_par", `Limite de ${maxPorPar} operaciones por dia en ${bot.pair}.`);
             continue;
           }
         }
@@ -1052,6 +1106,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
                 "info",
                 `Ciclo omitido: enfriamiento tras ${perdidas.length} pérdidas seguidas (quedan ${Math.ceil(cooldownMin - minutosDesde)} min).`,
               );
+              omitir("enfriamiento", `Enfriamiento tras ${perdidas.length} perdidas seguidas.`);
               continue;
             }
           }
@@ -1066,6 +1121,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
             stop_loss_pct: Number(bot.stop_loss_pct),
             take_profit_pct: Number(bot.take_profit_pct),
           });
+          detener("riesgo", "Faltan stop-loss o take-profit para operar en Real.");
           continue;
         }
 
@@ -1081,6 +1137,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
               coste_minimo_pct: veredicto.minimoPct,
               motivo: veredicto.motivo,
             });
+            detener("riesgo", "El take-profit no cubre el coste de ida y vuelta.");
             continue;
           }
         }
@@ -1090,6 +1147,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         // detiene sin operar.
         if (bot.mode === "real" && !esDelAdmin(claveDueno(duenoId), adminId)) {
           await stopBot(db, bot.id, bot.name, "real_solo_administrador", {});
+          detener("riesgo", "El modo Real es solo del administrador.");
           continue;
         }
 
@@ -1105,6 +1163,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
             squad_capital: squadCapital,
             max: maxCapitalDueno,
           });
+          detener("riesgo", "Capital del escuadron por encima del tope.");
           continue;
         }
         const pairShare = concentracionPct(capitalDueno, bot.pair);
@@ -1115,6 +1174,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
             concentration_pct: Number(pairShare.toFixed(2)),
             max: maxConcentracionDueno,
           });
+          detener("riesgo", "Concentracion excesiva en el par.");
           continue;
         }
 
@@ -1123,6 +1183,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           await stopBot(db, bot.id, bot.name, "binance_restriccion_geografica", {
             code: "binance_geo_restricted",
           });
+          detener("riesgo", "Binance bloqueado por region desde el servidor.");
           continue;
         }
 
@@ -1139,6 +1200,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
             "warn",
             "Ciclo omitido: el trading real requiere credenciales Binance verificadas y la autorización global de trading real.",
           );
+          omitir("real_bloqueado", "Faltan credenciales verificadas o la autorizacion global.");
           continue;
         }
 
@@ -1148,6 +1210,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
             capital: Number(bot.capital),
             max_capital: Number(bot.max_capital),
           });
+          detener("riesgo", "Capital asignado por encima del maximo.");
           continue;
         }
 
@@ -1157,6 +1220,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
             trades_today: tradesToday,
             max: Number(bot.max_trades_per_day),
           });
+          detener("riesgo", "Maximo de operaciones por dia alcanzado.");
           continue;
         }
 
@@ -1166,7 +1230,10 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         // solo hará TP/SL sin entrar de nuevo.
         const gestionandoAbierta =
           cierreEnCurso && bot.mode === "real" && (await botTienePosicionAbierta(db, bot));
-        if (!puedeAbrir && !gestionandoAbierta) continue;
+        if (!puedeAbrir && !gestionandoAbierta) {
+          omitir("sin_sesion", "No hay una sesion de motor abierta.");
+          continue;
+        }
 
         // Protección anti-duplicación: como máximo una entrada y su salida por bot
         // y ciclo. Binance además rechaza el duplicado por `newClientOrderId`.
@@ -1243,6 +1310,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
             // allow_live_orders apagado: no se envió nada a Binance, así que no se
             // registra ejecución ni se altera el P&L. Queda solo el aviso en el log.
             await log(db, bot.id, "warn", `Ciclo real omitido (dry-run): ${outcome.note}`);
+            omitir("dry_run", "Orden no enviada a Binance (dry-run).");
             continue;
           }
         } else {
@@ -1260,6 +1328,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
               "warn",
               "Precio de mercado no disponible: el ciclo demo se omite (no se inventa un precio).",
             );
+            omitir("sin_datos", "No se pudo leer el precio de mercado.");
             continue;
           }
           const abierta = await posicionAbierta(db, bot);
@@ -1276,6 +1345,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
                 "info",
                 `Posición demo abierta (${abierta.cantidad} a ${abierta.precio}): se mantiene (movimiento ${movimiento.toFixed(2)} %).`,
               );
+              omitir("sin_operacion", "Posicion abierta: se mantiene.");
               continue;
             }
             pnlDelta = Number(((precio - abierta.precio) * abierta.cantidad).toFixed(2));
@@ -1304,6 +1374,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
               "info",
               "Ciclo demo omitido: sin señal de compra y sin posición abierta.",
             );
+            omitir("sin_senal", "Sin senal de compra y sin posicion abierta.");
             continue;
           }
         }
@@ -1334,6 +1405,10 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
                 : "cierre_senal",
           signal_at: new Date().toISOString(),
         };
+        // La operacion que se acaba de ejecutar (entrada o salida) queda
+        // anotada en el diario del motor.
+        registrarDecision(side === "buy" ? "entrada" : "salida", note);
+
         let insert = await db.from("bot_executions").insert(execRow as never);
         if (
           insert.error &&
@@ -1348,6 +1423,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         if (insert.error) {
           if (insert.error.code === "23505") {
             await log(db, bot.id, "info", "Orden duplicada evitada por clave de idempotencia.");
+            omitir("sin_operacion", "Orden duplicada evitada por la clave de idempotencia.");
             continue;
           }
           throw new Error(insert.error.message);
@@ -1401,6 +1477,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
             },
             duenoId,
           );
+          registrarDecision("entrada", "Fill parcial: la posicion queda menor de lo pedido.");
           continue;
         }
         ordersCreated++;
@@ -1536,6 +1613,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
             daily_loss: dailyLoss,
             max: Number(bot.max_daily_loss),
           });
+          detener("riesgo", "Limite de perdida diaria alcanzado.");
           continue;
         }
 
@@ -1545,6 +1623,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
             weekly_loss: weeklyLoss,
             max_pct: Number(bot.max_weekly_drawdown_pct),
           });
+          detener("riesgo", "Drawdown semanal del bot superado.");
           continue;
         }
 

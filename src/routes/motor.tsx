@@ -30,6 +30,8 @@ import {
   leerConfigMotor,
   listarSesionesMotor,
 } from "@/lib/engine.functions";
+import { listarCiclosMotor } from "@/lib/motor.functions";
+import { MOTIVOS as MOTIVOS_MOTOR } from "@/lib/motor-decisiones";
 import { ESTRATEGIAS } from "@/lib/strategies";
 import { dateTime, money } from "@/lib/format";
 import { automationQuery } from "@/lib/queries";
@@ -162,6 +164,14 @@ function MotorPage() {
     queryKey: ["engine_sessions"],
     refetchInterval: 15000,
     queryFn: (): Promise<EngineSession[]> => listarFn({ data: { limit: 50 } }),
+  });
+
+  // Diario del motor: los ultimos ciclos y que hizo cada bot en ellos.
+  const listarCiclos = useServerFn(listarCiclosMotor);
+  const ciclos = useQuery({
+    queryKey: ["engine_cycles"],
+    queryFn: () => listarCiclos({ data: { limit: 20 } }),
+    refetchInterval: 20000,
   });
 
   // La sesión más reciente que cerró con posiciones de bots ya sin gestionar
@@ -451,6 +461,89 @@ function MotorPage() {
           — revisa el cron <span className="font-mono">POST /api/public/automation-tick</span>.
         </p>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex flex-wrap items-center justify-between gap-2">
+            Diario del motor
+            <span className="text-xs font-normal text-muted-foreground">
+              qué hizo (y qué no) cada bot en el último ciclo
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {ciclos.data && ciclos.data.ciclos.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Todavía no hay ciclos registrados. El motor escribe uno en cada pasada (si la tabla{" "}
+              <span className="font-mono">engine_cycles</span> está creada).
+            </p>
+          )}
+          {ciclos.data?.ciclos.slice(0, 3).map((ciclo) => (
+            <div key={ciclo.id} className="row-subtle rounded-lg px-3 py-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span className="font-medium">
+                  {ciclo.trigger === "cron" ? "Ciclo automático" : "Ciclo manual"} ·{" "}
+                  {ciclo.finished_at ? dateTime(ciclo.finished_at) : "sin cerrar"}
+                </span>
+                <span className="flex items-center gap-2">
+                  <StatusPill
+                    tone={
+                      ciclo.status === "completed"
+                        ? "success"
+                        : ciclo.status === "failed"
+                          ? "danger"
+                          : "neutral"
+                    }
+                  >
+                    {ciclo.status ?? "?"}
+                  </StatusPill>
+                  <span className="tabular text-xs text-muted-foreground">
+                    {ciclo.bots_processed} bots · {ciclo.orders_created} órdenes ·{" "}
+                    {ciclo.duration_ms ?? 0} ms
+                  </span>
+                </span>
+              </div>
+              {ciclo.decisions.length > 0 ? (
+                <ul className="mt-2 space-y-1">
+                  {ciclo.decisions.slice(0, 8).map((d, i) => (
+                    <li
+                      key={`${d.bot_id}-${i}`}
+                      className="flex flex-wrap items-baseline gap-2 text-xs"
+                    >
+                      <span className="font-medium">{d.bot}</span>
+                      <span
+                        className={
+                          d.accion === "omitido"
+                            ? "text-muted-foreground"
+                            : d.accion === "detenido"
+                              ? "text-warning"
+                              : d.accion === "error"
+                                ? "text-destructive"
+                                : "text-success"
+                        }
+                      >
+                        {MOTIVOS_MOTOR[d.motivo] ?? d.motivo}
+                      </span>
+                      {d.detalle ? (
+                        <span className="text-muted-foreground">· {d.detalle}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                  {ciclo.decisions.length > 8 && (
+                    <li className="text-xs text-muted-foreground">
+                      y {ciclo.decisions.length - 8} más…
+                    </li>
+                  )}
+                </ul>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Sin decisiones registradas en este ciclo.
+                </p>
+              )}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

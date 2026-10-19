@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { ArrowUpRight } from "lucide-react";
 
 import { AlertsPanel } from "@/components/AlertsPanel";
 import { ComparisonCharts } from "@/components/ComparisonCharts";
@@ -62,147 +63,204 @@ function Dashboard() {
   ).length;
   const stoppedByRisk = botList.filter((b) => b.auto_stop_reason).length;
   const offlineWorkers = workerList.filter((w) => w.status === "offline").length;
-  const health: { label: string; ok: boolean; detail: string }[] = [
+
+  const engineOn = !!engine.data?.engine_enabled;
+  const kill = !!engine.data?.kill_switch;
+  const ultimoTick = engine.data?.last_heartbeat_at ?? null;
+  const intervaloSeg = Number(engine.data?.tick_interval_seconds ?? 60);
+  const antiguedadSeg = ultimoTick
+    ? Math.max(0, Math.round((Date.now() - Date.parse(ultimoTick)) / 1000))
+    : null;
+  const motorVivo =
+    engineOn && !kill && antiguedadSeg !== null && antiguedadSeg <= intervaloSeg * 3;
+
+  const salud: { label: string; ok: boolean; detail: string }[] = [
     {
-      label: "Piloto automático",
-      ok: !!engine.data?.engine_enabled && !engine.data.kill_switch,
-      detail: engine.data?.engine_enabled ? "encendido" : "apagado",
+      label: "Motor",
+      ok: motorVivo,
+      detail: !engineOn
+        ? "apagado"
+        : kill
+          ? "detenido por el kill switch"
+          : antiguedadSeg === null
+            ? "sin señal de vida"
+            : antiguedadSeg > intervaloSeg * 3
+              ? `sin ticks hace ${antiguedadSeg} s`
+              : "operando",
     },
     {
-      label: "Cuenta de Binance",
+      label: "Binance",
       ok: binance.data?.connection_status === "ok",
-      detail: binance.data?.connection_status === "ok" ? "conectada" : "sin conectar",
+      detail:
+        binance.data?.connection_status === "ok"
+          ? `conectada · •••• ${binance.data.api_key_last4}`
+          : "sin conectar o sin probar",
     },
     {
-      label: "Seguridad de tus bots",
+      label: "Bots",
       ok: stoppedByRisk === 0,
-      detail: stoppedByRisk === 0 ? "ninguno se detuvo solo" : `${stoppedByRisk} bots detenidos`,
+      detail:
+        stoppedByRisk === 0
+          ? `${running} activos · ${realBots} en Real`
+          : `${stoppedByRisk} detenidos por un límite`,
     },
     {
-      label: "Equipos de minería",
+      label: "Minería",
       ok: offlineWorkers === 0,
-      detail: offlineWorkers === 0 ? "todos encendidos" : `${offlineWorkers} apagados`,
+      detail: offlineWorkers === 0 ? `${mining} equipos encendidos` : `${offlineWorkers} apagados`,
     },
     {
-      label: "Avisos urgentes",
+      label: "Avisos",
       ok: criticalAlerts === 0,
       detail: criticalAlerts === 0 ? "ninguno pendiente" : `${criticalAlerts} sin revisar`,
     },
   ];
 
+  // Pasos siguientes: lo que de verdad falta para que la app rinda. Cada uno
+  // mira el estado real, asi que la lista se acorta sola segun avanzas.
+  const pasos = [
+    {
+      hecho: botList.length > 0,
+      titulo: "Crea tu primer bot",
+      detalle: "Un bot con capital, par y estrategia. Sin bots no hay motor que opere.",
+      to: "/escuadron",
+    },
+    {
+      hecho: binance.data?.connection_status === "ok",
+      titulo: "Conecta y verifica tu cuenta de Binance",
+      detalle: "Sin claves verificadas no se puede operar (ni en testnet).",
+      to: "/binance",
+    },
+    {
+      hecho: engineOn,
+      titulo: "Enciende el motor",
+      detalle: "El motor es el que abre y cierra posiciones. Sin el, los bots no operan.",
+      to: "/motor",
+    },
+    {
+      hecho: false,
+      titulo: "Prueba la estrategia con el backtest",
+      detalle: "Antes de poner dinero real: mide si tu configuración supera al mercado y al azar.",
+      to: "/metricas",
+    },
+  ];
+  const pendientes = pasos.filter((p) => !p.hecho).length;
+
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Inicio"
-        subtitle="Un vistazo rápido a tu dinero, tus bots y si todo está funcionando bien."
+        eyebrow="Panel"
+        title="Tu taller de trading, de un vistazo"
+        subtitle="Lo que hay money en juego, qué está haciendo el motor y lo que te falta por mirar. Sin adornos: las cifras son reales y las alertas no se esconden."
+        action={<KillSwitchButton />}
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Stat
-          title="Dinero disponible"
-          value={money(Number(funds.data?.available_balance ?? 0))}
-          hint={`${money(Number(funds.data?.in_use_balance ?? 0))} lo están usando tus bots`}
-          tone="success"
-        />
-        <Stat
-          title="Ganancia o pérdida"
-          value={money(pnl)}
-          hint={`${running} bots activos · ${realBots} con dinero real`}
-          tone={pnl >= 0 ? "success" : "danger"}
-        />
-        <Stat
-          title="Equipos minando"
-          value={`${mining}/${workerList.length}`}
-          hint={`${money(dailyMining, "USD")} estimado al día`}
-          tone={mining > 0 ? "success" : "warning"}
-        />
-        <Stat
-          title="Conexión con Binance"
-          value={
-            binance.data
-              ? binance.data.connection_status === "ok"
-                ? "Verificada"
-                : binance.data.connection_status === "failed"
-                  ? "Fallida"
-                  : "Sin probar"
-              : "Sin configurar"
-          }
-          hint={
-            binance.data
-              ? `Clave •••• ${binance.data.api_key_last4}`
-              : "Conecta tu cuenta de Binance"
-          }
-          tone={binance.data?.connection_status === "ok" ? "success" : "warning"}
-        />
-      </div>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
-            Piloto automático (funciona día y noche)
-            <Link to="/automatizacion" className="text-xs text-primary hover:underline">
-              Ajustar
-            </Link>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-3 text-sm">
-          <StatusPill
-            tone={
-              engine.data?.kill_switch
-                ? "danger"
-                : engine.data?.engine_enabled
-                  ? "success"
-                  : "warning"
+      {/* Cabecera de cifras: el dinero y el estado, en una sola mirada. */}
+      <section className="surface accent-top overflow-hidden rounded-xl">
+        <div className="grid gap-px bg-border sm:grid-cols-2 xl:grid-cols-4">
+          <Cifra
+            etiqueta="Capital en juego"
+            valor={money(Number(funds.data?.available_balance ?? 0))}
+            pie={`${money(Number(funds.data?.in_use_balance ?? 0))} asignados a bots`}
+            tono="neutral"
+          />
+          <Cifra
+            etiqueta="Resultado acumulado"
+            valor={money(pnl)}
+            pie={`${running} bots activos · ${realBots} con dinero real`}
+            tono={pnl >= 0 ? "positivo" : "negativo"}
+          />
+          <Cifra
+            etiqueta="Estado del motor"
+            valor={motorVivo ? "Operando" : kill ? "Detenido" : engineOn ? "Sin ticks" : "Apagado"}
+            pie={
+              ultimoTick
+                ? `Último tick ${dateTime(ultimoTick)}`
+                : "Todavía no ha dado señales de vida"
             }
-          >
-            {engine.data?.kill_switch
-              ? "todo detenido por seguridad"
-              : engine.data?.engine_enabled
-                ? "encendido"
-                : "apagado"}
-          </StatusPill>
-          <span className="text-xs text-muted-foreground">
-            Operar con dinero real:{" "}
-            {!engine.data?.allow_real_trading
-              ? "bloqueado"
-              : !engine.data?.allow_live_orders
-                ? "habilitado en dry-run (sin enviar órdenes)"
-                : "permitido (requiere 2FA y límites)"}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            Última señal de vida:{" "}
-            {engine.data?.last_heartbeat_at ? dateTime(engine.data.last_heartbeat_at) : "sin datos"}
-          </span>
-        </CardContent>
-      </Card>
+            tono={motorVivo ? "positivo" : "aviso"}
+          />
+          <Cifra
+            etiqueta="Binance"
+            valor={
+              binance.data
+                ? binance.data.connection_status === "ok"
+                  ? "Verificada"
+                  : binance.data.connection_status === "failed"
+                    ? "Fallida"
+                    : "Sin probar"
+                : "Sin configurar"
+            }
+            pie={
+              binance.data
+                ? `Clave •••• ${binance.data.api_key_last4}`
+                : "Conecta tu cuenta para poder operar"
+            }
+            tono={binance.data?.connection_status === "ok" ? "positivo" : "aviso"}
+          />
+        </div>
+      </section>
 
+      {/* Salud: cinco comprobaciones, con el detalle de cada una. */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="flex flex-wrap items-center justify-between gap-3 text-base">
-            ¿Está todo bien? · Botón de parada
-            <KillSwitchButton />
-          </CardTitle>
+          <CardTitle className="text-base">¿Está todo bien?</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <KillSwitchStatus />
+        <CardContent>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-            {health.map((h) => (
-              <div
-                key={h.label}
-                className="rounded-md border border-border bg-secondary/40 px-3 py-2"
-              >
+            {salud.map((h) => (
+              <div key={h.label} className="row-subtle rounded-lg px-3 py-2.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium">{h.label}</span>
                   <StatusPill tone={h.ok ? "success" : "danger"}>
                     {h.ok ? "bien" : "revisar"}
                   </StatusPill>
                 </div>
-                <p className="mt-1 text-[11px] text-muted-foreground">{h.detail}</p>
+                <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">{h.detail}</p>
               </div>
             ))}
           </div>
+          <div className="mt-4 border-t border-border pt-4">
+            <KillSwitchStatus />
+          </div>
         </CardContent>
       </Card>
+
+      {/* Pasos siguientes: lo que de verdad falta. */}
+      {pendientes > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
+              Siguientes pasos
+              <span className="text-xs font-normal text-muted-foreground">
+                {pendientes} pendiente{pendientes === 1 ? "" : "s"}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-2 md:grid-cols-2">
+            {pasos
+              .filter((p) => !p.hecho)
+              .map((p) => (
+                <Link
+                  key={p.titulo}
+                  to={p.to}
+                  className="row-subtle group flex items-start gap-3 rounded-lg px-3 py-2.5 transition-colors hover:border-primary/40"
+                >
+                  <span className="mt-0.5 size-1.5 shrink-0 rounded-full bg-primary/70" />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-1.5 text-sm font-medium">
+                      {p.titulo}
+                      <ArrowUpRight className="size-3.5 opacity-0 transition-opacity group-hover:opacity-70" />
+                    </span>
+                    <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
+                      {p.detalle}
+                    </span>
+                  </span>
+                </Link>
+              ))}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <AlertsPanel title="Avisos importantes" limit={6} />
@@ -217,7 +275,7 @@ function Dashboard() {
               </p>
             )}
             {(reports.data ?? []).slice(0, 5).map((r) => (
-              <div key={r.id} className="rounded-md border border-border bg-secondary/40 px-3 py-2">
+              <div key={r.id} className="row-subtle rounded-lg px-3 py-2">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                   <span className="font-medium">
                     {r.period === "daily" ? "Diario" : "Semanal"} ·{" "}
@@ -256,17 +314,17 @@ function Dashboard() {
             {botList.slice(0, 5).map((bot) => (
               <div
                 key={bot.id}
-                className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+                className="row-subtle flex items-center justify-between rounded-lg px-3 py-2 text-sm"
               >
-                <div>
-                  <p className="font-medium">{bot.name}</p>
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{bot.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {bot.pair} · {bot.mode.toUpperCase()}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
                   <span
-                    className={`tabular text-sm ${Number(bot.pnl) >= 0 ? "text-success" : "text-destructive"}`}
+                    className={`metric text-sm ${Number(bot.pnl) >= 0 ? "text-success" : "text-destructive"}`}
                   >
                     {money(Number(bot.pnl))}
                   </span>
@@ -274,6 +332,9 @@ function Dashboard() {
                 </div>
               </div>
             ))}
+            {botList.length === 0 && (
+              <p className="text-sm text-muted-foreground">Todavía no tienes bots.</p>
+            )}
           </CardContent>
         </Card>
 
@@ -290,22 +351,25 @@ function Dashboard() {
             {workerList.slice(0, 5).map((w) => (
               <div
                 key={w.id}
-                className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+                className="row-subtle flex items-center justify-between rounded-lg px-3 py-2 text-sm"
               >
-                <div>
-                  <p className="font-medium">{w.name}</p>
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{w.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {w.coin} · {w.pool}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="tabular text-sm">
+                  <span className="metric text-sm">
                     {Number(w.hash_rate).toFixed(2)} {w.hash_unit}
                   </span>
                   <StatusPill tone={statusTone(w.status)}>{w.status}</StatusPill>
                 </div>
               </div>
             ))}
+            {workerList.length === 0 && (
+              <p className="text-sm text-muted-foreground">No hay equipos de minería.</p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -323,7 +387,7 @@ function Dashboard() {
           {(audit.data ?? []).slice(0, 6).map((e) => (
             <div
               key={e.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-secondary/40 px-3 py-2 text-sm"
+              className="row-subtle flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm"
             >
               <span className="tabular text-xs text-muted-foreground">
                 {dateTime(e.created_at)}
@@ -338,28 +402,31 @@ function Dashboard() {
   );
 }
 
-function Stat({
-  title,
-  value,
-  hint,
-  tone,
+/** Cifra grande del bloque de cabecera. */
+function Cifra({
+  etiqueta,
+  valor,
+  pie,
+  tono,
 }: {
-  title: string;
-  value: string;
-  hint: string;
-  tone: "success" | "warning" | "danger";
+  etiqueta: string;
+  valor: string;
+  pie: string;
+  tono: "positivo" | "negativo" | "aviso" | "neutral";
 }) {
   const color =
-    tone === "success" ? "text-success" : tone === "warning" ? "text-warning" : "text-destructive";
+    tono === "positivo"
+      ? "text-success"
+      : tono === "negativo"
+        ? "text-destructive"
+        : tono === "aviso"
+          ? "text-warning"
+          : "text-foreground";
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className={`tabular text-2xl font-semibold ${color}`}>{value}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
-      </CardContent>
-    </Card>
+    <div className="bg-card px-5 py-4">
+      <p className="kicker">{etiqueta}</p>
+      <p className={`metric mt-2 text-2xl font-semibold ${color}`}>{valor}</p>
+      <p className="mt-1 text-xs leading-snug text-muted-foreground">{pie}</p>
+    </div>
   );
 }
