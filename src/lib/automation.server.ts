@@ -209,10 +209,39 @@ async function loadBinanceSecret(
 }
 
 /**
+ * Posicion abierta de un bot (la ultima ejecucion que fue una compra y no
+ * se ha cerrado). Es la misma lectura que usa el ciclo real, pero para el
+ * modo demo, que no manda ordenes a Binance.
+ */
+async function posicionAbierta(
+  db: Db,
+  bot: { id: string; pair: string },
+): Promise<{ precio: number; cantidad: number } | null> {
+  const { data } = await db
+    .from("bot_executions")
+    .select("side,quantity,price")
+    .eq("bot_id", bot.id)
+    .eq("symbol", bot.pair)
+    .in("status", ["filled", "simulated", "partially_filled"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const last = data as { side?: string; quantity?: number; price?: number } | null;
+  if (last?.side !== "buy") return null;
+  const cantidad = Number(last.quantity ?? 0);
+  const precio = Number(last.price ?? 0);
+  if (!(cantidad > 0) || !(precio > 0)) return null;
+  return { precio, cantidad };
+}
+
+/**
  * Ciclo real de un bot: entrada MARKET por importe (activo de cotización) y salida
  * MARKET por cantidad cuando se alcanza el stop-loss o el take-profit (obligatorios
  * en Real). El P&L sale del precio real de ejecución de Binance, no de un número
  * aleatorio. Devuelve null cuando no hay nada que operar en este ciclo.
+ *
+ * `senal` es la señal de los indicadores (la misma función que usa el
+ * backtest): sin señal de compra no se entra y con señal de venta se sale.
  */
 async function realCycleOrder(
   db: Db,
@@ -227,6 +256,7 @@ async function realCycleOrder(
   size: number,
   minuteKey: string,
   settings: { allow_live_orders?: boolean },
+  senal: "buy" | "sell" | null = null,
 ): Promise<RealOrderOutcome | null> {
   const {
     placeBinanceOrder,
@@ -285,7 +315,13 @@ async function realCycleOrder(
   const entryPrice = last?.side === "buy" ? Number(last.price ?? 0) : 0;
 
   // Sin posición abierta: entrada por importe en el activo de cotización.
+  // SOLO si hay señal de compra: sin señal no se abre nada (misma regla que
+  // el backtest, para que ambos midan lo mismo).
   if (openQty <= 0 || entryPrice <= 0) {
+    if (senal !== "buy") {
+      await log(db, bot.id, "info", "Ciclo real omitido: sin señal de compra de los indicadores.");
+      return null;
+    }
     const order = await placeBinanceOrder({
       env,
       apiKey: creds.apiKey,
@@ -346,7 +382,8 @@ async function realCycleOrder(
   const movePct = ((price - entryPrice) / entryPrice) * 100;
   const hitStopLoss = movePct <= -Number(bot.stop_loss_pct);
   const hitTakeProfit = movePct >= Number(bot.take_profit_pct);
-  if (!hitStopLoss && !hitTakeProfit) return null;
+  // Cierra con stop-loss, take-profit o señal de venta.
+  if (!hitStopLoss && !hitTakeProfit && senal !== "sell") return null;
 
   const quantity = roundDownToStep(openQty, rules.stepSize);
   const order = await placeBinanceOrder({
@@ -391,7 +428,7 @@ async function realCycleOrder(
     env,
     note: order.partiallyFilled
       ? `${hitStopLoss ? "stop-loss" : "take-profit"} PARCIAL en ${env}: solo ${order.executedQty} de ${quantity} seVendieron; queda posicion abierta`
-      : `${hitStopLoss ? "stop-loss" : "take-profit"} ejecutado en ${env} (movimiento ${movePct.toFixed(2)}%)`,
+      : `${hitStopLoss ? "stop-loss" : hitTakeProfit ? "take-profit" : "senal de venta"} ejecutado en ${env} (movimiento ${movePct.toFixed(2)}%)`,
     orderId: order.orderId,
     dryRun: false,
   };
@@ -724,6 +761,11 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
       return d.toISOString().slice(0, 10);
     })();
 
+    // Configuracion de senales (indicadores y horizonte) de la plataforma.
+    // Es la MISMA que usa el backtest: si aqui no hay senal, no se opera.
+    const { leerConfigSenales, senalDelBot } = await import("./senal-motor.server");
+    const cfgSenales = await leerConfigSenales(db);
+
     // Capital y concentracion se miden por dueno: los bots de un usuario no suman
     // al tope del administrador ni a los de otro usuario.
     const { data: allBots } = await db.from("bots").select("*");
@@ -766,6 +808,10 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
     for (const bot of bots ?? []) {
       botsProcessed++;
       const duenoId = duenoDe(bot);
+      // La señal de los indicadores: la MISMA función que usa el backtest
+      // (senalDe). Sin señal de compra no se abre nada; con señal de venta se
+      // cierra lo que haya abierto.
+      const senal = cfgSenales ? await senalDelBot(db, bot, cfgSenales) : null;
       // Se declaran fuera del try para que el catch pueda auditar una orden real ya
       // ejecutada en Binance cuyo PnL no se aplicó (fallo de la RPC y del fallback).
       let exchangeOrderId: string | null = null;
@@ -895,7 +941,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         if (bot.mode === "real") {
           // Orden MARKET real en Binance (testnet primero): el P&L sale del precio
           // real de ejecución, nunca de un número aleatorio.
-          const outcome = await realCycleOrder(db, bot, size, minuteKey, settings);
+          const outcome = await realCycleOrder(db, bot, size, minuteKey, settings, senal);
           if (!outcome) continue;
           side = outcome.side;
           quantity = outcome.quantity;
@@ -914,15 +960,66 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
             continue;
           }
         } else {
-          // Demo: simulación interna con dinero falso. Nunca toca Binance.
-          const stopLossAmount = (size * Number(bot.stop_loss_pct)) / 100;
-          const rawPnl = (Math.random() - 0.45) * size * 0.05;
-          pnlDelta = Number(Math.max(rawPnl, -stopLossAmount).toFixed(2));
-          hitStopLoss = rawPnl < -stopLossAmount;
-          side = pnlDelta >= 0 ? "buy" : "sell";
-          quantity = Number(size.toFixed(4));
-          execStatus = "simulated";
-          note = "ciclo demo simulado";
+          // Demo = PAPER TRADING con el precio REAL del mercado (no un número
+          // aleatorio): se entra con señal de compra y se sale con stop-loss,
+          // take-profit o señal de venta. Así el resultado en demo es
+          // comparable con el backtest y con testnet, y se puede medir si la
+          // estrategia tiene ventaja antes de arriesgar dinero.
+          const { fetchBinancePrice } = await import("./binance-trading.server");
+          const precio = await fetchBinancePrice(bot.pair, "production");
+          if (!precio) {
+            await log(
+              db,
+              bot.id,
+              "warn",
+              "Precio de mercado no disponible: el ciclo demo se omite (no se inventa un precio).",
+            );
+            continue;
+          }
+          const abierta = await posicionAbierta(db, bot);
+          if (abierta) {
+            const movimiento = ((precio - abierta.precio) / abierta.precio) * 100;
+            const hitStop =
+              Number(bot.stop_loss_pct) > 0 && movimiento <= -Number(bot.stop_loss_pct);
+            const hitTake =
+              Number(bot.take_profit_pct) > 0 && movimiento >= Number(bot.take_profit_pct);
+            if (!hitStop && !hitTake && senal !== "sell") {
+              await log(
+                db,
+                bot.id,
+                "info",
+                `Posición demo abierta (${abierta.cantidad} a ${abierta.precio}): se mantiene (movimiento ${movimiento.toFixed(2)} %).`,
+              );
+              continue;
+            }
+            pnlDelta = Number(((precio - abierta.precio) * abierta.cantidad).toFixed(2));
+            side = "sell";
+            quantity = abierta.cantidad;
+            price = precio;
+            execStatus = "simulated";
+            hitStopLoss = hitStop;
+            hitTakeProfit = hitTake;
+            note = hitStop
+              ? "cierre demo por stop-loss"
+              : hitTake
+                ? "cierre demo por take-profit"
+                : "cierre demo por señal de venta";
+          } else if (senal === "buy") {
+            side = "buy";
+            quantity = Number((size / precio).toFixed(8));
+            price = precio;
+            pnlDelta = 0;
+            execStatus = "simulated";
+            note = "entrada demo por señal de compra (paper trading con precio real)";
+          } else {
+            await log(
+              db,
+              bot.id,
+              "info",
+              "Ciclo demo omitido: sin señal de compra y sin posición abierta.",
+            );
+            continue;
+          }
         }
 
         const execRow = {
