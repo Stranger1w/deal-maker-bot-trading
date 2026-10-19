@@ -53,74 +53,79 @@ export function SortableTable<T>({
     );
 
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <table className="w-full min-w-[640px] text-sm">
-        <thead>
-          <tr className="border-b border-border bg-secondary/60">
-            {columns.map((col) => {
-              const sortable = !!col.value;
-              const active = sort?.key === col.key;
-              const Icon = !active ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
-              return (
-                <th
-                  key={col.key}
-                  scope="col"
-                  aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
-                  className={cn(
-                    "px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground",
-                    col.align === "right" ? "text-right" : "text-left",
-                  )}
-                >
-                  {sortable ? (
-                    <button
-                      type="button"
-                      onClick={() => toggle(col.key)}
-                      className={cn(
-                        "inline-flex items-center gap-1.5 rounded-sm hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
-                        active && "text-primary",
-                      )}
-                      title={`Ordenar por ${col.label}`}
-                    >
-                      {col.label}
-                      <Icon className="size-3.5" aria-hidden />
-                    </button>
-                  ) : (
-                    col.label
-                  )}
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((row) => (
-            <tr
-              key={rowKey(row)}
-              className="border-b border-border/60 last:border-0 hover:bg-secondary/30"
-            >
-              {columns.map((col) => (
+    <div className="overflow-hidden rounded-xl border border-border/80">
+      <div className="max-h-[70vh] overflow-auto">
+        <table className="w-full min-w-[640px] text-sm">
+          <thead className="sticky top-0 z-10">
+            <tr className="border-b border-border bg-secondary/80 backdrop-blur-sm">
+              {columns.map((col) => {
+                const sortable = !!col.value;
+                const active = sort?.key === col.key;
+                const Icon = !active ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
+                return (
+                  <th
+                    key={col.key}
+                    scope="col"
+                    aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+                    className={cn(
+                      "px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground",
+                      col.align === "right" ? "text-right" : "text-left",
+                    )}
+                  >
+                    {sortable ? (
+                      <button
+                        type="button"
+                        onClick={() => toggle(col.key)}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-sm transition-colors hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
+                          active && "text-primary",
+                        )}
+                        title={`Ordenar por ${col.label}`}
+                      >
+                        {col.label}
+                        <Icon className="size-3.5 opacity-70" aria-hidden />
+                      </button>
+                    ) : (
+                      col.label
+                    )}
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((row) => (
+              <tr
+                key={rowKey(row)}
+                className="border-b border-border/40 transition-colors last:border-0 hover:bg-secondary/25"
+              >
+                {columns.map((col) => (
+                  <td
+                    key={col.key}
+                    className={cn(
+                      "px-3 py-2.5 align-middle",
+                      col.align === "right" ? "text-right tabular" : "",
+                      col.className,
+                    )}
+                  >
+                    {col.render(row)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+            {sorted.length === 0 && (
+              <tr>
                 <td
-                  key={col.key}
-                  className={cn(
-                    "px-3 py-2 align-middle",
-                    col.align === "right" ? "text-right tabular" : "",
-                    col.className,
-                  )}
+                  colSpan={columns.length}
+                  className="px-3 py-10 text-center text-muted-foreground"
                 >
-                  {col.render(row)}
+                  {empty}
                 </td>
-              ))}
-            </tr>
-          ))}
-          {sorted.length === 0 && (
-            <tr>
-              <td colSpan={columns.length} className="px-3 py-6 text-center text-muted-foreground">
-                {empty}
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

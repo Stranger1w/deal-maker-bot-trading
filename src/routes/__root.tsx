@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 
-import { KillSwitchButton } from "@/components/KillSwitchButton";
+import { AppShell } from "@/components/AppShell";
 import { Toaster } from "@/components/ui/sonner";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -130,99 +130,18 @@ function RootShell({ children }: { children: ReactNode }) {
 /**
  * Navegacion: cuatro grupos que dicen DONDE ESTAS, no una lista de
  * pantallas. Los nombres son de tarea ("que quiero hacer"), no de modulo.
+ * La pinta el AppShell (barra lateral + paleta de comandos).
  */
-const navGroups = [
-  {
-    title: "Resumen",
-    items: [
-      { to: "/", label: "Inicio", icon: LayoutDashboard },
-      { to: "/metricas", label: "Métricas", icon: ChartNoAxesColumn },
-    ],
-  },
-  {
-    title: "Dinero",
-    items: [
-      { to: "/fondos", label: "Fondos", icon: Wallet },
-      { to: "/binance", label: "Binance", icon: KeyRound },
-    ],
-  },
-  {
-    title: "Trading",
-    items: [
-      { to: "/escuadron", label: "Mis bots", icon: Bot },
-      { to: "/motor", label: "Motor", icon: Gauge },
-      { to: "/mercados", label: "Mercados", icon: CandlestickChart },
-      { to: "/reconocimiento", label: "Oportunidades", icon: Radar },
-    ],
-  },
-  {
-    title: "Ajustes",
-    items: [
-      { to: "/automatizacion", label: "Riesgo global", icon: Cpu },
-      { to: "/mineria", label: "Minería", icon: Pickaxe },
-      { to: "/acceso", label: "Seguridad", icon: ShieldCheck },
-    ],
-  },
-] as const;
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen bg-background">
-        <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
-          <div className="mx-auto max-w-7xl px-4">
-            <div className="flex items-center gap-x-6 gap-y-3 py-3">
-              <Link to="/" className="group flex items-center gap-2.5">
-                <span className="grid size-8 place-items-center rounded-lg bg-primary font-bold text-primary-foreground shadow-sm transition-transform group-hover:scale-105">
-                  D
-                </span>
-                <span className="flex flex-col leading-none">
-                  <span className="text-base font-semibold tracking-tight">Deal Maker</span>
-                  <span className="mt-0.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                    Trading
-                  </span>
-                </span>
-              </Link>
-              {/* Parada de emergencia siempre accesible, también en móvil. */}
-              <div className="ml-auto">
-                <KillSwitchButton />
-              </div>
-            </div>
-            {/* Navegación por tareas: cada grupo dice dónde estás. */}
-            <nav className="flex flex-wrap items-center gap-x-5 gap-y-1 pb-2">
-              {navGroups.map((group) => (
-                <div key={group.title} className="flex items-center gap-2">
-                  <span className="kicker hidden sm:inline">{group.title}</span>
-                  <span aria-hidden className="hidden h-4 w-px bg-border sm:inline-block" />
-                  <div className="flex items-center gap-1">
-                    {group.items.map((item) => (
-                      <Link
-                        key={item.to}
-                        to={item.to}
-                        activeOptions={{ exact: item.to === "/" }}
-                        className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-                        activeProps={{
-                          className:
-                            "bg-secondary text-foreground shadow-[inset_0_0_0_1px_var(--color-border)]",
-                        }}
-                      >
-                        <item.icon className="size-3.5 opacity-80" />
-                        {item.label}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </nav>
-          </div>
-        </header>
-        <main className="mx-auto max-w-7xl px-4 py-8">
-          {/* Required: nested routes render here. */}
-          <Outlet />
-        </main>
-      </div>
+      <AppShell>
+        {/* Required: nested routes render here. */}
+        <Outlet />
+      </AppShell>
       <Toaster position="top-right" richColors />
     </QueryClientProvider>
   );

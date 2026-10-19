@@ -6,6 +6,7 @@ import { AlertsPanel } from "@/components/AlertsPanel";
 import { ComparisonCharts } from "@/components/ComparisonCharts";
 import { KillSwitchButton, KillSwitchStatus } from "@/components/KillSwitchButton";
 import { PageHeader } from "@/components/PageHeader";
+import { SkeletonCifras } from "@/components/Skeleton";
 import { StatusPill, statusTone } from "@/components/StatusPill";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { dateTime, money } from "@/lib/format";
@@ -51,6 +52,8 @@ function Dashboard() {
   const reports = useQuery(reportsQuery);
 
   const botList = bots.data ?? [];
+  // Mientras cargan los datos no se inventan ceros: un "0,00" parece real.
+  const cargandoDatos = funds.isLoading || bots.isLoading || engine.isLoading;
   const workerList = workers.data ?? [];
   const pnl = botList.reduce((s, b) => s + Number(b.pnl), 0);
   const running = botList.filter((b) => b.status === "running").length;
@@ -179,50 +182,56 @@ function Dashboard() {
       />
 
       {/* Cabecera de cifras: el dinero y el estado, en una sola mirada. */}
-      <section className="surface accent-top overflow-hidden rounded-xl">
-        <div className="grid gap-px bg-border sm:grid-cols-2 xl:grid-cols-4">
-          <Cifra
-            etiqueta="Capital en juego"
-            valor={money(Number(funds.data?.available_balance ?? 0))}
-            pie={`${money(Number(funds.data?.in_use_balance ?? 0))} asignados a bots`}
-            tono="neutral"
-          />
-          <Cifra
-            etiqueta="Resultado acumulado"
-            valor={money(pnl)}
-            pie={`${running} bots activos · ${realBots} con dinero real`}
-            tono={pnl >= 0 ? "positivo" : "negativo"}
-          />
-          <Cifra
-            etiqueta="Estado del motor"
-            valor={motorVivo ? "Operando" : kill ? "Detenido" : engineOn ? "Sin ticks" : "Apagado"}
-            pie={
-              ultimoTick
-                ? `Último tick ${dateTime(ultimoTick)}`
-                : "Todavía no ha dado señales de vida"
-            }
-            tono={motorVivo ? "positivo" : "aviso"}
-          />
-          <Cifra
-            etiqueta="Binance"
-            valor={
-              binance.data
-                ? binance.data.connection_status === "ok"
-                  ? "Verificada"
-                  : binance.data.connection_status === "failed"
-                    ? "Fallida"
-                    : "Sin probar"
-                : "Sin configurar"
-            }
-            pie={
-              binance.data
-                ? `Clave •••• ${binance.data.api_key_last4}`
-                : "Conecta tu cuenta para poder operar"
-            }
-            tono={binance.data?.connection_status === "ok" ? "positivo" : "aviso"}
-          />
-        </div>
-      </section>
+      {cargandoDatos ? (
+        <SkeletonCifras cantidad={4} />
+      ) : (
+        <section className="surface accent-top overflow-hidden rounded-xl">
+          <div className="grid gap-px bg-border sm:grid-cols-2 xl:grid-cols-4">
+            <Cifra
+              etiqueta="Capital en juego"
+              valor={money(Number(funds.data?.available_balance ?? 0))}
+              pie={`${money(Number(funds.data?.in_use_balance ?? 0))} asignados a bots`}
+              tono="neutral"
+            />
+            <Cifra
+              etiqueta="Resultado acumulado"
+              valor={money(pnl)}
+              pie={`${running} bots activos · ${realBots} con dinero real`}
+              tono={pnl >= 0 ? "positivo" : "negativo"}
+            />
+            <Cifra
+              etiqueta="Estado del motor"
+              valor={
+                motorVivo ? "Operando" : kill ? "Detenido" : engineOn ? "Sin ticks" : "Apagado"
+              }
+              pie={
+                ultimoTick
+                  ? `Último tick ${dateTime(ultimoTick)}`
+                  : "Todavía no ha dado señales de vida"
+              }
+              tono={motorVivo ? "positivo" : "aviso"}
+            />
+            <Cifra
+              etiqueta="Binance"
+              valor={
+                binance.data
+                  ? binance.data.connection_status === "ok"
+                    ? "Verificada"
+                    : binance.data.connection_status === "failed"
+                      ? "Fallida"
+                      : "Sin probar"
+                  : "Sin configurar"
+              }
+              pie={
+                binance.data
+                  ? `Clave •••• ${binance.data.api_key_last4}`
+                  : "Conecta tu cuenta para poder operar"
+              }
+              tono={binance.data?.connection_status === "ok" ? "positivo" : "aviso"}
+            />
+          </div>
+        </section>
+      )}
 
       {/* Salud: cinco comprobaciones, con el detalle de cada una. */}
       <Card>

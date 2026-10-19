@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
+import { SkeletonTabla } from "@/components/Skeleton";
 import { SortableTable, type Column } from "@/components/SortableTable";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -289,7 +290,7 @@ function MercadosPage() {
             </span>
           </div>
           {mercados.isLoading ? (
-            <p className="text-sm text-muted-foreground">Cargando mercados…</p>
+            <SkeletonTabla filas={8} columnas={6} />
           ) : filtrados.length === 0 ? (
             <EmptyState
               icono={CandlestickChart}
