@@ -63,6 +63,9 @@
 - [x] Interfaz: sistema visual propio (fondo con halo, superficies con sombra, tokens
       `surface`/`row-subtle`/`kicker`/`metric`), panel rediseñado con bloque de cifras,
       tira de salud y "siguientes pasos", cabeceras con sección y barra superior ligera
+- [x] Interfaz amigable e intuitiva: navegación por tareas con el grupo visible,
+      glosario con "?" en cada término técnico, estados vacíos que explican qué pasa
+      y qué hacer, formularios con ayuda y el panel diciendo qué hacer cuando algo falla
 - [ ] Alertas por Telegram ya están (opcional); falta el canal de correo con dominio
       verificado
 - [ ] Idempotencia y reintentos con backoff en el envío de órdenes (parcial: ya hay
