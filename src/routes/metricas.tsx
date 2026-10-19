@@ -95,6 +95,7 @@ function MetricasPage() {
   return (
     <div className="space-y-8">
       <PageHeader
+        eyebrow="Análisis"
         title="Métricas honestas"
         subtitle="Lo que el motor ha hecho de verdad: P&L real por bot, por indicador, por par y por hora. Las cifras no demuestran rentabilidad; con pocas operaciones son ruido."
       />

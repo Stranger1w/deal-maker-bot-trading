@@ -86,6 +86,7 @@ function SquadPage() {
   return (
     <div className="space-y-8">
       <PageHeader
+        eyebrow="Mis bots"
         title="Escuadrón de bots"
         subtitle="Cada bot opera en Binance. Demo usa Binance testnet o el simulador interno; Real requiere confirmación explícita y consume fondos reales."
       />

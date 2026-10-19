@@ -268,6 +268,7 @@ function FondosPage() {
   return (
     <div className="space-y-8">
       <PageHeader
+        eyebrow="Mi dinero"
         title="Fondos"
         subtitle="Tesorería operativa: saldo libre, capital comprometido por bots activos y trazabilidad completa de cada movimiento."
       />

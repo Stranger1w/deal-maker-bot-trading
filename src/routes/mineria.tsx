@@ -201,6 +201,7 @@ function MiningPage() {
   return (
     <div className="space-y-8">
       <PageHeader
+        eyebrow="Minería"
         title="Enjambre de minería"
         subtitle="Infraestructura de minería totalmente separada del trading: sin modos demo/real y sin acceso a los fondos de los bots."
         action={

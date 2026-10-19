@@ -245,6 +245,7 @@ function MercadosPage() {
   return (
     <div className="space-y-8">
       <PageHeader
+        eyebrow="Mercados"
         title="Mercados"
         subtitle="Precios de Binance 24 h (lector público, sin API key). Solo pares que existen en el entorno activo; la cotización por defecto es USDT."
       />

@@ -160,13 +160,18 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <div className="min-h-screen bg-background">
-        <header className="sticky top-0 z-30 border-b border-border bg-sidebar/95 backdrop-blur">
+        <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3">
-            <Link to="/" className="flex items-center gap-2">
-              <span className="grid size-8 place-items-center rounded-md bg-primary font-bold text-primary-foreground">
+            <Link to="/" className="group flex items-center gap-2.5">
+              <span className="grid size-8 place-items-center rounded-lg bg-primary font-bold text-primary-foreground shadow-sm transition-transform group-hover:scale-105">
                 D
               </span>
-              <span className="text-lg font-semibold tracking-tight">Deal Maker</span>
+              <span className="flex flex-col leading-none">
+                <span className="text-base font-semibold tracking-tight">Deal Maker</span>
+                <span className="mt-0.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Trading
+                </span>
+              </span>
             </Link>
             <nav className="flex flex-wrap items-center gap-x-4 gap-y-2">
               {navGroups.map((group, i) => (
@@ -177,10 +182,13 @@ function RootComponent() {
                       key={item.to}
                       to={item.to}
                       activeOptions={{ exact: item.to === "/" }}
-                      className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                      activeProps={{ className: "bg-primary text-primary-foreground" }}
+                      className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+                      activeProps={{
+                        className:
+                          "bg-secondary text-foreground shadow-[inset_0_0_0_1px_var(--color-border)]",
+                      }}
                     >
-                      <item.icon className="size-4" />
+                      <item.icon className="size-4 opacity-80" />
                       {item.label}
                     </Link>
                   ))}

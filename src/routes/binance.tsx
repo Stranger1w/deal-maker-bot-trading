@@ -106,6 +106,7 @@ function BinancePage() {
   return (
     <div className="space-y-8">
       <PageHeader
+        eyebrow="Mi cuenta"
         title="Configuración · API Keys de Binance"
         subtitle="Todo el trading real se ejecuta vía Binance. El secreto se cifra en reposo, nunca se expone al navegador ni se escribe en logs; solo el backend lo descifra para firmar solicitudes."
       />

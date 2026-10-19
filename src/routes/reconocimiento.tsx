@@ -347,6 +347,7 @@ function ReconPage() {
   return (
     <div className="space-y-8">
       <PageHeader
+        eyebrow="Reconocimiento"
         title="Escuadrón de Reconocimiento"
         subtitle="Bots que solo estudian el mercado: precios, volumen, order book, noticias e indicadores. No ejecutan operaciones, no tienen modo Demo/Real y no mueven capital."
       />

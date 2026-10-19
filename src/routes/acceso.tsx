@@ -162,6 +162,7 @@ function AccessPage() {
   return (
     <div className="space-y-8">
       <PageHeader
+        eyebrow="Seguridad"
         title="Acceso y seguridad"
         subtitle="Los retiros de fondos y el paso Demo→Real exigen sesión iniciada y segundo factor verificado. Sin ello, esos flujos permanecen bloqueados."
         action={

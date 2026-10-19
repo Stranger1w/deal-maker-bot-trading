@@ -319,6 +319,7 @@ function MotorPage() {
   return (
     <div className="space-y-8">
       <PageHeader
+        eyebrow="Motor"
         title="Motor"
         subtitle="Sesiones con Temporizador o 24/7: el motor solo opera dentro de una sesión iniciada desde esta pestaña."
       />
