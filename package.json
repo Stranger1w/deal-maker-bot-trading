@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "bun test src",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "backtest": "bun scripts/backtest.ts"
   },
   "overrides": {
     "rolldown": "1.2.1"
