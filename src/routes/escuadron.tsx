@@ -3,9 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Brain, Pause, Play, ScrollText, Settings2, ShieldAlert, Square } from "lucide-react";
+import { Bot, Brain, Pause, Play, ScrollText, Settings2, ShieldAlert, Square } from "lucide-react";
 
 import { AlertsPanel } from "@/components/AlertsPanel";
+import { EmptyState } from "@/components/EmptyState";
+import { Explicar } from "@/components/Explicar";
 import { PageHeader } from "@/components/PageHeader";
 import { SortableTable, type Column } from "@/components/SortableTable";
 import { StatusPill, statusTone } from "@/components/StatusPill";
@@ -561,11 +563,20 @@ function SquadTab() {
       <Card>
         <CardHeader>
           <CardTitle>Alta rápida</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Un bot necesita tres cosas: cómo llamarlo, qué par operar y cuánto dinero se le asigna.
+            Los indicadores y la estrategia los puedes ajustar después, en «Motor».
+          </p>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-5">
           <div className="space-y-1.5">
             <Label>Nombre</Label>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <Input
+              value={form.name}
+              placeholder="Mi bot de BTC"
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
+            <p className="text-[11px] text-muted-foreground">Como lo reconocerás en la lista.</p>
           </div>
           <div className="space-y-1.5">
             <Label>Estrategia base</Label>
@@ -584,7 +595,14 @@ function SquadTab() {
           </div>
           <div className="space-y-1.5">
             <Label>Par / activo</Label>
-            <Input value={form.pair} onChange={(e) => setForm({ ...form, pair: e.target.value })} />
+            <Input
+              value={form.pair}
+              placeholder="BTCUSDT"
+              onChange={(e) => setForm({ ...form, pair: e.target.value })}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              El activo que operará, p. ej. BTCUSDT.
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label>Capital (USDT)</Label>
@@ -593,6 +611,9 @@ function SquadTab() {
               value={form.capital}
               onChange={(e) => setForm({ ...form, capital: e.target.value })}
             />
+            <p className="text-[11px] text-muted-foreground">
+              Cuánto se le asigna. Es su tope: el motor no arriesgará más.
+            </p>
           </div>
           <div className="flex items-end">
             <Button className="w-full" onClick={submitNew}>
@@ -638,6 +659,14 @@ function SquadTab() {
           initialSort={{ key: "pnl", dir: "desc" }}
           columns={botColumns}
           empty="Sin bots en el escuadrón."
+        />
+      )}
+
+      {view === "table" && filteredBots.length === 0 && (
+        <EmptyState
+          icono={Bot}
+          titulo="Todavía no hay bots"
+          detalle="Un bot es una estrategia con dinero: un par, un capital y los indicadores que decidirán comprar y vender. Créalo en «Alta rápida» (abajo) y el motor podrá operarlo."
         />
       )}
 
@@ -945,17 +974,20 @@ function SquadTab() {
             <div className="grid gap-3 sm:grid-cols-2">
               {(
                 [
-                  ["stop_loss_pct", "Stop-loss por operación (%)"],
-                  ["take_profit_pct", "Take-profit por operación (%)"],
-                  ["max_daily_loss", "Pérdida diaria máx. (USDT)"],
-                  ["max_drawdown_pct", "Drawdown diario máx. (%)"],
-                  ["max_weekly_drawdown_pct", "Drawdown semanal máx. (%)"],
-                  ["max_capital", "Tope de capital (USDT)"],
-                  ["max_trades_per_day", "Máx. operaciones/día"],
+                  ["stop_loss_pct", "Stop-loss por operación (%)", "stop_loss"],
+                  ["take_profit_pct", "Take-profit por operación (%)", "take_profit"],
+                  ["max_daily_loss", "Pérdida diaria máx. (USDT)", ""],
+                  ["max_drawdown_pct", "Drawdown diario máx. (%)", "drawdown"],
+                  ["max_weekly_drawdown_pct", "Drawdown semanal máx. (%)", ""],
+                  ["max_capital", "Tope de capital (USDT)", ""],
+                  ["max_trades_per_day", "Máx. operaciones/día", ""],
                 ] as const
-              ).map(([key, label]) => (
+              ).map(([key, label, termino]) => (
                 <div key={key} className="space-y-1.5">
-                  <Label>{label}</Label>
+                  <Label className="flex items-center gap-1">
+                    {label}
+                    {termino ? <Explicar termino={termino} /> : null}
+                  </Label>
                   <Input
                     inputMode="decimal"
                     value={String(riskFor[key] ?? "")}
@@ -971,6 +1003,12 @@ function SquadTab() {
                   aria-label="Activar automatización del bot"
                 />
               </div>
+              <p className="text-[11px] leading-relaxed text-muted-foreground sm:col-span-2">
+                El take-profit tiene que ser mayor que el coste de ida y vuelta (comisiones y
+                slippage) con margen: si no, cada operación sale en pérdida aunque el precio se
+                mueva a favor. Un stop-loss del 1–3 % es un punto de partida razonable para pares
+                líquidos.
+              </p>
             </div>
           )}
           <DialogFooter>
@@ -1052,7 +1090,11 @@ function SquadTab() {
                 </div>
               ))}
             {(logs.data ?? []).filter((log) => log.bot_id === logsFor?.id).length === 0 && (
-              <p className="text-sm text-muted-foreground">Sin registros todavía.</p>
+              <EmptyState
+                icono={ScrollText}
+                titulo="Sin actividad todavía"
+                detalle="Aquí se verá, ciclo a ciclo, qué ha hecho el bot: con qué señal ha entrado, qué ha cerrado y por qué se ha quedado quieto."
+              />
             )}
           </div>
         </DialogContent>

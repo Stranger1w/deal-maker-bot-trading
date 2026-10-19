@@ -3,9 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Play, RotateCcw, Square } from "lucide-react";
+import { Pickaxe, Play, RotateCcw, Square } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { EmptyState } from "@/components/EmptyState";
 import { StatusPill, statusTone } from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -359,13 +360,21 @@ function MiningPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <SortableTable
-            rows={filtered}
-            rowKey={(w) => w.id}
-            initialSort={{ key: "hash", dir: "desc" }}
-            columns={workerColumns}
-            empty="Sin workers en el enjambre."
-          />
+          {filtered.length === 0 ? (
+            <EmptyState
+              icono={Pickaxe}
+              titulo="No hay equipos de minería"
+              detalle="Un equipo de minería calcula hashes con tu CPU a cambio de créditos internos (DMR). Ojo: con una CPU de casa esto da céntimos al día, menos que la electricidad: es un juguete, no un ingreso."
+            />
+          ) : (
+            <SortableTable
+              rows={filtered}
+              rowKey={(w) => w.id}
+              initialSort={{ key: "hash", dir: "desc" }}
+              columns={workerColumns}
+              empty="Sin workers en el enjambre."
+            />
+          )}
         </CardContent>
       </Card>
 

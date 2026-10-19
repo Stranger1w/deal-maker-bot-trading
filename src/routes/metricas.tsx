@@ -4,6 +4,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { AlertTriangle } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { EmptyState } from "@/components/EmptyState";
+import { Explicar, GLOSARIO } from "@/components/Explicar";
 import { SortableTable, type Column } from "@/components/SortableTable";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { informeMetricasMotor } from "@/lib/metricas.functions";
@@ -60,13 +62,23 @@ const COLUMNAS: Column<ResumenGrupo>[] = [
     key: "winRatePct",
     label: "Win rate",
     value: (x) => x.winRatePct,
-    render: (x) => pct(x.winRatePct),
+    render: (x) => (
+      <span className="inline-flex items-center gap-1">
+        {pct(x.winRatePct)}
+        <Explicar termino="win_rate" />
+      </span>
+    ),
   },
   {
     key: "profitFactor",
     label: "Profit factor",
     value: (x) => x.profitFactor,
-    render: (x) => x.profitFactor.toFixed(2),
+    render: (x) => (
+      <span className="inline-flex items-center gap-1">
+        {x.profitFactor.toFixed(2)}
+        <Explicar termino="profit_factor" />
+      </span>
+    ),
   },
   {
     key: "mejorOperacion",
@@ -136,7 +148,10 @@ function MetricasPage() {
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">Drawdown máximo</CardTitle>
+                <CardTitle className="flex items-center gap-1 text-sm text-muted-foreground">
+                  Drawdown máximo
+                  <Explicar termino="drawdown" />
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-semibold tabular">
@@ -250,6 +265,23 @@ function MetricasPage() {
                 initialSort={{ key: "pnlNeto", dir: "desc" }}
                 empty="Sin operaciones."
               />
+            </CardContent>
+          </Card>
+
+          {/* Glosario: las palabras que aparecen arriba, explicadas. */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Qué significa cada palabra</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-2">
+              {Object.entries(GLOSARIO).map(([termino, definicion]) => (
+                <div key={termino} className="row-subtle rounded-lg px-3 py-2">
+                  <p className="text-xs font-medium capitalize">{termino.replace(/_/g, " ")}</p>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                    {definicion}
+                  </p>
+                </div>
+              ))}
             </CardContent>
           </Card>
         </>

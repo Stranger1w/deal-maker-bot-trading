@@ -74,7 +74,7 @@ function Dashboard() {
   const motorVivo =
     engineOn && !kill && antiguedadSeg !== null && antiguedadSeg <= intervaloSeg * 3;
 
-  const salud: { label: string; ok: boolean; detail: string }[] = [
+  const salud: { label: string; ok: boolean; detail: string; accion?: string | undefined }[] = [
     {
       label: "Motor",
       ok: motorVivo,
@@ -87,6 +87,13 @@ function Dashboard() {
             : antiguedadSeg > intervaloSeg * 3
               ? `sin ticks hace ${antiguedadSeg} s`
               : "operando",
+      accion: !engineOn
+        ? "Enciéndelo en la pestaña Motor."
+        : kill
+          ? "Revisa el motivo del kill switch y reactívalo cuando quieras."
+          : antiguedadSeg !== null && antiguedadSeg > intervaloSeg * 3
+            ? "El cron no está llamando al motor: revisa que esté configurado."
+            : undefined,
     },
     {
       label: "Binance",
@@ -95,6 +102,10 @@ function Dashboard() {
         binance.data?.connection_status === "ok"
           ? `conectada · •••• ${binance.data.api_key_last4}`
           : "sin conectar o sin probar",
+      accion:
+        binance.data?.connection_status === "ok"
+          ? undefined
+          : "Pega tus API keys y pulsa «Probar». Sin claves verificadas no se opera en Real.",
     },
     {
       label: "Bots",
@@ -103,16 +114,28 @@ function Dashboard() {
         stoppedByRisk === 0
           ? `${running} activos · ${realBots} en Real`
           : `${stoppedByRisk} detenidos por un límite`,
+      accion:
+        stoppedByRisk === 0
+          ? undefined
+          : "Un bot se paró porque tocó un límite de riesgo: míralo en «Mis bots» antes de tocar nada.",
     },
     {
       label: "Minería",
       ok: offlineWorkers === 0,
       detail: offlineWorkers === 0 ? `${mining} equipos encendidos` : `${offlineWorkers} apagados`,
+      accion:
+        offlineWorkers === 0
+          ? undefined
+          : "Los equipos apagados no están minando: enciéndelos desde «Minería».",
     },
     {
       label: "Avisos",
       ok: criticalAlerts === 0,
       detail: criticalAlerts === 0 ? "ninguno pendiente" : `${criticalAlerts} sin revisar`,
+      accion:
+        criticalAlerts === 0
+          ? undefined
+          : "Hay avisos críticos sin revisar: míralos abajo, en «Avisos importantes».",
     },
   ];
 
@@ -217,6 +240,9 @@ function Dashboard() {
                   </StatusPill>
                 </div>
                 <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">{h.detail}</p>
+                {h.accion ? (
+                  <p className="mt-1.5 text-[11px] leading-snug text-primary/90">{h.accion}</p>
+                ) : null}
               </div>
             ))}
           </div>
@@ -240,13 +266,15 @@ function Dashboard() {
           <CardContent className="grid gap-2 md:grid-cols-2">
             {pasos
               .filter((p) => !p.hecho)
-              .map((p) => (
+              .map((p, i) => (
                 <Link
                   key={p.titulo}
                   to={p.to}
                   className="row-subtle group flex items-start gap-3 rounded-lg px-3 py-2.5 transition-colors hover:border-primary/40"
                 >
-                  <span className="mt-0.5 size-1.5 shrink-0 rounded-full bg-primary/70" />
+                  <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
+                    {i + 1}
+                  </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5 text-sm font-medium">
                       {p.titulo}

@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Search } from "lucide-react";
+import { CandlestickChart, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/PageHeader";
+import { EmptyState } from "@/components/EmptyState";
 import { SortableTable, type Column } from "@/components/SortableTable";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -289,6 +290,15 @@ function MercadosPage() {
           </div>
           {mercados.isLoading ? (
             <p className="text-sm text-muted-foreground">Cargando mercados…</p>
+          ) : filtrados.length === 0 ? (
+            <EmptyState
+              icono={CandlestickChart}
+              titulo="No hay pares con este filtro"
+              detalle={
+                snapshot?.aviso ??
+                "Prueba con otra búsqueda o cambia la cotización (USDT, BTC…). Solo se muestran los pares que existen en el entorno activo (testnet o producción)."
+              }
+            />
           ) : (
             <SortableTable
               rows={filtrados}

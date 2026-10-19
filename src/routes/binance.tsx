@@ -3,9 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Globe2, Lock, PlugZap, ShieldAlert } from "lucide-react";
+import { Globe2, KeyRound, Lock, PlugZap, ShieldAlert } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { EmptyState } from "@/components/EmptyState";
 import { StatusPill, statusTone } from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -220,10 +221,11 @@ function BinancePage() {
                 />
               </>
             ) : (
-              <p className="text-muted-foreground">
-                Todavía no hay credenciales guardadas. Los bots en modo Real permanecen bloqueados
-                hasta verificar la conexión.
-              </p>
+              <EmptyState
+                icono={KeyRound}
+                titulo="Todavía no hay credenciales guardadas"
+                detalle="Pega una API key de Binance con permiso de operar (y SIN retiros: la app las rechaza si los tienen) y pulsa «Probar». Los bots en modo Real permanecen bloqueados hasta verificar la conexión."
+              />
             )}
             <p className="rounded-md border border-border bg-secondary/40 p-3 text-xs text-muted-foreground">
               El secreto se almacena cifrado con AES-GCM y una clave que vive solo en el servidor.

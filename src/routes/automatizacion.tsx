@@ -201,9 +201,9 @@ function AutomationPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Piloto automático"
-        title="Automatización 24/7"
-        subtitle="El motor corre en la nube mediante un worker programado: no requiere que tu PC ni la app de escritorio estén abiertas."
+        eyebrow="Ajustes"
+        title="Riesgo global y motor 24/7"
+        subtitle="Los límites que se aplican a todo el escuadrón, la parada de emergencia y el estado del motor. El motor corre en la nube mediante un worker programado: no requiere que tu PC ni la app de escritorio estén abiertas."
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
