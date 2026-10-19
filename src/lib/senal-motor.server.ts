@@ -18,6 +18,8 @@
 import { cerradas } from "./indicators/helpers";
 import { senalDe } from "./indicators";
 import type { PriceSeries, SignalDirection } from "./indicators/types";
+import { detectarRegimen, type Regimen } from "./regimen";
+import { atrPct } from "./riesgo-tamano";
 import { velasDeBinance } from "./velas.server";
 
 type Db = Awaited<ReturnType<typeof getDb>>;
@@ -132,13 +134,61 @@ export async function senalDelBot(
   bot: { pair: string },
   cfg: ConfigSenales,
 ): Promise<SignalDirection> {
+  const analisis = await analizarBot(db, bot, cfg);
+  return analisis.senal;
+}
+
+/** Analisis completo del bot: senal, volatilidad y regimen de mercado. */
+export type AnalisisBot = {
+  senal: SignalDirection;
+  /** Volatilidad relativa del par (ATR en %), null si no hay datos. */
+  atrPct: number | null;
+  /** Regimen detectado (para el filtro de regimen). */
+  regimen: Regimen;
+  /** Explicacion legible del regimen. */
+  detalle: string;
+  /** true si no se pudieron obtener datos (sin red, par inexistente...). */
+  sinDatos: boolean;
+};
+
+/**
+ * Analiza el par del bot: senal de los indicadores, volatilidad (ATR) y
+ * regimen de mercado. Todo con la MISMA serie de velas, cacheada 60 s.
+ */
+export async function analizarBot(
+  db: Db,
+  bot: { pair: string },
+  cfg: ConfigSenales,
+): Promise<AnalisisBot> {
+  const vacio: AnalisisBot = {
+    senal: null,
+    atrPct: null,
+    regimen: "lateral",
+    detalle: "Sin datos del par.",
+    sinDatos: true,
+  };
   try {
     const serie = await velasCerradas(bot.pair, cfg.intervalo);
     const cerradasSerie = cerradas(serie);
-    if (cerradasSerie.closes.length < 5) return null;
-    return senalDe(cfg.ids, cerradasSerie, cfg.params);
+    if (cerradasSerie.closes.length < 5) return vacio;
+
+    const velas = cerradasSerie.closes.map((cierre, i) => ({
+      close: cierre,
+      high: cerradasSerie.highs[i] ?? cierre,
+      low: cerradasSerie.lows[i] ?? cierre,
+    }));
+    const atrRelativo = atrPct(velas);
+    const deteccion = detectarRegimen(velas);
+
+    return {
+      senal: senalDe(cfg.ids, cerradasSerie, cfg.params),
+      atrPct: atrRelativo,
+      regimen: deteccion.regimen,
+      detalle: deteccion.detalle,
+      sinDatos: false,
+    };
   } catch {
     // Sin datos (red, region, par inexistente): no hay senal. No se inventa.
-    return null;
+    return vacio;
   }
 }

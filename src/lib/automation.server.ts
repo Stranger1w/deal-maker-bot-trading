@@ -820,7 +820,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
 
     // Configuracion de senales (indicadores y horizonte) de la plataforma.
     // Es la MISMA que usa el backtest: si aqui no hay senal, no se opera.
-    const { leerConfigSenales, senalDelBot } = await import("./senal-motor.server");
+    const { leerConfigSenales, senalDelBot, analizarBot } = await import("./senal-motor.server");
     const cfgSenales = await leerConfigSenales(db, adminId);
 
     // ── Selector automático de par (Fase 3) ──────────────────────────────
@@ -938,7 +938,9 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
               },
             }
           : cfgSenales;
-      const senal = cfgParaBot ? await senalDelBot(db, bot, cfgParaBot) : null;
+      const analisis = cfgParaBot ? await analizarBot(db, bot, cfgParaBot) : null;
+      const senal = analisis?.senal ?? null;
+      const atrRelativo = analisis?.atrPct ?? null;
       // Se declaran fuera del try para que el catch pueda auditar una orden real ya
       // ejecutada en Binance cuyo PnL no se aplicó (fallo de la RPC y del fallback).
       let exchangeOrderId: string | null = null;
@@ -954,6 +956,86 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         }
         if (bot.risk_week !== weekStart) {
           weeklyLoss = 0;
+        }
+
+        // ── Filtro de régimen de mercado ─────────────────────────────────
+        // Una estrategia de reversion en tendencia fuerte pierde dinero, y
+        // con volatilidad extrema el slippage real se dispara. El filtro es
+        // un freno: solo esta activo si el dueno lo enciende.
+        if (settings.filtro_regimen === true && analisis && !analisis.sinDatos) {
+          const { operarEnRegimen, tipoDeIndicadores } = await import("./regimen");
+          const { buscarIndicador } = await import("./indicators");
+          const tipoEstrategia = tipoDeIndicadores(cfgParaBot?.ids ?? [], (id) => {
+            const def = buscarIndicador(id);
+            return def ? def.tipo : null;
+          });
+          const veredicto = operarEnRegimen({
+            regimen: analisis.regimen,
+            tipoEstrategia,
+            activo: true,
+          });
+          if (!veredicto.permitido) {
+            await log(
+              db,
+              bot.id,
+              "info",
+              `Ciclo omitido por filtro de régimen: ${veredicto.motivo} ${analisis.detalle}`,
+            );
+            continue;
+          }
+        }
+
+        // ── Límite de operaciones por PAR y por día ─────────────────────
+        const maxPorPar = Number(settings.max_trades_per_pair ?? 0);
+        if (maxPorPar > 0) {
+          const desdeDia = new Date();
+          desdeDia.setUTCHours(0, 0, 0, 0);
+          const { data: tradesPar } = await db
+            .from("bot_executions")
+            .select("id")
+            .eq("bot_id", bot.id)
+            .eq("symbol", bot.pair)
+            .gte("created_at", desdeDia.toISOString());
+          if ((tradesPar ?? []).length >= maxPorPar) {
+            await log(
+              db,
+              bot.id,
+              "info",
+              `Ciclo omitido: límite de ${maxPorPar} operaciones por día en ${bot.pair} alcanzado.`,
+            );
+            continue;
+          }
+        }
+
+        // ── Enfriamiento tras racha de pérdidas ──────────────────────────
+        // Tras varias perdidas seguidas se espera un rato: seguir operando
+        // en tendencia contraria es como se quema el capital.
+        const cooldownMin = Number(settings.cooldown_minutes_after_losses ?? 0);
+        const cooldownPerdidas = Number(settings.cooldown_losses ?? 0);
+        if (cooldownMin > 0 && cooldownPerdidas > 0) {
+          const { data: ultimaPerdida } = await db
+            .from("bot_executions")
+            .select("pnl, created_at")
+            .eq("bot_id", bot.id)
+            .eq("side", "sell")
+            .order("created_at", { ascending: false })
+            .limit(cooldownPerdidas);
+          const perdidas = (ultimaPerdida ?? []).filter((e) => Number(e.pnl ?? 0) < 0);
+          if (perdidas.length >= cooldownPerdidas) {
+            const ultima = String(
+              (perdidas[perdidas.length - 1] as { created_at: string }).created_at,
+            );
+            const minutosDesde = (Date.now() - Date.parse(ultima)) / 60_000;
+            if (minutosDesde < cooldownMin) {
+              await log(
+                db,
+                bot.id,
+                "info",
+                `Ciclo omitido: enfriamiento tras ${perdidas.length} pérdidas seguidas (quedan ${Math.ceil(cooldownMin - minutosDesde)} min).`,
+              );
+              continue;
+            }
+          }
         }
 
         // Stop-loss y take-profit son obligatorios para operar en Real.
@@ -1091,7 +1173,28 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
               (configBot?.params as Record<string, number>) ?? {},
             )
           : null;
-        const size = decisionEstrategia?.monto ?? baseSize;
+        let size = decisionEstrategia?.monto ?? baseSize;
+
+        // ── Tamaño por RIESGO (no un porcentaje fijo) ─────────────────────
+        // Se arriesga un % fijo del capital por operacion y el tamaño sale
+        // de la distancia del stop (y del ATR si el par es volatil). Es lo
+        // que evita que un 2 % de stop en un par tranquilo sea un 5 % en uno
+        // volatil.
+        const riesgoPorOperacion = Number(settings.riesgo_por_operacion ?? 0);
+        if (riesgoPorOperacion > 0 && Number(bot.stop_loss_pct) > 0) {
+          const { tamanoPorRiesgo } = await import("./riesgo-tamano");
+          const porRiesgo = tamanoPorRiesgo({
+            capital: Number(bot.capital),
+            riesgoPorOperacion,
+            stopLossPct: Number(bot.stop_loss_pct),
+            topeFraccionCapital: defEstrategia?.topeFraccionCapital ?? 0.1,
+            atrPct: atrRelativo,
+            stopPorAtr: settings.stop_por_atr ?? null,
+          });
+          if (porRiesgo.ok && porRiesgo.monto > 0) {
+            size = Math.min(size, porRiesgo.monto);
+          }
+        }
 
         let side: "buy" | "sell";
         let quantity: number;

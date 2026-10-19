@@ -130,6 +130,12 @@ export type Database = {
       }
       automation_settings: {
         Row: {
+          riesgo_por_operacion: number
+          stop_por_atr: number | null
+          filtro_regimen: boolean
+          max_trades_per_pair: number
+          cooldown_minutes_after_losses: number
+          cooldown_losses: number
           allow_live_orders: boolean
           allow_real_trading: boolean
           engine_enabled: boolean
@@ -161,6 +167,12 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          riesgo_por_operacion: number
+          stop_por_atr: number | null
+          filtro_regimen: boolean
+          max_trades_per_pair: number
+          cooldown_minutes_after_losses: number
+          cooldown_losses: number
           allow_live_orders?: boolean
           allow_real_trading?: boolean
           engine_enabled?: boolean
@@ -192,6 +204,12 @@ export type Database = {
           user_id: string
         }
         Update: {
+          riesgo_por_operacion?: number
+          stop_por_atr?: number | null
+          filtro_regimen?: boolean
+          max_trades_per_pair?: number
+          cooldown_minutes_after_losses?: number
+          cooldown_losses?: number
           allow_live_orders?: boolean
           allow_real_trading?: boolean
           engine_enabled?: boolean
