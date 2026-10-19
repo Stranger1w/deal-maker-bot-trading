@@ -53,11 +53,21 @@
       (migración `20261023000000`)
 - [x] Backtest que funciona **sin internet** (`--archivo` + `scripts/guardar-velas.ts`
       + dataset de ejemplo en `datos/`)
+- [x] Referencia aleatoria (la misma estrategia con la señal al azar, mismo motor) y
+      sensibilidad de parámetros: la estrategia por defecto solo gana al 3 % de las
+      aleatorias, o sea, no se distingue del azar
+- [x] **Diario del motor**: una línea por bot y ciclo con el motivo (sin señal, filtro
+      de régimen, enfriamiento, límite por par, sin sesión, dry-run, límites de
+      riesgo…) y la tarjeta que lo muestra en la pestaña Motor (migración
+      `20261025000000`)
+- [x] Interfaz: sistema visual propio (fondo con halo, superficies con sombra, tokens
+      `surface`/`row-subtle`/`kicker`/`metric`), panel rediseñado con bloque de cifras,
+      tira de salud y "siguientes pasos", cabeceras con sección y barra superior ligera
+- [ ] Alertas por Telegram ya están (opcional); falta el canal de correo con dominio
+      verificado
 - [ ] Idempotencia y reintentos con backoff en el envío de órdenes (parcial: ya hay
       clave de idempotencia, manejo del 23505 y reconciliación de la posición; falta
       reconciliar órdenes pendientes)
-- [ ] Alertas por Telegram y logs estructurados (canales opcionales: si no hay
-      internet, el motor sigue funcionando y queda en el log)
 - [ ] Cron 24/7: falta elegir dónde corre (la nube, porque el PC no tiene internet)
 - [ ] Prueba de escenario con DOS usuarios de punta a punta (hace falta el usuario de
       prueba de Supabase)
