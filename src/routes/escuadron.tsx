@@ -662,11 +662,17 @@ function SquadTab() {
         />
       )}
 
-      {view === "table" && filteredBots.length === 0 && (
+      {filteredBots.length === 0 && (
         <EmptyState
           icono={Bot}
-          titulo="Todavía no hay bots"
-          detalle="Un bot es una estrategia con dinero: un par, un capital y los indicadores que decidirán comprar y vender. Créalo en «Alta rápida» (abajo) y el motor podrá operarlo."
+          titulo={
+            botList.length === 0 ? "Todavía no hay bots" : "Ningún bot coincide con la búsqueda"
+          }
+          detalle={
+            botList.length === 0
+              ? "Un bot es una estrategia con dinero: un par, un capital y los indicadores que decidirán comprar y vender. créalo en «Alta rápida» (abajo) y el motor podrá operarlo."
+              : "Prueba con otro texto o quita los filtros: hay bots, pero ninguno coincide con lo que has buscado."
+          }
         />
       )}
 
