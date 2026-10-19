@@ -22,13 +22,17 @@
  *   --descuento-bnb 0.1      Descuento por pagar con BNB (0,1 = 10 %)
  *   --estrategia optimal     fixed | conservative | optimal | aggressive
  *   --walk-forward 4         Numero de bloques de validacion fuera de muestra
+ *   --archivo datos/x.json   Lee las velas de un fichero (para probar SIN
+ *                            internet). Ver scripts/guardar-velas.ts.
  */
+
+import { readFileSync } from "node:fs";
 
 import { buscarEstrategia } from "../src/lib/strategies/index";
 import { ejecutarBacktest } from "../src/lib/backtest/engine";
-import { velasDeBinance } from "../src/lib/backtest/data.server";
+import { velasDeBinance } from "../src/lib/velas.server";
 import { walkForward } from "../src/lib/backtest/walkforward";
-import type { ConfigBacktest } from "../src/lib/backtest/types";
+import type { ConfigBacktest, Vela } from "../src/lib/backtest/types";
 import { getBinanceSymbolRules } from "../src/lib/binance-trading.server";
 
 function arg(nombre: string, porDefecto?: string): string | undefined {
@@ -74,7 +78,7 @@ const config: ConfigBacktest = {
 const estrategia = buscarEstrategia(estrategiaId);
 if (estrategia) config.estrategia = estrategia;
 
-console.log(`\n=== Backtest: ${simbolo} · ${intervalo} · ${limite} velas ===`);
+console.log(`\n=== Backtest: ${simbolo} · ${intervalo} ===`);
 console.log(
   `indicadores: ${indicadores.join(", ")} | estrategia: ${estrategiaId} | capital: ${config.capitalInicial}`,
 );
@@ -82,25 +86,54 @@ console.log(
   `costes: comision ${(config.costes.comision * 100).toFixed(3)} %/lado, slippage ${(config.costes.slippage * 100).toFixed(3)} %/lado, stop ${config.stopLossPct} %, take ${config.takeProfitPct} %`,
 );
 
-const velas = await velasDeBinance({ simbolo, intervalo, limite });
-if (velas.length === 0) {
-  console.error(
-    "No se han descargado velas. Si el servidor esta bloqueado por region, prueba en tu PC.",
+// Velas: del fichero (offline) o de Binance.
+const archivo = arg("archivo");
+let velas: Vela[];
+let simboloFinal = simbolo;
+if (archivo) {
+  const datos = JSON.parse(readFileSync(archivo, "utf8")) as {
+    simbolo?: string;
+    intervalo?: string;
+    velas: Vela[];
+  };
+  velas = datos.velas ?? [];
+  simboloFinal = datos.simbolo ?? simbolo;
+  console.log(
+    `velas del fichero ${archivo} (${datos.simbolo ?? simbolo} ${datos.intervalo ?? ""})`,
   );
+} else {
+  velas = await velasDeBinance({ simbolo, intervalo, limite });
+  if (velas.length === 0) {
+    console.error(
+      "No se han descargado velas. Sin internet: descarga las velas antes con 'bun scripts/guardar-velas.ts' y despues usa --archivo.",
+    );
+    process.exit(1);
+  }
+}
+if (velas.length === 0) {
+  console.error("El fichero no tiene velas.");
   process.exit(1);
 }
 
-const reglas = await getBinanceSymbolRules(simbolo, "production");
-config.reglas = {
-  stepSize: reglas.stepSize,
-  minQty: reglas.minQty,
-  minNotional: reglas.minNotional,
-};
+// Reglas del símbolo: hacen falta aunque no haya internet (van en el
+// fichero de ExchangeInfo, que se cachean aparte). Sin internet se usan las
+// reglas por defecto, con un aviso.
+if (archivo) {
+  config.reglas = { stepSize: 0.00001, minQty: 0, minNotional: 5 };
+  console.log("reglas por defecto (sin internet): stepSize 0.00001, minNotional 5 USDT");
+} else {
+  const reglas = await getBinanceSymbolRules(simboloFinal, "production");
+  config.reglas = {
+    stepSize: reglas.stepSize,
+    minQty: reglas.minQty,
+    minNotional: reglas.minNotional,
+  };
+}
 console.log(
-  `velas: ${velas.length} (${new Date(velas[0]!.time).toISOString().slice(0, 10)} → ${new Date(velas[velas.length - 1]!.time).toISOString().slice(0, 10)}) | stepSize ${reglas.stepSize} | minNotional ${reglas.minNotional}`,
+  `velas: ${velas.length} (${new Date(velas[0]!.time).toISOString().slice(0, 10)} → ${new Date(velas[velas.length - 1]!.time).toISOString().slice(0, 10)}) | stepSize ${config.reglas?.stepSize} | minNotional ${config.reglas?.minNotional}`,
 );
 
-const r = ejecutarBacktest(velas, config, { simbolo, operacionesMinimas: 100 });
+const r = ejecutarBacktest(velas, config, { simbolo: simboloFinal, operacionesMinimas: 100 });
 const m = r.metricas;
 
 console.log("\n--- RESULTADO ---");

@@ -25,7 +25,28 @@ bun run backtest -- --simbolo BTCUSDT --intervalo 1h --velas 3000 --indicadores 
 
 Opciones: `--simbolo --intervalo --velas --indicadores --parametros --capital
 --fraccion --stop --take --comision --slippage --descuento-bnb --estrategia
---walk-forward`.
+--walk-forward --archivo`.
+
+### Sin internet (en tu PC o en el servidor)
+
+Si no hay conexión, el backtest sigue funcionando con las velas ya
+descargadas. En `datos/` hay un dataset de ejemplo (BTCUSDT 1h, 3000 velas,
+junio–octubre de 2026):
+
+```powershell
+bun run backtest -- --archivo datos/btcusdt-1h.json --indicadores close_price --capital 1000 --stop 2 --take 4 --walk-forward 4
+```
+
+Para otros pares o intervalos, descarga las velas **cuando tengas internet**
+y guárdalas para después:
+
+```powershell
+bun scripts/guardar-velas.ts --simbolo ETHUSDT --intervalo 1h --velas 3000
+bun run backtest -- --archivo datos/ethusdt-1h.json --indicadores rsi
+```
+
+Sin internet se usan las reglas por defecto del símbolo (stepSize 0.00001,
+minNotional 5 USDT) y el aviso lo dice.
 
 ## Qué mirar (y qué NO mirar)
 
