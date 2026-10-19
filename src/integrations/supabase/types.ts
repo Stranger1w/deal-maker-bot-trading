@@ -624,6 +624,7 @@ export type Database = {
         Row: {
           account_mode: string
           amount_per_trade: number
+          auto_symbol_max_spread_pct: number | null
           auto_symbol_min_volume: number
           execution_mode: string
           horizon_minutes: number
@@ -641,6 +642,7 @@ export type Database = {
         Insert: {
           account_mode?: string
           amount_per_trade?: number
+          auto_symbol_max_spread_pct?: number | null
           auto_symbol_min_volume?: number
           execution_mode?: string
           horizon_minutes?: number
@@ -658,6 +660,7 @@ export type Database = {
         Update: {
           account_mode?: string
           amount_per_trade?: number
+          auto_symbol_max_spread_pct?: number | null
           auto_symbol_min_volume?: number
           execution_mode?: string
           horizon_minutes?: number

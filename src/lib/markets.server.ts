@@ -36,6 +36,12 @@ export type ParMercado = {
   low: number;
   /** (high − low) / price en tanto por uno (0.043 = 4,3 % de recorrido). */
   volatility: number;
+  /**
+   * Spread actual en tanto por uno ((ask − bid) / medio). Null si no se pudo
+   * leer el libro de ordenes. Un spread alto se come la ganancia: por eso el
+   * selector automatico de par lo tiene en cuenta.
+   */
+  spread: number | null;
 };
 
 /** Instantánea que devuelve la pestaña Mercados. */
@@ -128,6 +134,30 @@ export function leerTickers(body: unknown): TickerCrudo[] {
 }
 
 /**
+ * Lee el libro de ordenes (/api/v3/ticker/bookTicker) y devuelve el spread
+ * de cada simbolo en tanto por uno.
+ *
+ * Pesa 2 en el contador de peso de Binance (todo el mercado en una
+ * llamada), asi que es barato: sin esto, el selector automatico de par
+ * podria elegir un par con un spread enorme, donde la ganancia se la come
+ * el spread antes de empezar.
+ */
+export function leerSpreads(body: unknown): Map<string, number> {
+  const out = new Map<string, number>();
+  if (!Array.isArray(body)) return out;
+  for (const item of body) {
+    if (!item || typeof item !== "object") continue;
+    const raw = item as Record<string, unknown>;
+    const symbol = typeof raw["symbol"] === "string" ? raw["symbol"] : "";
+    const bid = num(raw["bidPrice"]);
+    const ask = num(raw["askPrice"]);
+    if (!symbol || !(bid > 0) || !(ask > 0) || ask < bid) continue;
+    out.set(symbol, (ask - bid) / ((ask + bid) / 2));
+  }
+  return out;
+}
+
+/**
  * Índice de pares del entorno activo desde /api/v3/exchangeInfo: solo status
  * TRADING, con base/quote reales (no se infieren del nombre del símbolo).
  */
@@ -156,6 +186,7 @@ export function leerSimbolosEntorno(body: unknown): Map<string, InfoSimbolo> {
 export function normalizarMercado(
   tickers: TickerCrudo[],
   simbolos: Map<string, InfoSimbolo>,
+  spreads: Map<string, number> = new Map(),
 ): ParMercado[] {
   const out: ParMercado[] = [];
   for (const t of tickers) {
@@ -173,6 +204,7 @@ export function normalizarMercado(
       high: t.high,
       low: t.low,
       volatility: calcularVolatilidad(t.high, t.low, t.price),
+      spread: spreads.get(t.symbol) ?? null,
     });
   }
   return out;
@@ -199,9 +231,13 @@ export async function obtenerSnapshotMercados(): Promise<MercadosSnapshot> {
   const host = BINANCE_HOSTS[env];
   const fetchedAt = new Date().toISOString();
   try {
-    const [tickersRes, infoRes] = await Promise.all([
+    const [tickersRes, infoRes, bookRes] = await Promise.all([
       fetch(`${host}/api/v3/ticker/24hr`, { signal: AbortSignal.timeout(15_000) }),
       fetch(`${host}/api/v3/exchangeInfo`, { signal: AbortSignal.timeout(15_000) }),
+      // El spread: si esta llamada falla, se sigue (el spread queda a null).
+      fetch(`${host}/api/v3/ticker/bookTicker`, { signal: AbortSignal.timeout(15_000) }).catch(
+        () => null,
+      ),
     ]);
     for (const res of [tickersRes, infoRes]) {
       if (res.ok) continue;
@@ -211,7 +247,8 @@ export async function obtenerSnapshotMercados(): Promise<MercadosSnapshot> {
     }
     const tickers = leerTickers(await tickersRes.json());
     const simbolos = leerSimbolosEntorno(await infoRes.json());
-    const rows = normalizarMercado(tickers, simbolos);
+    const spreads = bookRes?.ok ? leerSpreads(await bookRes.json()) : new Map<string, number>();
+    const rows = normalizarMercado(tickers, simbolos, spreads);
     const snapshot: MercadosSnapshot = {
       env,
       fetchedAt,

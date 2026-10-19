@@ -84,6 +84,25 @@ export async function leerMinVolumen(
   }
 }
 
+/**
+ * Spread maximo admitido (engine_config.auto_symbol_max_spread_pct).
+ * null = sin limite (no se filtra por spread).
+ */
+export async function leerMaxSpread(db: DbMin, userId?: string | null): Promise<number | null> {
+  try {
+    const consulta = db.from("engine_config").select("auto_symbol_max_spread_pct");
+    const res = (await (userId ? consulta.eq("user_id", userId) : consulta)) as {
+      data?: { auto_symbol_max_spread_pct?: unknown }[] | null;
+      error?: { message: string } | null;
+    };
+    if (res.error) return null;
+    const v = Number((res.data ?? [])[0]?.auto_symbol_max_spread_pct);
+    return Number.isFinite(v) && v > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 type DbFull = {
   from: (t: string) => {
     select: (
@@ -218,7 +237,11 @@ async function elegirYAplicar(
     ocupados = new Set<string>();
   }
 
-  const candidatos = filtrarCandidatos(snapshot.rows, { minVolumen, paresOcupados: ocupados });
+  const candidatos = filtrarCandidatos(snapshot.rows, {
+    minVolumen,
+    paresOcupados: ocupados,
+    maxSpread: await leerMaxSpread(db, duenoId),
+  });
   const capital = Number(bot.capital) || 0;
   const aptos: Candidato[] = [];
   for (const c of candidatos.slice(0, TOP_REGLAS)) {
@@ -237,7 +260,13 @@ async function elegirYAplicar(
   let actual: Candidato | null = null;
   if (filaActual && esParElegible(filaActual.symbol, filaActual.base, filaActual.quote)) {
     const { score, componentes } = puntuarPar(filaActual, maxVol);
-    actual = { symbol: filaActual.symbol, price: filaActual.price, score, componentes };
+    actual = {
+      symbol: filaActual.symbol,
+      price: filaActual.price,
+      score,
+      componentes,
+      spread: filaActual.spread ?? null,
+    };
   }
 
   const ts = fila.auto_symbol_updated_at ? Date.parse(fila.auto_symbol_updated_at) : NaN;

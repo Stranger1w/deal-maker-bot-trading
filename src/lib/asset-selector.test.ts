@@ -25,6 +25,7 @@ function fila(
     high: 105,
     low: 95,
     volatility: 0.1,
+    spread: 0.001,
     ...extra,
   };
 }
@@ -86,6 +87,29 @@ describe("filtrarCandidatos", () => {
     const out = filtrarCandidatos(rows, { minVolumen: 0, paresOcupados: new Set(["BTCUSDT"]) });
     expect(out.map((c) => c.symbol)).toEqual(["ETHUSDT"]);
   });
+
+  test("excluye pares con spread demasiado alto (el spread se come la ganancia)", () => {
+    const rows = [
+      fila("BTCUSDT", "BTC", 1_000_000, { spread: 0.0002 }),
+      fila("ETHUSDT", "ETH", 900_000, { spread: 0.02 }),
+    ];
+    const out = filtrarCandidatos(rows, {
+      minVolumen: 0,
+      paresOcupados: new Set(),
+      maxSpread: 0.005,
+    });
+    expect(out.map((c) => c.symbol)).toEqual(["BTCUSDT"]);
+  });
+
+  test("si no se pudo leer el spread, el par NO se descarta", () => {
+    const rows = [fila("BTCUSDT", "BTC", 1_000_000, { spread: null })];
+    const out = filtrarCandidatos(rows, {
+      minVolumen: 0,
+      paresOcupados: new Set(),
+      maxSpread: 0.005,
+    });
+    expect(out.map((c) => c.symbol)).toEqual(["BTCUSDT"]);
+  });
 });
 
 describe("decidirConHisteresis", () => {
@@ -94,6 +118,7 @@ describe("decidirConHisteresis", () => {
     price: 100,
     score,
     componentes: { volumen: 0.5, volatilidad: 0.5, momentum: 0.5 },
+    spread: 0.001,
   });
 
   test("sin candidatos: conserva el par", () => {

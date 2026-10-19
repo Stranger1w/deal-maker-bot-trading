@@ -47,6 +47,8 @@ export type Candidato = {
   price: number;
   score: number;
   componentes: ComponentesScore;
+  /** Spread del par (null si no se pudo leer el libro de ordenes). */
+  spread: number | null;
 };
 
 export type MotivoSeleccion =
@@ -133,22 +135,29 @@ export function esParElegible(symbol: string, base: string, quote: string): bool
 
 /**
  * Candidatos ordenados por score: volumen mínimo, precio usable, elegible,
- * no asignado a otro bot. La intersección con el entorno activo ya viene
- * hecha en rows (listarMercados).
+ * spread máximo, no asignado a otro bot. La intersección con el entorno
+ * activo ya viene hecha en rows (listarMercados).
+ *
+ * El spread importa tanto como el volumen: en un par con un spread del 1 %,
+ * la ganancia de un take-profit del 0,5 % se la come el spread antes de
+ * empezar. Si no se pudo leer el libro de ordenes (spread null), el par NO
+ * se descarta: no se bloquea el selector por falta de un dato.
  */
 export function filtrarCandidatos(
   rows: ParMercado[],
-  opts: { minVolumen: number; paresOcupados: Set<string> },
+  opts: { minVolumen: number; paresOcupados: Set<string>; maxSpread?: number | null },
 ): Candidato[] {
   const maxVol = rows.reduce((m, r) => Math.max(m, r.quoteVolume), 0);
+  const maxSpread = opts.maxSpread ?? null;
   const out: Candidato[] = [];
   for (const r of rows) {
     if (!(r.price > 0)) continue;
     if (r.quoteVolume < opts.minVolumen) continue;
     if (!esParElegible(r.symbol, r.base, r.quote)) continue;
     if (opts.paresOcupados.has(r.symbol.toUpperCase())) continue;
+    if (maxSpread !== null && r.spread !== null && r.spread > maxSpread) continue;
     const { score, componentes } = puntuarPar(r, maxVol);
-    out.push({ symbol: r.symbol, price: r.price, score, componentes });
+    out.push({ symbol: r.symbol, price: r.price, score, componentes, spread: r.spread ?? null });
   }
   out.sort((a, b) => b.score - a.score);
   return out;
