@@ -161,7 +161,7 @@ if (r.avisos.length) {
 }
 
 if (folds >= 2) {
-  const wf = walkForward(velas, config, { folds, simbolo });
+  const wf = walkForward(velas, config, { folds, simbolo: simboloFinal });
   console.log(`\n--- WALK-FORWARD (${folds} bloques fuera de muestra) ---`);
   for (const f of wf.folds) {
     console.log(
@@ -172,6 +172,55 @@ if (folds >= 2) {
     `  resumen: ${wf.resumen.bloquesPositivos}/${wf.folds.length} bloques positivos, ${wf.resumen.operaciones} operaciones, retorno medio ${wf.resumen.retornoMedioPct.toFixed(2)} %, drawdown maximo ${wf.resumen.maxDrawdownPct.toFixed(2)} %`,
   );
   console.log(`  aviso: ${wf.aviso}`);
+}
+
+// Referencia ALEATORIA: la estrategia tiene que ganarle a entrar al azar
+// con los mismos costes, o solo ha tenido suerte.
+const ejecucionesAleatorias = num("aleatorio", 0);
+if (ejecucionesAleatorias > 0) {
+  const { backtestAleatorio, compararConAleatoria } = await import("../src/lib/backtest/aleatorio");
+  const aleatorios: number[] = [];
+  for (let s = 1; s <= ejecucionesAleatorias; s++) {
+    aleatorios.push(backtestAleatorio(velas, config, s, { operacionesObjetivo: m.operaciones }));
+  }
+  const ref = compararConAleatoria(m.retornoNetoPct, aleatorios);
+  console.log(`\n--- REFERENCIA ALEATORIA (${ref.ejecuciones} ejecuciones) ---`);
+  console.log(
+    `  la estrategia: ${ref.nuestraPct.toFixed(2)} % | aleatorias: mejor ${ref.mejorPct.toFixed(2)} %, mediana ${ref.medianaPct.toFixed(2)} %, peor ${ref.peorPct.toFixed(2)} %`,
+  );
+  console.log(`  percentil: ${ref.percentil} %`);
+  console.log(`  veredicto: ${ref.veredicto}`);
+}
+
+// Sensibilidad de parametros: si al mover un parametro el resultado se
+// hunde, la configuracion esta afinada a un valor concreto.
+const sensibilidadParam = arg("sensibilidad-param");
+const sensibilidadValores = (arg("sensibilidad-valores", "") ?? "")
+  .split(",")
+  .map((v) => Number(v.trim()))
+  .filter((v) => Number.isFinite(v));
+if (sensibilidadParam && sensibilidadValores.length > 1 && indicadores.length > 0) {
+  const { analizarSensibilidad } = await import("../src/lib/backtest/sensibilidad");
+  const [indicador, ...resto] = sensibilidadParam.split(".");
+  const parametro = resto.join(".") || "periodo";
+  const s = analizarSensibilidad({
+    velas,
+    config,
+    indicador,
+    parametro,
+    valores: sensibilidadValores,
+    simbolo: simboloFinal,
+  });
+  console.log(`\n--- SENSIBILIDAD (${indicador}.${parametro}) ---`);
+  console.log(
+    `  referencia: ${s.referencia.retornoPct.toFixed(2)} % (${s.referencia.operaciones} ops)`,
+  );
+  for (const v of s.variantes) {
+    console.log(
+      `  ${String(v.valor).padStart(6)}: ${v.retornoPct.toFixed(2)} % (${v.operaciones} ops, deviation ${v.desviacionPct.toFixed(2)} puntos)`,
+    );
+  }
+  console.log(`  veredicto: ${s.veredicto}`);
 }
 
 console.log("");

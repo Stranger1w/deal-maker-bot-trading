@@ -13,6 +13,7 @@
  */
 
 import type { StrategyDef } from "../strategies/types";
+import type { PriceSeries, SignalDirection } from "../indicators/types";
 
 /** Vela OHLCV ya cerrada. */
 export type Vela = {
@@ -66,6 +67,13 @@ export type ConfigBacktest = {
   reglas?: ReglasSimbolo;
   /** Ids de indicadores (los de src/lib/indicators). */
   indicadores: string[];
+  /**
+   * Señal personalizada (en vez de la de los indicadores). Sirve para la
+   * referencia ALEATORIA: el MISMO motor (mismas reglas de salida, mismo
+   * tamaño, mismos costes) pero con una entrada al azar. Si la estrategia
+   * real no gana a esa referencia, no hay ventaja: solo hay suerte.
+   */
+  senal?: (serie: PriceSeries) => SignalDirection;
   /** Parametros por indicador. */
   parametros?: Record<string, Record<string, number>>;
   /** Parametros de la estrategia (formato plano, como los de src/lib/strategies). */

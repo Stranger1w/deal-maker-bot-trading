@@ -48,6 +48,26 @@ bun run backtest -- --archivo datos/ethusdt-1h.json --indicadores rsi
 Sin internet se usan las reglas por defecto del símbolo (stepSize 0.00001,
 minNotional 5 USDT) y el aviso lo dice.
 
+## Referencia aleatoria (lo que separa la suerte de la estrategia)
+
+"Supera al mercado" no basta: un bot puede ganar por azar un mes. La
+referencia dura es **la misma estrategia con la señal al azar** (mismo motor,
+mismas reglas de salida, mismo tamaño, mismos costes). Si la estrategia real
+no gana a esa referencia, no tiene ventaja.
+
+```powershell
+bun run backtest -- --archivo datos/btcusdt-1h.json --indicadores close_price --capital 1000 --stop 2 --take 4 --aleatorio 30
+```
+
+## Sensibilidad de parámetros
+
+Si al mover **un poco** un parámetro el resultado se hunde, la configuración
+está afinada a un valor concreto, no a una idea.
+
+```powershell
+bun run backtest -- --archivo datos/btcusdt-1h.json --indicadores close_price --sensibilidad-param close_price.periodo --sensibilidad-valores 2,3,4,5
+```
+
 ## Qué mirar (y qué NO mirar)
 
 | Métrica | Qué significa |
@@ -78,11 +98,16 @@ El informe incluye además los **avisos**: lo que el resultado NO demuestra.
 BTCUSDT, velas de 1 hora, 3000 velas, `close_price`, 0,1 % de comisión y
 0,05 % de slippage por lado:
 
-- **−1,42 %** de retorno neto · 272 operaciones · win rate 18,75 % ·
+- **−1,42 %** de retorno neto · 273 operaciones · win rate 18,68 % ·
   profit factor 0,45 · drawdown máximo 1,47 %
-- Comprar y mantener en el mismo periodo: **+24,07 %**
+- Comprar y mantener en el mismo periodo: **+24,85 %**
 - Walk-forward de 4 bloques: **0 de 4 bloques positivos**
+- **Referencia aleatoria (30 ejecuciones):** la estrategia real solo gana al
+  **3 %** de las aleatorias (mediana aleatoria −0,97 %). Es decir: **no se
+  puede distinguir del azar**.
+- Sensibilidad de `close_price.periodo`: el resultado se mueve entre −4,35 %
+  (periodo 2) y −0,10 % (periodo 5): frágil, está afinada a un valor.
 
 Es decir: **la estrategia por defecto no tiene ventaja demostrada**. No la
-subas a Real hasta que alguna configuración supere al benchmark en varios
-bloques fuera de muestra.
+subas a Real hasta que alguna configuración supere al benchmark **y** a la
+referencia aleatoria en varios bloques fuera de muestra.

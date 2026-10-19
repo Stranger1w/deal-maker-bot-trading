@@ -107,7 +107,9 @@ export function ejecutarBacktest(
     if (i > 0) {
       const previa = serieDesde(velas, i - 1);
       if (previa.closes.length >= minSamples) {
-        senal = senalDe(config.indicadores, previa, config.parametros ?? {});
+        senal = config.senal
+          ? config.senal(previa)
+          : senalDe(config.indicadores, previa, config.parametros ?? {});
       }
     }
     void serie;
