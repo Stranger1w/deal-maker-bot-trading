@@ -111,11 +111,11 @@ export const saveSquadRisk = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const db = await admin();
-    const { data: settings } = await db
-      .from("automation_settings")
-      .select("id")
-      .limit(1)
-      .maybeSingle();
+    // Los limites globales son los de la FILA DEL ADMINISTRADOR: con
+    // .limit(1) se escribian en la fila de otro usuario.
+    const { leerAjustesPlataforma } = await import("./propietario.server");
+    const plataforma = await leerAjustesPlataforma(db);
+    const settings = plataforma?.fila ?? null;
     if (!settings) throw new Error("No hay configuración del motor");
     const { error } = await db
       .from("automation_settings")
@@ -130,7 +130,7 @@ export const saveSquadRisk = createServerFn({ method: "POST" })
         require_benchmark_outperformance: data.requireBenchmarkOutperformance,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", settings.id);
+      .eq("id", settings.id as string);
     if (error) throw new Error(error.message);
     await audit(
       "risk.squad_limits_updated",
@@ -159,11 +159,9 @@ export const saveCapitalPolicy = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const db = await admin();
-    const { data: settings } = await db
-      .from("automation_settings")
-      .select("id")
-      .limit(1)
-      .maybeSingle();
+    const { leerAjustesPlataforma } = await import("./propietario.server");
+    const plataforma = await leerAjustesPlataforma(db);
+    const settings = plataforma?.fila ?? null;
     if (!settings) throw new Error("No hay configuración del motor");
     const { error } = await db
       .from("automation_settings")
@@ -174,7 +172,7 @@ export const saveCapitalPolicy = createServerFn({ method: "POST" })
         notify_email_enabled: data.notifyEmailEnabled && !!data.notifyEmail,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", settings.id);
+      .eq("id", settings.id as string);
     if (error) throw new Error(error.message);
     await audit(
       "capital.policy_updated",
@@ -204,11 +202,10 @@ export const triggerKillSwitch = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const db = await admin();
     const { raiseAlert } = await import("./alerts.server");
-    const { data: settings } = await db
-      .from("automation_settings")
-      .select("id")
-      .limit(1)
-      .maybeSingle();
+    // El kill switch global vive en la fila del administrador.
+    const { leerAjustesPlataforma } = await import("./propietario.server");
+    const plataforma = await leerAjustesPlataforma(db);
+    const settings = plataforma?.fila ?? null;
     if (!settings) throw new Error("No hay configuración del motor");
     const now = new Date().toISOString();
 
@@ -223,7 +220,7 @@ export const triggerKillSwitch = createServerFn({ method: "POST" })
         kill_switch_at: now,
         updated_at: now,
       })
-      .eq("id", settings.id);
+      .eq("id", settings.id as string);
     if (error) throw new Error(error.message);
 
     let botsStopped = 0;
@@ -257,6 +254,7 @@ export const triggerKillSwitch = createServerFn({ method: "POST" })
         title: "Kill switch global activado",
         message: `${data.actor}: ${data.reason}. ${botsStopped} bots detenidos y ${workersStopped} workers apagados.`,
         entity: "automation",
+        userId: context.userId,
       });
     } else {
       await raiseAlert(db, {
@@ -265,6 +263,7 @@ export const triggerKillSwitch = createServerFn({ method: "POST" })
         title: "Kill switch desactivado",
         message: `${data.actor}: ${data.reason}. Los bots y workers siguen detenidos hasta reactivarlos manualmente.`,
         entity: "automation",
+        userId: context.userId,
       });
     }
 
@@ -336,6 +335,13 @@ export const promoteBotToReal = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
 
     const { raiseAlert } = await import("./alerts.server");
+    // La alerta va a nombre del dueño del bot (puede no ser quien promovió).
+    const { duenoDe } = await import("./tick-scope");
+    const { data: filaBot } = await db
+      .from("bots")
+      .select("user_id")
+      .eq("id", data.botId)
+      .maybeSingle();
     await raiseAlert(db, {
       category: "security",
       severity: "warning",
@@ -343,6 +349,7 @@ export const promoteBotToReal = createServerFn({ method: "POST" })
       message: `El bot pasó a operar con fondos reales tras validar criterios demo y 2FA. Queda en pausa para revisión.`,
       entity: "bot",
       entityId: data.botId,
+      userId: duenoDe(filaBot) ?? context.userId,
     });
     await audit(
       "security.bot_mode_real",
@@ -371,11 +378,10 @@ export const createSecureWithdrawal = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     assertTwoFactor(context.claims as unknown as Record<string, unknown>);
     const db = await admin();
-    const { data: account } = await db
-      .from("fund_accounts")
-      .select("id,available_balance")
-      .limit(1)
-      .maybeSingle();
+    // La cuenta es la del usuario que pide el retiro: con .limit(1) se
+    // descontaba el saldo de la cuenta de otro usuario.
+    const { leerCuentaDeUsuario } = await import("./propietario.server");
+    const account = await leerCuentaDeUsuario(db, context.userId);
     if (!account) throw new Error("No hay cuenta de fondos configurada");
     if (Number(account.available_balance) < data.amount)
       throw new Error("Saldo disponible insuficiente para este retiro");
@@ -405,6 +411,7 @@ export const createSecureWithdrawal = createServerFn({ method: "POST" })
       title: "Retiro solicitado",
       message: `Retiro de ${data.amount} por ${data.method}, autorizado con 2FA verificada.`,
       entity: "fund_transaction",
+      userId: context.userId,
     });
     await audit(
       "funds.withdrawal_requested",

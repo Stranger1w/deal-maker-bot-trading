@@ -21,8 +21,25 @@ export async function evaluatePromotionCore(botId: string): Promise<PromotionChe
 
   const { data: bot } = await db.from("bots").select("*").eq("id", botId).maybeSingle();
   if (!bot) throw new Error("Bot no encontrado");
-  const { data: settings } = await db.from("automation_settings").select("*").limit(1).maybeSingle();
-  const { data: creds } = await db.from("binance_credentials").select("connection_status");
+
+  // Los criterios y las credenciales son del DUEÑO del bot: con .limit(1) se
+  // usaban los limites de otro usuario y se daba por verificadas las claves
+  // de otro (un bot podia promoverse a Real con las claves ajenas).
+  const { duenoDe } = await import("./tick-scope");
+  const { leerAjustesDeUsuario, leerAjustesPlataforma } = await import("./propietario.server");
+  const duenoId = duenoDe(bot);
+  let settings = null;
+  if (duenoId) {
+    settings = await leerAjustesDeUsuario(db, duenoId);
+  } else {
+    settings = (await leerAjustesPlataforma(db))?.fila ?? null;
+  }
+  const { data: creds } = duenoId
+    ? await db
+        .from("binance_credentials")
+        .select("connection_status")
+        .eq("user_id" as never, duenoId as never)
+    : { data: [] as { connection_status: string }[] };
 
   const minDemoDays = Number(settings?.min_demo_days ?? 14);
   const minDemoTrades = Number(settings?.min_demo_trades ?? 50);
@@ -54,7 +71,8 @@ export async function evaluatePromotionCore(botId: string): Promise<PromotionChe
   const reasons: string[] = [];
   if (!hasStopLoss) reasons.push("Falta stop-loss obligatorio.");
   if (!hasTakeProfit) reasons.push("Falta take-profit obligatorio.");
-  if (demoDays < minDemoDays) reasons.push(`Solo ${demoDays} de ${minDemoDays} días mínimos en demo.`);
+  if (demoDays < minDemoDays)
+    reasons.push(`Solo ${demoDays} de ${minDemoDays} días mínimos en demo.`);
   if (demoTrades < minDemoTrades)
     reasons.push(`Solo ${demoTrades} de ${minDemoTrades} operaciones demo mínimas.`);
   if (benchmarkRequired && botReturnPct <= benchmarkReturnPct)

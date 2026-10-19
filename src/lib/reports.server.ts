@@ -16,28 +16,46 @@ export async function buildReports(period: "daily" | "weekly") {
   const end = new Date();
   const start = new Date(end.getTime() - (period === "daily" ? 1 : 7) * 86_400_000);
 
-  const { data: settings } = await client
-    .from("automation_settings")
-    .select("notify_email, notify_email_enabled")
-    .limit(1)
-    .maybeSingle();
+  // El reporte es de un usuario (performance_reports.user_id es NOT NULL):
+  // el del administrador de la plataforma. Los agregados se calculan con SUS
+  // bots y SUS ejecuciones: antes se sumaban los de todos los usuarios.
+  const { leerAjustesPlataforma, leerCuentaDeUsuario } = await import("./propietario.server");
+  const plataforma = await leerAjustesPlataforma(client);
+  const duenoId = plataforma?.adminId ?? null;
+  const settings = plataforma?.fila ?? null;
+  if (!duenoId) throw new Error("No hay dueño de plataforma para el reporte");
+
   const emailStatus =
     settings?.notify_email_enabled && settings.notify_email
       ? "pendiente_dominio_verificado"
       : "no_configurado";
 
-  const { data: bots } = await client.from("bots").select("name,pnl,capital,win_rate,mode,status");
+  const { data: bots } = await client
+    .from("bots")
+    .select("name,pnl,capital,win_rate,mode,status")
+    .eq("user_id" as never, duenoId as never);
   const { data: executions } = await client
     .from("bot_executions")
     .select("pnl,created_at")
-    .gte("created_at", start.toISOString());
+    .gte("created_at", start.toISOString())
+    .in(
+      "bot_id",
+      (
+        await client
+          .from("bots")
+          .select("id")
+          .eq("user_id" as never, duenoId as never)
+      ).data?.map((b) => (b as { id: string }).id) ?? ["__sin_bots__"],
+    );
   const { data: workers } = await client
     .from("mining_workers")
-    .select("hash_rate,estimated_daily_earnings,status");
+    .select("hash_rate,estimated_daily_earnings,status")
+    .eq("user_id" as never, duenoId as never);
   const { data: payouts } = await client
     .from("mining_payouts")
     .select("usd_value,paid_at")
-    .gte("paid_at", start.toISOString());
+    .gte("paid_at", start.toISOString())
+    .eq("user_id" as never, duenoId as never);
 
   const squadPnl = (executions ?? []).reduce((s, e) => s + Number(e.pnl), 0);
   const squadCapital = (bots ?? []).reduce((s, b) => s + Number(b.capital), 0);
@@ -48,10 +66,7 @@ export async function buildReports(period: "daily" | "weekly") {
   const activeWorkers = (workers ?? []).filter((w) => w.status === "mining");
   const hashTotal = activeWorkers.reduce((s, w) => s + Number(w.hash_rate), 0);
   const payoutTotal = (payouts ?? []).reduce((s, p) => s + Number(p.usd_value), 0);
-  const dailyEarnings = (workers ?? []).reduce(
-    (s, w) => s + Number(w.estimated_daily_earnings),
-    0,
-  );
+  const dailyEarnings = (workers ?? []).reduce((s, w) => s + Number(w.estimated_daily_earnings), 0);
 
   const rows = [
     {
@@ -85,7 +100,9 @@ export async function buildReports(period: "daily" | "weekly") {
     },
   ];
 
-  const { error } = await client.from("performance_reports").insert(rows);
+  const { error } = await client
+    .from("performance_reports")
+    .insert(rows.map((fila) => ({ ...fila, user_id: duenoId })) as never);
   if (error) throw new Error(error.message);
 
   await raiseAlert(client, {
@@ -94,6 +111,7 @@ export async function buildReports(period: "daily" | "weekly") {
     title: `Reporte ${period === "daily" ? "diario" : "semanal"} generado`,
     message: rows.map((r) => r.summary).join(" "),
     entity: "performance_report",
+    userId: duenoId,
   });
 
   return { ok: true, reports: rows.length, emailStatus };
@@ -102,11 +120,12 @@ export async function buildReports(period: "daily" | "weekly") {
 /** Reserva o reinvierte la ganancia semanal según la política configurada. */
 export async function profitSweep() {
   const client = await db();
-  const { data: settings } = await client
-    .from("automation_settings")
-    .select("id, profit_policy, profit_reserve_pct, last_profit_sweep_on")
-    .limit(1)
-    .maybeSingle();
+  // El barrido se hace sobre la configuracion y la cuenta del administrador
+  // (no sobre una fila arbitraria de .limit(1)).
+  const { leerAjustesPlataforma, leerCuentaDeUsuario } = await import("./propietario.server");
+  const plataforma = await leerAjustesPlataforma(client);
+  const settings = plataforma?.fila ?? null;
+  const duenoId = plataforma?.adminId ?? null;
   if (!settings) throw new Error("No hay configuración del motor");
 
   const today = day(new Date());
@@ -115,26 +134,30 @@ export async function profitSweep() {
   }
 
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const { data: botsDueno } = duenoId
+    ? await client
+        .from("bots")
+        .select("id")
+        .eq("user_id" as never, duenoId as never)
+    : { data: [] as unknown[] };
+  const idsDueno = (botsDueno ?? []).map((b) => (b as { id: string }).id);
   const { data: executions } = await client
     .from("bot_executions")
     .select("pnl")
-    .gte("created_at", weekAgo);
+    .gte("created_at", weekAgo)
+    .in("bot_id", idsDueno.length ? idsDueno : ["__sin_bots__"]);
   const weeklyProfit = (executions ?? []).reduce((s, e) => s + Number(e.pnl), 0);
 
   let moved = 0;
   if (settings.profit_policy === "reserve" && weeklyProfit > 0) {
     moved = Number(((weeklyProfit * Number(settings.profit_reserve_pct)) / 100).toFixed(2));
-    const { data: account } = await client
-      .from("fund_accounts")
-      .select("id,available_balance,in_use_balance")
-      .limit(1)
-      .maybeSingle();
+    const account = duenoId ? await leerCuentaDeUsuario(client, duenoId) : null;
     if (account && moved > 0) {
-      const inUse = Math.max(0, Number(account.in_use_balance) - moved);
+      const inUse = Math.max(0, account.in_use_balance - moved);
       await client
         .from("fund_accounts")
         .update({
-          available_balance: Number(account.available_balance) + moved,
+          available_balance: account.available_balance + moved,
           in_use_balance: inUse,
           updated_at: new Date().toISOString(),
         })
@@ -153,7 +176,7 @@ export async function profitSweep() {
   await client
     .from("automation_settings")
     .update({ last_profit_sweep_on: today, updated_at: new Date().toISOString() })
-    .eq("id", settings.id);
+    .eq("id", settings.id as string);
 
   await client.from("audit_events").insert({
     action: "capital.profit_sweep",
@@ -165,7 +188,8 @@ export async function profitSweep() {
       moved,
     } as never,
     actor: "cron",
-  });
+    user_id: duenoId,
+  } as never);
 
   await raiseAlert(client, {
     category: "funds",
@@ -176,6 +200,7 @@ export async function profitSweep() {
         ? `Se reservaron ${moved} USDT como saldo disponible (${settings.profit_reserve_pct}% de la ganancia semanal). No se realizan retiros externos automáticos.`
         : "Política de reinversión activa: las ganancias permanecen asignadas a los bots.",
     entity: "fund_account",
+    userId: duenoId ?? "",
   });
 
   return { ok: true, moved, policy: settings.profit_policy };

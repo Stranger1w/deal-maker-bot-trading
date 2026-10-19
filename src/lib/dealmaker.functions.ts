@@ -4,8 +4,6 @@ import { z } from "zod";
 import { requireAdmin } from "@/integrations/supabase/admin-middleware";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const ACCOUNT_ID = "11111111-1111-1111-1111-111111111111";
-
 async function admin() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   return supabaseAdmin;
@@ -45,8 +43,14 @@ export const createDeposit = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const db = await admin();
     const reference = data.reference?.trim() || `DP-${Date.now().toString().slice(-6)}`;
+    // El deposito va a la cuenta del usuario que lo hace (no a una cuenta
+    // global compartida: con .limit(1) o con el id fijo, el saldo de un
+    // usuario movia el del otro).
+    const { leerCuentaDeUsuario } = await import("./propietario.server");
+    const account = await leerCuentaDeUsuario(db, context.userId);
+    if (!account) throw new Error("No hay cuenta de fondos configurada");
     const { error } = await db.from("fund_transactions").insert({
-      account_id: ACCOUNT_ID,
+      account_id: account.id,
       kind: "deposit",
       method: data.method,
       amount: data.amount,
@@ -158,6 +162,7 @@ export const testBinanceConnection = createServerFn({ method: "POST" })
         title: "Binance bloqueado por región del servidor",
         message: test.message,
         entity: "binance",
+        userId: context.userId,
       });
     }
     return test;
@@ -194,7 +199,14 @@ export const saveBinanceCredentials = createServerFn({ method: "POST" })
       updated_at: new Date().toISOString(),
     };
 
-    const { data: existing } = await db.from("binance_credentials").select("id").limit(1);
+    // Las credenciales son de quien las guarda (una fila por usuario). Con
+    // .limit(1) se actualizaba la fila de OTRO usuario: sus claves se
+    // pisaban con las del admin y ese usuario acababa operando con ellas.
+    const { data: existing } = await db
+      .from("binance_credentials")
+      .select("id")
+      .eq("user_id" as never, context.userId as never)
+      .limit(1);
     if (existing && existing.length > 0 && existing[0]) {
       const { error } = await db
         .from("binance_credentials")
@@ -639,16 +651,23 @@ export const updateAutomationSettings = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const db = await admin();
-    const { data: settings } = await db
-      .from("automation_settings")
-      .select("*")
-      .limit(1)
-      .maybeSingle();
+    // La configuracion que se cambia es la de la plataforma (fila del
+    // administrador): con .limit(1) se tocaba la de otro usuario.
+    const { leerAjustesPlataforma } = await import("./propietario.server");
+    const plataforma = await leerAjustesPlataforma(db);
+    const settings = plataforma?.fila ?? null;
     if (!settings) throw new Error("No hay configuración del motor");
 
     if (data.allowRealTrading === true) {
-      const { data: creds } = await db.from("binance_credentials").select("connection_status");
-      if (!(creds ?? []).some((c) => c.connection_status === "ok")) {
+      // Las credenciales verificadas son las del administrador de la
+      // plataforma: si las tiene OTRO usuario, no habilita trading real.
+      const creds = plataforma?.adminId
+        ? await db
+            .from("binance_credentials")
+            .select("connection_status")
+            .eq("user_id" as never, plataforma.adminId as never)
+        : { data: [] as { connection_status: string }[] };
+      if (!(creds.data ?? []).some((c) => c.connection_status === "ok")) {
         throw new Error(
           "Configura y verifica tus API Keys de Binance antes de autorizar trading real",
         );
@@ -669,7 +688,7 @@ export const updateAutomationSettings = createServerFn({ method: "POST" })
     const { error } = await db
       .from("automation_settings")
       .update(patch as never)
-      .eq("id", settings.id);
+      .eq("id", settings.id as string);
     if (error) throw new Error(error.message);
 
     if (data.killSwitch === true) {

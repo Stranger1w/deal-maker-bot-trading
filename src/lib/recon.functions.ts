@@ -5,6 +5,8 @@ import { z } from "zod";
 
 import { requireAdmin } from "@/integrations/supabase/admin-middleware";
 
+import { duenoDe } from "./tick-scope";
+
 async function admin() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   return supabaseAdmin;
@@ -118,6 +120,8 @@ export const runReconScan = createServerFn({ method: "POST" })
     let findings = 0;
 
     for (const bot of list) {
+      // El dueño del bot de reconocimiento es el dueño de sus alertas.
+      const duenoId = duenoDe(bot) ?? context.userId;
       try {
         const snapshot = await buildMarketSnapshot(db, {
           symbols: bot.symbols as string[],
@@ -187,6 +191,7 @@ export const runReconScan = createServerFn({ method: "POST" })
               message: String(f["detail"]),
               entity: "recon_bot",
               entityId: bot.id,
+              userId: duenoId,
             });
           }
         }
@@ -212,6 +217,7 @@ export const runReconScan = createServerFn({ method: "POST" })
           message,
           entity: "recon_bot",
           entityId: bot.id,
+          userId: duenoId,
         });
       }
     }

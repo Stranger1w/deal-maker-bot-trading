@@ -3,9 +3,12 @@
 // ni escribe flags de trading real ni usa binance_trading_env.
 //
 // Tabla public.engine_sessions (migracion 20261005000000_engine_sessions.sql):
-//  - Solo existe UNA sesion a la vez en estado 'active' o 'closing': el indice
-//    unico parcial engine_sessions_one_active sobre ((true)) WHERE status IN
-//    ('active','closing') lo garantiza en la base.
+//  - Solo existe UNA sesion a la vez en estado 'active' o 'closing' POR
+//    USUARIO: el indice unico parcial engine_sessions_one_active lo garantiza
+//    en la base. Antes era sobre ((true)) (una sesion para TODA la
+//    plataforma); desde el 14-oct es UNIQUE (user_id) WHERE status IN
+//    ('active','closing') (migracion 20261014100000_engine_sessions_por_usuario).
+//  - user_id es NOT NULL: toda sesion tiene dueño.
 //  - 'closed' exige close_reason y session_stopped_at (constraint closed_has_reason).
 //  - 'timer' exige session_ends_at (constraint timer_needs_end).
 //
@@ -45,6 +48,8 @@ export type PosicionSinGestion = {
 
 export type EngineSession = {
   id: string;
+  /** Dueno de la sesion (engine_sessions.user_id es NOT NULL). */
+  user_id?: string | null;
   mode: SessionMode;
   status: SessionStatus;
   session_started_at: string;
@@ -85,25 +90,34 @@ export function expiraPorTimer(
   );
 }
 
-/** Devuelve la sesion activa o en cierre (la unica posible por el indice unico). */
-export async function obtenerSesionActiva(db: Db): Promise<EngineSession | null> {
-  const { data, error } = await db
-    .from("engine_sessions")
-    .select("*")
-    .in("status", ["active", "closing"])
-    .limit(1)
-    .maybeSingle();
+/**
+ * Devuelve la sesion activa o en cierre DE UN USUARIO (la unica posible por
+ * el indice unico parcial, que desde el 14-oct es POR USUARIO).
+ *
+ * Sin userId se comporta como antes (cualquier sesion viva): solo para
+ * lecturas historicas de la plataforma, nunca para operar.
+ */
+export async function obtenerSesionActiva(
+  db: Db,
+  userId?: string | null,
+): Promise<EngineSession | null> {
+  let consulta = db.from("engine_sessions").select("*").in("status", ["active", "closing"]);
+  if (userId) consulta = consulta.eq("user_id" as never, userId as never);
+  const { data, error } = await consulta.limit(1).maybeSingle();
   if (error) throw new Error(`No se pudo leer la sesion activa: ${error.message}`);
   return (data as EngineSession | null) ?? null;
 }
 
 /**
- * Abre una sesion. Si el indice unico parcial detecta que ya hay una
- * active/closing (error 23505), devuelve esa sesion existente en vez de fallar.
+ * Abre una sesion PARA UN USUARIO (engine_sessions.user_id es NOT NULL).
+ *
+ * Si ese usuario ya tiene una sesion active/closing, el indice unico
+ * parcial lo rechaza (23505) y se devuelve la suya, que es lo que quiere
+ * quien pulsa "Iniciar": no crear una segunda sesion.
  */
 export async function iniciarSesion(
   db: Db,
-  args: { mode: SessionMode; session_ends_at?: string | null },
+  args: { mode: SessionMode; session_ends_at?: string | null; user_id: string },
 ): Promise<EngineSession> {
   const { data, error } = await db
     .from("engine_sessions")
@@ -111,12 +125,13 @@ export async function iniciarSesion(
       mode: args.mode,
       status: "active",
       session_ends_at: args.mode === "timer" ? (args.session_ends_at ?? null) : null,
-    })
+      user_id: args.user_id,
+    } as never)
     .select("*")
     .single();
   if (!error && data) return data as EngineSession;
   if (error?.code === "23505") {
-    const existente = await obtenerSesionActiva(db);
+    const existente = await obtenerSesionActiva(db, args.user_id);
     if (existente) return existente;
   }
   throw new Error(`No se pudo iniciar la sesion: ${error?.message ?? "error desconocido"}`);
@@ -158,6 +173,7 @@ export async function cerrarSesion(
   db: Db,
   sessionId: string,
   reason: CloseReason,
+  userId?: string | null,
 ): Promise<EngineSession | null> {
   const ahora = new Date().toISOString();
 
@@ -166,7 +182,10 @@ export async function cerrarSesion(
     // kill_switch: este cierre ocurre justo antes de stopAllBots, asi que los
     // bots aun 'running' quedaran sin gestionar en cuanto se detengan; se
     // incluyen TODAS las posiciones abiertas.
-    sinGestion = await posicionesSinGestionar(db, { todas: reason === "kill_switch" });
+    sinGestion = await posicionesSinGestionar(db, {
+      todas: reason === "kill_switch",
+      userId: userId ?? null,
+    });
   } catch {
     sinGestion = [];
   }
@@ -208,7 +227,7 @@ export async function cerrarSesion(
   const sesion = (data as EngineSession | null) ?? null;
   if (!sesion) return null; // ya cerrada u otra transicion: sin efecto.
 
-  const pnl = await calcularPnlPorRango(db, sesion);
+  const pnl = await calcularPnlPorRango(db, sesion, userId ?? null);
   const { data: actualizada, error: errorPnl } = await db
     .from("engine_sessions")
     .update({ pnl_total: pnl })
@@ -223,17 +242,35 @@ export async function cerrarSesion(
  * P&L de la sesion: suma bot_executions.pnl cuyo created_at cae dentro de
  * [session_started_at, session_stopped_at]. PostgREST no expone SUM, asi que se
  * leen los pnl del rango y se suman aqui con resumenPnl (redondeo a 2 decimales).
+ *
+ * Con userId solo se cuentan las ejecuciones de LOS BOTS DE ESE USUARIO: sin
+ * filtro, el P&L de la sesion sumaria el de todos los usuarios de la plataforma.
  */
 export async function calcularPnlPorRango(
   db: Db,
   sesion: Pick<EngineSession, "id" | "session_started_at" | "session_stopped_at">,
+  userId?: string | null,
 ): Promise<number> {
   if (!sesion.session_stopped_at) return 0;
-  const { data, error } = await db
+  let consulta = db
     .from("bot_executions")
     .select("pnl")
     .gte("created_at", sesion.session_started_at)
     .lte("created_at", sesion.session_stopped_at);
+
+  if (userId) {
+    const { data: bots, error: errorBots } = await db
+      .from("bots")
+      .select("id")
+      .eq("user_id" as never, userId as never);
+    if (errorBots)
+      throw new Error(`No se pudo calcular el pnl de la sesion ${sesion.id}: ${errorBots.message}`);
+    const ids = (bots ?? []).map((b) => (b as { id: string }).id);
+    if (ids.length === 0) return 0;
+    consulta = consulta.in("bot_id", ids);
+  }
+
+  const { data, error } = await consulta;
   if (error)
     throw new Error(`No se pudo calcular el pnl de la sesion ${sesion.id}: ${error.message}`);
   return resumenPnl((data ?? []).map((fila) => Number((fila as { pnl: number }).pnl)));
@@ -242,11 +279,16 @@ export async function calcularPnlPorRango(
 /**
  * Historial de sesiones para la pestana Motor: de mas reciente a mas antigua.
  * Solo service_role puede leer la tabla, asi que esto se expone via server fn.
+ * Con userId, solo las sesiones de ese usuario.
  */
-export async function listarSesiones(db: Db, limit = 50): Promise<EngineSession[]> {
-  const { data, error } = await db
-    .from("engine_sessions")
-    .select("*")
+export async function listarSesiones(
+  db: Db,
+  limit = 50,
+  userId?: string | null,
+): Promise<EngineSession[]> {
+  let consulta = db.from("engine_sessions").select("*");
+  if (userId) consulta = consulta.eq("user_id" as never, userId as never);
+  const { data, error } = await consulta
     .order("session_started_at", { ascending: false })
     .limit(limit);
   if (error) throw new Error(`No se pudieron listar las sesiones: ${error.message}`);
@@ -282,12 +324,14 @@ export async function botTienePosicionAbierta(
  * TP/SL, asi que contarlo dejaria la sesion en 'closing' para siempre. El
  * cierre de la sesion exige 0 aqui.
  */
-export async function contarPosicionesAbiertas(db: Db): Promise<number> {
-  const { data: bots, error } = await db
+export async function contarPosicionesAbiertas(db: Db, userId?: string | null): Promise<number> {
+  let consulta = db
     .from("bots")
     .select("id, pair")
     .eq("status", "running")
     .eq("automation_enabled", true);
+  if (userId) consulta = consulta.eq("user_id" as never, userId as never);
+  const { data: bots, error } = await consulta;
   if (error) throw new Error(`No se pudieron leer los bots del cierre: ${error.message}`);
   let abiertas = 0;
   for (const bot of bots ?? []) {
@@ -311,11 +355,13 @@ export async function contarPosicionesAbiertas(db: Db): Promise<number> {
  */
 export async function posicionesSinGestionar(
   db: Db,
-  opts: { todas?: boolean } = {},
+  opts: { todas?: boolean; userId?: string | null } = {},
 ): Promise<PosicionSinGestion[]> {
-  const { data: bots, error } = await db
+  let consulta = db
     .from("bots")
     .select("id, name, pair, status, automation_enabled, auto_stop_reason");
+  if (opts.userId) consulta = consulta.eq("user_id" as never, opts.userId as never);
+  const { data: bots, error } = await consulta;
   if (error) throw new Error(`No se pudieron leer los bots del cierre: ${error.message}`);
   const sinGestion: PosicionSinGestion[] = [];
   for (const bot of bots ?? []) {

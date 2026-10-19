@@ -40,7 +40,13 @@ export type ReevaluarResultado = ResultadoSeleccion & {
   parNuevo: string | null;
 };
 
-type FilaBot = { id: string; pair: string; capital: number; mode?: string };
+type FilaBot = {
+  id: string;
+  pair: string;
+  capital: number;
+  mode?: string;
+  user_id?: string | null;
+};
 type FilaAuto = {
   auto_symbol: boolean;
   auto_symbol_score: number | null;
@@ -50,15 +56,23 @@ type FilaAuto = {
 
 type DbMin = {
   from: (t: string) => {
-    select: (c: string) => PromiseLike<unknown>;
+    select: (
+      c: string,
+    ) => { eq: (c: string, v: unknown) => PromiseLike<unknown> } & PromiseLike<unknown>;
   };
 };
 
 /** Volumen mínimo: engine_config si existe; si no, constante por entorno. */
-export async function leerMinVolumen(db: DbMin, env: "testnet" | "production"): Promise<number> {
+export async function leerMinVolumen(
+  db: DbMin,
+  env: "testnet" | "production",
+  userId?: string | null,
+): Promise<number> {
   const { MIN_VOLUMEN_POR_ENTORNO } = await import("./asset-selector.server");
   try {
-    const res = (await db.from("engine_config").select("auto_symbol_min_volume")) as {
+    const consulta = db.from("engine_config").select("auto_symbol_min_volume");
+    // engine_config es una fila por usuario: sin filtro se leia la de otro.
+    const res = (await (userId ? consulta.eq("user_id", userId) : consulta)) as {
       data?: { auto_symbol_min_volume?: unknown }[] | null;
       error?: { message: string } | null;
     };
@@ -110,7 +124,10 @@ export async function reevaluarBot(
   // Solo el "Aplicar" manual puede saltar el intervalo (nunca el tick).
   const forzarIntervalo = opts.aplicar ? (opts.forzarIntervalo ?? false) : false;
   try {
-    const botsRes = (await db.from("bots").select("id,pair,capital,mode").eq("id", botId)) as {
+    const botsRes = (await db
+      .from("bots")
+      .select("id,pair,capital,mode,user_id")
+      .eq("id", botId)) as {
       data?: FilaBot[] | null;
     };
     const bot = (botsRes.data ?? [])[0] ?? null;
@@ -185,7 +202,9 @@ async function elegirYAplicar(
     return sinCambio("sin_candidatos", "Sin candidatos: el bot conserva su par actual", bot.pair);
   }
 
-  const minVolumen = await leerMinVolumen(db, snapshot.env);
+  // El dueño del bot: su configuracion de motor y sus auditorias son suyas.
+  const duenoId = bot.user_id ?? null;
+  const minVolumen = await leerMinVolumen(db, snapshot.env, duenoId);
   // Pares ocupados por OTRO bot (foto fresca: el tick es secuencial).
   let ocupados = new Set<string>();
   try {
@@ -320,7 +339,10 @@ async function elegirYAplicar(
           componentes: elegido.componentes,
           motivo: decision.motivo,
         },
-      });
+        // La auditoria va a nombre del dueño del bot (audit_events.user_id
+        // es nullable, pero sin dueño no la ve su usuario).
+        user_id: duenoId,
+      } as never);
     } catch {
       // Best-effort.
     }

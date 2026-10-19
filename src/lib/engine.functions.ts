@@ -68,11 +68,12 @@ export const iniciarMotor = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const db = await admin();
-    const { data: settings } = await db
-      .from("automation_settings")
-      .select("id, kill_switch")
-      .limit(1)
-      .maybeSingle();
+    // La configuracion global del motor es la del ADMINISTRADOR (una fila por
+    // usuario). Leer con .limit(1) devolvia una fila arbitraria: con mas de
+    // un usuario, el admin encendia el motor en la fila de otro.
+    const { leerAjustesPlataforma } = await import("./propietario.server");
+    const plataforma = await leerAjustesPlataforma(db);
+    const settings = plataforma?.fila ?? null;
     if (!settings) throw new Error("No hay configuración del motor");
     if (settings.kill_switch)
       throw new Error("El Kill Switch está activo: desactícalo antes de iniciar una sesión.");
@@ -88,7 +89,13 @@ export const iniciarMotor = createServerFn({ method: "POST" })
     const { iniciarSesion } = await import("./engine-sessions.server");
     let sesion: EngineSession;
     try {
-      sesion = await iniciarSesion(db, { mode: data.mode, session_ends_at: sessionEndsAt });
+      // La sesion es del usuario que la abre (engine_sessions.user_id es
+      // NOT NULL): el indice unico parcial es por usuario.
+      sesion = await iniciarSesion(db, {
+        mode: data.mode,
+        session_ends_at: sessionEndsAt,
+        user_id: context.userId,
+      });
     } catch (e) {
       throw errorSesion(e instanceof Error ? e.message : String(e));
     }
@@ -122,26 +129,27 @@ export const detenerMotor = createServerFn({ method: "POST" })
   .middleware([requireAdmin])
   .handler(async ({ context }) => {
     const db = await admin();
-    const { data: settings } = await db
-      .from("automation_settings")
-      .select("id")
-      .limit(1)
-      .maybeSingle();
+    // Misma fila que usa el tick: la del administrador (no una arbitraria).
+    const { leerAjustesPlataforma } = await import("./propietario.server");
+    const plataforma = await leerAjustesPlataforma(db);
+    const settings = plataforma?.fila ?? null;
     if (!settings) throw new Error("No hay configuración del motor");
 
     const { obtenerSesionActiva, marcarSesionParaCierre, cerrarSesion, contarPosicionesAbiertas } =
       await import("./engine-sessions.server");
+    // Ambito de la sesion: el del dueno de la fila de configuracion.
+    const duenoSesion = plataforma?.adminId ?? null;
 
     let sesion: EngineSession | null = null;
     let posicionesAbiertas = 0;
     try {
-      const activa = await obtenerSesionActiva(db);
+      const activa = await obtenerSesionActiva(db, duenoSesion);
       if (activa) {
         await marcarSesionParaCierre(db, activa.id, "manual");
-        posicionesAbiertas = await contarPosicionesAbiertas(db);
+        posicionesAbiertas = await contarPosicionesAbiertas(db, duenoSesion);
         sesion =
           posicionesAbiertas === 0
-            ? await cerrarSesion(db, activa.id, "manual")
+            ? await cerrarSesion(db, activa.id, "manual", duenoSesion)
             : { ...activa, status: "closing", close_reason: "manual" };
       }
     } catch (e) {
@@ -160,7 +168,7 @@ export const detenerMotor = createServerFn({ method: "POST" })
         engine_status: "stopped",
         updated_at: new Date().toISOString(),
       })
-      .eq("id", settings.id);
+      .eq("id", settings.id as string);
     if (error) throw new Error(error.message);
 
     await audit(
@@ -181,11 +189,13 @@ export const listarSesionesMotor = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
     z.object({ limit: z.number().int().min(1).max(200).default(50) }).parse(input ?? {}),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const db = await admin();
     const { listarSesiones } = await import("./engine-sessions.server");
     try {
-      return await listarSesiones(db, data.limit);
+      // Solo las sesiones del usuario que pregunta (cada usuario tiene las
+      // suyas: el indice de sesion viva es por usuario).
+      return await listarSesiones(db, data.limit, context.userId);
     } catch (e) {
       throw errorSesion(e instanceof Error ? e.message : String(e));
     }

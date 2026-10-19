@@ -174,6 +174,7 @@ function crearFakeDb(opts: {
 const AHORA = new Date("2026-10-05T12:00:00.000Z");
 const SESION_BASE: EngineSession = {
   id: "s1",
+  user_id: "u1",
   mode: "timer",
   status: "active",
   session_started_at: "2026-10-05T10:00:00.000Z",
@@ -235,19 +236,33 @@ describe("expiraPorTimer", () => {
 describe("iniciarSesion", () => {
   test("abre una sesion active con los defaults de la tabla", async () => {
     const { db, sesiones } = crearFakeDb({});
-    const s = await iniciarSesion(db, { mode: "24x7" });
+    const s = await iniciarSesion(db, { mode: "24x7", user_id: "u1" });
     expect(s.status).toBe("active");
     expect(sesiones).toHaveLength(1);
     expect(sesiones[0]!["session_ends_at"]).toBeNull();
   });
 
+  test("la sesion guarda su dueno (engine_sessions.user_id es NOT NULL)", async () => {
+    const { db, sesiones } = crearFakeDb({});
+    await iniciarSesion(db, { mode: "24x7", user_id: "u-dueno" });
+    expect(sesiones[0]!["user_id"]).toBe("u-dueno");
+  });
+
   test("timer guarda session_ends_at; 24x7 lo ignora", async () => {
     const { db, sesiones } = crearFakeDb({});
-    await iniciarSesion(db, { mode: "timer", session_ends_at: "2026-10-05T14:00:00.000Z" });
+    await iniciarSesion(db, {
+      mode: "timer",
+      session_ends_at: "2026-10-05T14:00:00.000Z",
+      user_id: "u1",
+    });
     expect(sesiones[0]!["session_ends_at"]).toBe("2026-10-05T14:00:00.000Z");
 
     const { db: db2, sesiones: sesiones2 } = crearFakeDb({});
-    await iniciarSesion(db2, { mode: "24x7", session_ends_at: "2026-10-05T14:00:00.000Z" });
+    await iniciarSesion(db2, {
+      mode: "24x7",
+      session_ends_at: "2026-10-05T14:00:00.000Z",
+      user_id: "u1",
+    });
     expect(sesiones2[0]!["session_ends_at"]).toBeNull();
   });
 
@@ -257,9 +272,24 @@ describe("iniciarSesion", () => {
       sesiones: [existente as unknown as Fila],
       insertaConFLICTO: true,
     });
-    const s = await iniciarSesion(db, { mode: "24x7" });
+    const s = await iniciarSesion(db, { mode: "24x7", user_id: "u1" });
     expect(s.id).toBe("s-ya");
     expect(s.status).toBe("active");
+  });
+
+  test("23505 NO devuelve la sesion de otro usuario (el indice de sesion viva es por usuario)", async () => {
+    const ajena = { ...SESION_BASE, id: "s-ajena", user_id: "u-otro" };
+    const { db } = crearFakeDb({
+      sesiones: [ajena as unknown as Fila],
+      insertaConFLICTO: true,
+    });
+    let mensaje = "";
+    try {
+      await iniciarSesion(db, { mode: "24x7", user_id: "u1" });
+    } catch (e) {
+      mensaje = e instanceof Error ? e.message : String(e);
+    }
+    expect(mensaje).toContain("No se pudo iniciar la sesion");
   });
 });
 
