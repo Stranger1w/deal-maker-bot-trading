@@ -10,6 +10,7 @@ import {
 import {
   Bot,
   CandlestickChart,
+  ChartNoAxesColumn,
   Cpu,
   Gauge,
   KeyRound,
@@ -142,6 +143,7 @@ const navGroups = [
       { to: "/reconocimiento", label: "Buscar oportunidades", icon: Radar },
       { to: "/mercados", label: "Mercados", icon: CandlestickChart },
       { to: "/motor", label: "Motor", icon: Gauge },
+      { to: "/metricas", label: "Métricas", icon: ChartNoAxesColumn },
       { to: "/automatizacion", label: "Piloto automático", icon: Cpu },
       { to: "/mineria", label: "Minería", icon: Pickaxe },
     ],

@@ -17,6 +17,7 @@ import { Route as EscuadronRouteImport } from './routes/escuadron'
 import { Route as FondosRouteImport } from './routes/fondos'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as MercadosRouteImport } from './routes/mercados'
+import { Route as MetricasRouteImport } from './routes/metricas'
 import { Route as MineriaRouteImport } from './routes/mineria'
 import { Route as MotorRouteImport } from './routes/motor'
 import { Route as ReconocimientoRouteImport } from './routes/reconocimiento'
@@ -65,6 +66,11 @@ const MercadosRoute = MercadosRouteImport.update({
   path: '/mercados',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MetricasRoute = MetricasRouteImport.update({
+  id: '/metricas',
+  path: '/metricas',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MineriaRoute = MineriaRouteImport.update({
   id: '/mineria',
   path: '/mineria',
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/fondos': typeof FondosRoute
   '/mcp': typeof McpRoute
   '/mercados': typeof MercadosRoute
+  '/metricas': typeof MetricasRoute
   '/mineria': typeof MineriaRoute
   '/motor': typeof MotorRoute
   '/reconocimiento': typeof ReconocimientoRoute
@@ -128,6 +135,7 @@ export interface FileRoutesByTo {
   '/fondos': typeof FondosRoute
   '/mcp': typeof McpRoute
   '/mercados': typeof MercadosRoute
+  '/metricas': typeof MetricasRoute
   '/mineria': typeof MineriaRoute
   '/motor': typeof MotorRoute
   '/reconocimiento': typeof ReconocimientoRoute
@@ -146,6 +154,7 @@ export interface FileRoutesById {
   '/fondos': typeof FondosRoute
   '/mcp': typeof McpRoute
   '/mercados': typeof MercadosRoute
+  '/metricas': typeof MetricasRoute
   '/mineria': typeof MineriaRoute
   '/motor': typeof MotorRoute
   '/reconocimiento': typeof ReconocimientoRoute
@@ -165,6 +174,7 @@ export interface FileRouteTypes {
     | '/fondos'
     | '/mcp'
     | '/mercados'
+    | '/metricas'
     | '/mineria'
     | '/motor'
     | '/reconocimiento'
@@ -182,6 +192,7 @@ export interface FileRouteTypes {
     | '/fondos'
     | '/mcp'
     | '/mercados'
+    | '/metricas'
     | '/mineria'
     | '/motor'
     | '/reconocimiento'
@@ -199,6 +210,7 @@ export interface FileRouteTypes {
     | '/fondos'
     | '/mcp'
     | '/mercados'
+    | '/metricas'
     | '/mineria'
     | '/motor'
     | '/reconocimiento'
@@ -217,6 +229,7 @@ export interface RootRouteChildren {
   FondosRoute: typeof FondosRoute
   McpRoute: typeof McpRoute
   MercadosRoute: typeof MercadosRoute
+  MetricasRoute: typeof MetricasRoute
   MineriaRoute: typeof MineriaRoute
   MotorRoute: typeof MotorRoute
   ReconocimientoRoute: typeof ReconocimientoRoute
@@ -284,6 +297,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MercadosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/metricas': {
+      id: '/metricas'
+      path: '/metricas'
+      fullPath: '/metricas'
+      preLoaderRoute: typeof MetricasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/mineria': {
       id: '/mineria'
       path: '/mineria'
@@ -345,6 +365,7 @@ const rootRouteChildren: RootRouteChildren = {
   FondosRoute: FondosRoute,
   McpRoute: McpRoute,
   MercadosRoute: MercadosRoute,
+  MetricasRoute: MetricasRoute,
   MineriaRoute: MineriaRoute,
   MotorRoute: MotorRoute,
   ReconocimientoRoute: ReconocimientoRoute,

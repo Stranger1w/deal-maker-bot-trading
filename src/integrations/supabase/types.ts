@@ -370,6 +370,9 @@ export type Database = {
           price: number
           quantity: number
           side: string
+          signal_at: string | null
+          signal_indicators: string[] | null
+          signal_reason: string | null
           status: string
           symbol: string
         }
@@ -386,6 +389,9 @@ export type Database = {
           price?: number
           quantity?: number
           side: string
+          signal_at: string
+          signal_indicators: string[]
+          signal_reason: string
           status?: string
           symbol: string
         }
@@ -402,6 +408,9 @@ export type Database = {
           price?: number
           quantity?: number
           side?: string
+          signal_at?: string
+          signal_indicators?: string[]
+          signal_reason?: string
           status?: string
           symbol?: string
         }

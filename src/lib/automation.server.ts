@@ -1199,6 +1199,18 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           status: execStatus,
           error: execError,
           exchange_order_id: exchangeOrderId,
+          // Registro de la decision: que indicadores la dispararon y por que.
+          // Es lo que permite despues comparar por indicador, par y hora
+          // (panel de metricas honestas).
+          signal_indicators: cfgParaBot?.ids ?? [],
+          signal_reason: hitStopLoss
+            ? "stop_loss"
+            : hitTakeProfit
+              ? "take_profit"
+              : side === "buy"
+                ? "compra"
+                : "cierre_senal",
+          signal_at: new Date().toISOString(),
         };
         let insert = await db.from("bot_executions").insert(execRow as never);
         if (
