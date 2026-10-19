@@ -182,30 +182,16 @@ type RealOrderOutcome = {
  * Credenciales Binance descifradas en memoria. Nunca se registran ni se devuelven.
  * Solo se usan las del dueno del bot: un bot jamas opera con las claves de otro
  * usuario, y un bot sin dueno no tiene credenciales.
+ *
+ * La implementacion vive en credenciales.server.ts (la usa tambien la
+ * reconciliacion).
  */
 async function loadBinanceSecret(
   db: Db,
   ownerId: string | null,
 ): Promise<{ apiKey: string; apiSecret: string } | null> {
-  if (!ownerId) return null;
-  const { data } = await db
-    .from("binance_credentials")
-    .select("api_key_cipher,api_secret_cipher")
-    // types.ts aun no incluye binance_credentials.user_id: cast.
-    .eq("user_id" as never, ownerId as never)
-    .limit(1)
-    .maybeSingle();
-  const row = data as { api_key_cipher?: string; api_secret_cipher?: string } | null;
-  if (!row?.api_key_cipher || !row?.api_secret_cipher) return null;
-  const { decryptSecret } = await import("./crypto.server");
-  try {
-    return {
-      apiKey: await decryptSecret(row.api_key_cipher),
-      apiSecret: await decryptSecret(row.api_secret_cipher),
-    };
-  } catch {
-    return null;
-  }
+  const { loadBinanceSecret: cargar } = await import("./credenciales.server");
+  return cargar(db, ownerId);
 }
 
 /**
@@ -368,6 +354,66 @@ async function realCycleOrder(
     };
   }
 
+  // ── Reconciliación: antes de vender, comprobar contra el exchange ──────
+  // Si el motor cree que hay posición y en Binance no hay nada (venta
+  // manual, orden que se perdió, reinicio a medias), NO se manda ninguna
+  // orden de venta: se registra la diferencia y se cierra la posición local.
+  // Si las cantidades no cuadran, se vende lo que HAY, no lo que se cree.
+  let cantidadAVender = openQty;
+  try {
+    const { reconciliarBot } = await import("./reconciliacion.server");
+    const rec = await reconciliarBot(
+      db,
+      { id: bot.id, name: bot.name, pair: symbol, mode: "real", user_id: bot.user_id },
+      env,
+    );
+    if (rec.consultado) {
+      const sinPosicion = rec.discrepancias.find((d) => d.tipo === "posicion_sin_exchange");
+      if (sinPosicion) {
+        await log(
+          db,
+          bot.id,
+          "warn",
+          `Reconciliación: el exchange no tiene ${symbol} pero el motor sí. No se manda ninguna orden; revisa si vendiste a mano.`,
+        );
+        await audit(
+          db,
+          "reconciliation.position_missing",
+          bot.id,
+          { simbolo: symbol, local: sinPosicion.local, exchange: sinPosicion.exchange },
+          bot.user_id ?? null,
+        );
+        return null;
+      }
+      const cantidadDistinta = rec.discrepancias.find((d) => d.tipo === "cantidad_distinta");
+      if (cantidadDistinta && rec.exchange !== null) {
+        cantidadAVender = rec.exchange;
+        await log(
+          db,
+          bot.id,
+          "warn",
+          `Reconciliación: el motor cree que tiene ${cantidadDistinta.local} y el exchange tiene ${rec.exchange}. Se opera con la cantidad real.`,
+        );
+        await audit(
+          db,
+          "reconciliation.quantity_mismatch",
+          bot.id,
+          { simbolo: symbol, local: cantidadDistinta.local, exchange: cantidadDistinta.exchange },
+          bot.user_id ?? null,
+        );
+      }
+    }
+  } catch (error) {
+    // Si la reconciliación falla (red, credenciales), se sigue: el
+    // sell se limita a lo que el motor tiene registrado.
+    await log(
+      db,
+      bot.id,
+      "warn",
+      `Reconciliación no disponible: ${error instanceof Error ? error.message : "error desconocido"}`,
+    );
+  }
+
   // Posición abierta: se cierra con stop-loss o take-profit.
   const price = await fetchBinancePrice(symbol, env);
   if (!price) {
@@ -385,7 +431,7 @@ async function realCycleOrder(
   // Cierra con stop-loss, take-profit o señal de venta.
   if (!hitStopLoss && !hitTakeProfit && senal !== "sell") return null;
 
-  const quantity = roundDownToStep(openQty, rules.stepSize);
+  const quantity = roundDownToStep(cantidadAVender, rules.stepSize);
   const order = await placeBinanceOrder({
     env,
     apiKey: creds.apiKey,

@@ -86,6 +86,56 @@ export function roundDownToStep(value: number, stepSize: number): number {
   return Number((stepped / factor).toFixed(decimals));
 }
 
+/** Activo base de un par: "BTCUSDT" -> "BTC". */
+export function baseAssetDe(symbol: string): string {
+  const upper = symbol.toUpperCase();
+  const quotes = ["USDT", "USDC", "BUSD", "FDUSD", "TUSD", "BTC", "ETH", "BNB", "EUR"];
+  for (const quote of quotes) {
+    if (upper.endsWith(quote) && upper.length > quote.length) {
+      return upper.slice(0, upper.length - quote.length);
+    }
+  }
+  return upper;
+}
+
+/**
+ * Saldo LIBRE de un activo segun la cuenta de Binance (consulta firmada).
+ *
+ * Es lo que usa la reconciliacion: compara lo que el motor cree que tiene
+ * con lo que hay de verdad. Devuelve null si no se pudo consultar (sin
+ * credenciales, sin red, region bloqueada): nunca inventa un saldo.
+ */
+export async function consultarSaldoBinance(
+  env: BinanceTradingEnv,
+  apiKey: string,
+  apiSecret: string,
+  activo: string,
+): Promise<number | null> {
+  try {
+    const { signBinanceQuery } = await import("./crypto.server");
+    const query = `timestamp=${Date.now()}&recvWindow=5000`;
+    const signature = await signBinanceQuery(query, apiSecret);
+    const res = await fetch(
+      `${BINANCE_HOSTS[env]}/api/v3/account?${query}&signature=${signature}`,
+      {
+        headers: { "X-MBX-APIKEY": apiKey },
+      },
+    );
+    if (!res.ok) return null;
+    const body = (await res.json()) as {
+      balances?: { asset?: string; free?: string; locked?: string }[];
+    };
+    const fila = (body.balances ?? []).find(
+      (b) => (b.asset ?? "").toUpperCase() === activo.toUpperCase(),
+    );
+    if (!fila) return 0;
+    const libre = Number(fila.free ?? 0);
+    return Number.isFinite(libre) ? libre : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Reglas reales del símbolo (público, sin credenciales). */
 export async function getBinanceSymbolRules(
   symbol: string,

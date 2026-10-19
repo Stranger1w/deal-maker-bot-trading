@@ -1,0 +1,39 @@
+name: CI
+
+# Comprueba tsc, eslint y los tests en cada push y en cada PR.
+# Si algo falla, no se puede subir nada: la rama queda en rojo y se ve
+# antes de que llegue a Lovable o a la maquina del dueno.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verificar:
+    name: tsc + eslint + tests
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Copiar el repo
+        uses: actions/checkout@v4
+
+      - name: Instalar bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # --ignore-scripts: en CI no hace falta el binario de Electron ni el
+      # postinstall de esbuild (solo se comprueban tipos, lint y tests).
+      # Asi la instalacion tarda segundos en vez de minutos.
+      - name: Instalar dependencias
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Tipos (tsc --noEmit)
+        run: bunx tsc --noEmit
+
+      - name: Lint (eslint)
+        run: bun run lint
+
+      - name: Tests (bun test)
+        run: bun test src
