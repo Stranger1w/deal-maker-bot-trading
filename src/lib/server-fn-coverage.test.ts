@@ -27,7 +27,18 @@ const USUARIO = [
   "validarParMercado",
 ].sort();
 
-type Hallazgo = { archivo: string; nombre: string; nivel: "admin" | "usuario" | "ninguno" };
+/**
+ * Funciones PUBLICAS (sin sesion). Lista cerrada: son las unicas que se
+ * pueden llamar sin estar autenticado. De momento, solo la que dice si el
+ * registro de usuarios esta abierto (la necesita la pantalla de acceso).
+ */
+const PUBLICAS = ["estadoRegistroPublico"].sort();
+
+type Hallazgo = {
+  archivo: string;
+  nombre: string;
+  nivel: "admin" | "usuario" | "publico" | "ninguno";
+};
 
 function archivosTs(dir: string, acumulado: string[] = []): string[] {
   for (const nombre of readdirSync(dir)) {
@@ -62,6 +73,7 @@ function escanear(): { hallazgos: Hallazgo[]; sinNombre: string[] } {
       let nivel: Hallazgo["nivel"] = "ninguno";
       if (cadena.includes(".middleware([requireAdmin])")) nivel = "admin";
       else if (cadena.includes(".middleware([requireSupabaseAuth])")) nivel = "usuario";
+      else if (cadena.includes(".middleware([publico])")) nivel = "publico";
       hallazgos.push({ archivo: archivo.replace(process.cwd(), ""), nombre, nivel });
     }
     if (encontradas !== llamadas) sinNombre.push(archivo.replace(process.cwd(), ""));
@@ -93,6 +105,14 @@ describe("cobertura de seguridad de server functions", () => {
       .map((h) => h.nombre)
       .sort();
     expect(usuario).toEqual(USUARIO);
+  });
+
+  test("solo la lista cerrada PUBLICAS se puede llamar sin sesion", () => {
+    const publicas = hallazgos
+      .filter((h) => h.nivel === "publico")
+      .map((h) => h.nombre)
+      .sort();
+    expect(publicas).toEqual(PUBLICAS);
   });
 
   test("los nombres de server functions no se repiten (el test razona por nombre)", () => {

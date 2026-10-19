@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
 import { KeyRound, ShieldCheck, LogOut } from "lucide-react";
@@ -11,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSecuritySession } from "@/hooks/useSecuritySession";
 import { supabase } from "@/integrations/supabase/client";
+import { estadoRegistroPublico } from "@/lib/registro.functions";
 
 export const Route = createFileRoute("/acceso")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -48,6 +51,14 @@ function AccessPage() {
   const [busy, setBusy] = useState(false);
   const [qr, setQr] = useState<{ id: string; svg: string; secret: string } | null>(null);
   const [code, setCode] = useState("");
+
+  // El registro publico esta cerrado por defecto (el multiusuario todavia no
+  // esta probado). El boton solo aparece si el administrador lo abre.
+  const estadoRegistro = useServerFn(estadoRegistroPublico);
+  const registro = useQuery({
+    queryKey: ["registro_publico"],
+    queryFn: () => estadoRegistro({}),
+  });
 
   const returnTo = safeNext(next);
 
@@ -225,10 +236,22 @@ function AccessPage() {
               <Button onClick={signIn} disabled={busy} className="flex-1">
                 Iniciar sesión
               </Button>
-              <Button onClick={signUp} disabled={busy} variant="secondary" className="flex-1">
-                Crear cuenta
-              </Button>
+              {registro.data?.permitido ? (
+                <Button onClick={signUp} disabled={busy} variant="secondary" className="flex-1">
+                  Crear cuenta
+                </Button>
+              ) : (
+                <Button variant="secondary" className="flex-1" disabled>
+                  Crear cuenta (cerrado)
+                </Button>
+              )}
             </div>
+            {!registro.data?.permitido && (
+              <p className="text-xs text-muted-foreground">
+                {registro.data?.motivo ??
+                  "El registro esta cerrado mientras el multiusuario no este probado."}
+              </p>
+            )}
           </CardContent>
         </Card>
 

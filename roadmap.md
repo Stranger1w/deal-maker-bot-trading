@@ -25,9 +25,22 @@
 - [x] Los indicadores mandan de verdad: el motor calcula la señal con `senalDe` (antes solo
       se usaba en los tests) y el modo Demo pasa a ser paper trading con precio real
 - [x] Configuración del motor en la UI (indicadores, estrategia, horizonte, importe)
-- [ ] Compuerta de promoción (gate) demo → testnet → real con umbrales mínimos
-- [ ] Idempotencia y reconciliación de órdenes contra el exchange
-- [ ] Panel de métricas honestas por indicador, estrategia, par y hora
-- [ ] CI que corra `tsc`, `eslint` y los tests antes de cada push
-- [ ] Empaquetado Electron (`.exe`): falta la carpeta `desktop/` en el repo
-
+- [x] Compuerta de promoción (gate) demo → testnet → real: exige evidencia (P&L neto
+      positivo en demo, drawdown dentro del límite, mínimo de operaciones cerradas,
+      superar al benchmark), no solo tiempo
+- [x] Reconciliación contra el exchange antes de vender: si la posición no cuadra, no se
+      manda ninguna orden y queda auditada
+- [x] CI (`.github/workflows/ci.yml`): `tsc` + `eslint` + tests en cada push y PR
+- [x] Empaquetado Electron en el repo (`desktop/`, `installer.nsh`, `public/icon.ico`,
+      scripts `desktop:build` / `dist:win`): el `.exe` se reconstruye desde aquí
+- [x] Registro público de usuarios cerrado por defecto (interruptor en `app_settings`
+      o variable `PUBLIC_SIGNUP`), con lista cerrada de funciones públicas
+- [x] Selector automático de par enganchado al tick (solo testnet) y "Aplicar" manual
+- [ ] Panel de métricas honestas por indicador, estrategia, par y hora del día
+      (necesita registrar qué señal produjo cada operación: migración + campo)
+- [ ] Idempotencia y reintentos con backoff en el envío de órdenes (parcial: ya hay
+      clave de idempotencia y manejo del 23505; falta reconciliar órdenes pendientes)
+- [ ] Regenerar `types.ts` con `user_id` (ahora mismo el compilador no puede avisar de
+      un `user_id` que falte: todo va con `as never`)
+- [ ] Cron 24/7 y alternativa de nube gratuita para el motor
+- [ ] Fase 7: re-cifrar credenciales reales con la clave nueva y apagar flags
