@@ -11,6 +11,7 @@ import { SortableTable, type Column } from "@/components/SortableTable";
 import { StatusPill, statusTone } from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -49,6 +50,9 @@ import {
   saveSquadRisk,
   type PromotionCheck,
 } from "@/lib/risk.functions";
+import { guardarConfigBot, leerConfigBot } from "@/lib/engine.functions";
+import { INDICADORES } from "@/lib/indicators";
+import { ESTRATEGIAS } from "@/lib/strategies";
 import { dateTime, money, pct } from "@/lib/format";
 import {
   automationQuery,
@@ -134,6 +138,8 @@ function SquadTab() {
   const promote = useServerFn(promoteBotToReal);
   const leerAviso = useServerFn(estadoAvisoRiesgo);
   const aceptarAviso = useServerFn(aceptarAvisoRiesgo);
+  const leerConfigBotFn = useServerFn(leerConfigBot);
+  const guardarConfigBotFn = useServerFn(guardarConfigBot);
   // Aviso de riesgo: hay que leerlo y aceptarlo antes de poner un bot en Real.
   const aviso = useQuery({
     queryKey: ["aviso_riesgo"],
@@ -147,6 +153,12 @@ function SquadTab() {
   const [squadForm, setSquadForm] = useState<Record<string, string> | null>(null);
   const [groupBy, setGroupBy] = useState<"strategy" | "pair">("strategy");
   const [realTarget, setRealTarget] = useState<BotRow | null>(null);
+  const [motorFor, setMotorFor] = useState<BotRow | null>(null);
+  const [motorIndicadores, setMotorIndicadores] = useState<string[]>([]);
+  const [motorEstrategia, setMotorEstrategia] = useState<
+    "fixed" | "conservative" | "optimal" | "aggressive"
+  >("fixed");
+  const [motorGuardando, setMotorGuardando] = useState(false);
   const [logsFor, setLogsFor] = useState<BotRow | null>(null);
   const [editing, setEditing] = useState<BotRow | null>(null);
   const [form, setForm] = useState({
@@ -210,6 +222,42 @@ function SquadTab() {
       refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo activar el modo Real");
+    }
+  };
+
+  // ── Configuracion del motor por bot (indicadores y estrategia) ────────
+  const abrirMotor = async (bot: BotRow) => {
+    setMotorFor(bot);
+    setMotorGuardando(false);
+    try {
+      const cfg = await leerConfigBotFn({ data: { botId: bot.id } });
+      setMotorIndicadores(cfg.indicatorIds ?? []);
+      setMotorEstrategia(
+        (cfg.strategyId as "fixed" | "conservative" | "optimal" | "aggressive") ?? "fixed",
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo leer la configuración del bot");
+    }
+  };
+
+  const guardarMotor = async () => {
+    if (!motorFor) return;
+    setMotorGuardando(true);
+    try {
+      await guardarConfigBotFn({
+        data: {
+          botId: motorFor.id,
+          indicatorIds: motorIndicadores,
+          strategyId: motorEstrategia,
+        },
+      });
+      toast.success(`Motor de ${motorFor.name} actualizado`);
+      setMotorFor(null);
+      refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar la configuración");
+    } finally {
+      setMotorGuardando(false);
     }
   };
 
@@ -668,6 +716,9 @@ function SquadTab() {
                         <Button size="sm" variant="ghost" onClick={() => setEditing(bot)}>
                           <Settings2 className="size-3.5" /> Estrategia
                         </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setMotorFor(bot)}>
+                          <Brain className="size-3.5" /> Motor
+                        </Button>
                         <Button size="sm" variant="ghost" onClick={() => setLogsFor(bot)}>
                           <ScrollText className="size-3.5" /> Logs
                         </Button>
@@ -795,7 +846,91 @@ function SquadTab() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={!!motorFor}
+        onOpenChange={(open) => {
+          if (!open) setMotorFor(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Motor de {motorFor?.name}</DialogTitle>
+            <DialogDescription>
+              Los indicadores que decidirán comprar y vender, y la estrategia que decide el tamaño
+              de cada operación. Si no eliges nada, este bot usa la configuración de la plataforma.
+              El backtest usa estos mismos indicadores.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {INDICADORES.map((ind) => {
+                const marcado = motorIndicadores.includes(ind.id);
+                return (
+                  <label
+                    key={ind.id}
+                    className="flex cursor-pointer items-start gap-2 rounded-md border border-border p-2 text-xs"
+                  >
+                    <Checkbox
+                      checked={marcado}
+                      onCheckedChange={(v) =>
+                        setMotorIndicadores((prev) =>
+                          v === true
+                            ? prev.includes(ind.id)
+                              ? prev
+                              : [...prev, ind.id]
+                            : prev.filter((x) => x !== ind.id),
+                        )
+                      }
+                      aria-label={ind.nombre}
+                    />
+                    <span>
+                      <span className="font-medium">{ind.nombre}</span>
+                      <span className="block text-muted-foreground">{ind.descripcionCorta}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="space-y-1">
+              <Label>Estrategia (tamaño de la operación)</Label>
+              <Select
+                value={motorEstrategia}
+                onValueChange={(v) =>
+                  setMotorEstrategia(v as "fixed" | "conservative" | "optimal" | "aggressive")
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ESTRATEGIAS.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.nombre} · {e.detalles.resumen}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setMotorFor(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => void guardarMotor()}
+              disabled={motorGuardando || motorIndicadores.length === 0}
+            >
+              {motorGuardando ? "Guardando…" : "Guardar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!riskFor} onOpenChange={(open) => !open && setRiskFor(null)}>
+        {" "}
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Riesgo · {riskFor?.name}</DialogTitle>

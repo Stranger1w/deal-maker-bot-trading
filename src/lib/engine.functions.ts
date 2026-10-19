@@ -12,6 +12,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireAdmin } from "@/integrations/supabase/admin-middleware";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 import type { EngineSession } from "./engine-sessions.server";
 
@@ -202,6 +203,93 @@ export const listarSesionesMotor = createServerFn({ method: "POST" })
   });
 
 /* ------------------------- CONFIGURACION DEL MOTOR ------------------------ */
+
+/**
+ * Configuracion de un BOT: sus indicadores y su estrategia de tamaño.
+ *
+ * Cada bot puede tener los suyos (engine_strategies). Si no los tiene, usa
+ * los de la plataforma (engine_config). Es la misma logica que aplica el
+ * motor, asi que lo que se ve aqui es lo que hace.
+ */
+export const guardarConfigBot = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        botId: z.string().uuid(),
+        indicatorIds: z.array(z.string().min(1)).min(1),
+        strategyId: z.enum(["fixed", "conservative", "optimal", "aggressive"]),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { exigirBotPropio } = await import("./ownership.server");
+    await exigirBotPropio(context.supabase, data.botId);
+    const db = await admin();
+
+    const { idsValidos } = await import("./indicators");
+    const validos = new Set<string>(idsValidos());
+    const desconocida = data.indicatorIds.find((id: string) => !validos.has(id));
+    if (desconocida) throw new Error(`Indicador desconocido: ${desconocida}`);
+
+    const ahora = new Date().toISOString();
+    const { data: actual } = await db
+      .from("engine_strategies")
+      .select("bot_id, consecutive_wins, consecutive_losses, martingale_level, auto_symbol, params")
+      .eq("bot_id", data.botId)
+      .maybeSingle();
+    const fila = actual as {
+      consecutive_wins?: number | null;
+      consecutive_losses?: number | null;
+      martingale_level?: number | null;
+      auto_symbol?: boolean | null;
+      params?: unknown;
+    } | null;
+
+    const { error } = await db.from("engine_strategies").upsert(
+      {
+        bot_id: data.botId,
+        indicator_ids: data.indicatorIds,
+        strategy_id: data.strategyId,
+        params: (fila?.params ?? {}) as never,
+        consecutive_wins: Number(fila?.consecutive_wins ?? 0),
+        consecutive_losses: Number(fila?.consecutive_losses ?? 0),
+        martingale_level: Number(fila?.martingale_level ?? 0),
+        auto_symbol: fila?.auto_symbol ?? false,
+        auto_symbol_reason: {} as never,
+        updated_at: ahora,
+      },
+      { onConflict: "bot_id" },
+    );
+    if (error) throw new Error(error.message);
+
+    await audit(
+      "engine.bot_config_updated",
+      { bot_id: data.botId, indicator_ids: data.indicatorIds, strategy_id: data.strategyId },
+      context.userId,
+    );
+    return { ok: true };
+  });
+
+/** Lee la configuracion de un bot (indicadores y estrategia propios). */
+export const leerConfigBot = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ botId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { exigirBotPropio } = await import("./ownership.server");
+    await exigirBotPropio(context.supabase, data.botId);
+    const db = await admin();
+    const { data: fila } = await db
+      .from("engine_strategies")
+      .select("indicator_ids, strategy_id")
+      .eq("bot_id", data.botId)
+      .maybeSingle();
+    const config = fila as { indicator_ids?: string[] | null; strategy_id?: string | null } | null;
+    return {
+      indicatorIds: config?.indicator_ids ?? [],
+      strategyId: config?.strategy_id ?? "fixed",
+    };
+  });
 
 /**
  * Reevalua ahora el par de un bot (el "Aplicar" manual del selector Auto).

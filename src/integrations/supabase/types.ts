@@ -759,9 +759,11 @@ export type Database = {
           bot_id: string
           consecutive_losses: number
           consecutive_wins: number
+          indicator_ids: string[] | null
           locked_accepted_at: string | null
           martingale_level: number
           params: Json
+          strategy_id: string | null
           updated_at: string
         }
         Insert: {
@@ -772,9 +774,11 @@ export type Database = {
           bot_id: string
           consecutive_losses?: number
           consecutive_wins?: number
+          indicator_ids?: string[] | null
           locked_accepted_at?: string | null
           martingale_level?: number
           params?: Json
+          strategy_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -785,9 +789,11 @@ export type Database = {
           bot_id?: string
           consecutive_losses?: number
           consecutive_wins?: number
+          indicator_ids?: string[] | null
           locked_accepted_at?: string | null
           martingale_level?: number
           params?: Json
+          strategy_id?: string | null
           updated_at?: string
         }
         Relationships: []

@@ -41,7 +41,18 @@ export type TickResult = {
   notes: string;
 };
 
-/** Fila de automation_settings con los topes propios de un usuario. */
+/** Fila de configuracion por bot (engine_strategies). */
+type FilaEstrategiaBot = {
+  bot_id: string;
+  indicator_ids?: string[] | null;
+  strategy_id?: string | null;
+  params?: unknown;
+  consecutive_wins?: number | null;
+  consecutive_losses?: number | null;
+  martingale_level?: number | null;
+};
+
+/** Fila de configuracion con los topes propios de un usuario. */
 type AjustesUsuario = {
   id: string;
   user_id?: string | null;
@@ -866,9 +877,27 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
     const perdidaDia = new Map<string, number>();
     const perdidaSemana = new Map<string, number>();
 
+    // ── Configuracion POR BOT: indicadores y estrategia (Fase 3) ───────────
+    // Cada bot puede tener sus propios indicadores y su propia estrategia
+    // (engine_strategies). Si no los tiene, usa los de la plataforma
+    // (engine_config). La estrategia decide el TAMAÑO de la operacion y
+    // lleva su estado (rachas, nivel de martingala).
+    const { data: filasEstrategia } = await db
+      .from("engine_strategies")
+      .select(
+        "bot_id, indicator_ids, strategy_id, params, consecutive_wins, consecutive_losses, martingale_level",
+      );
+    const configPorBot = new Map<string, FilaEstrategiaBot>();
+    for (const fila of (filasEstrategia ?? []) as unknown as FilaEstrategiaBot[]) {
+      if (fila.bot_id) configPorBot.set(fila.bot_id, fila);
+    }
+    const { buscarEstrategia } = await import("./strategies/index");
+    const { decidir, estadoInicial } = await import("./strategies/types");
+
     for (const bot of bots ?? []) {
       botsProcessed++;
       const duenoId = duenoDe(bot);
+      const configBot = configPorBot.get(bot.id) ?? null;
 
       // ── Reevaluacion del par (Auto) ──────────────────────────────────
       // Va antes de la senal: si cambia el par, la senal y la operacion de
@@ -895,7 +924,21 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
       // La señal de los indicadores: la MISMA función que usa el backtest
       // (senalDe). Sin señal de compra no se abre nada; con señal de venta se
       // cierra lo que haya abierto.
-      const senal = cfgSenales ? await senalDelBot(db, bot, cfgSenales) : null;
+      // Cada bot puede tener SUS indicadores (engine_strategies); si no,
+      // se usan los de la plataforma (engine_config).
+      const idsPropios = configBot?.indicator_ids ?? [];
+      const cfgParaBot =
+        cfgSenales && idsPropios.length > 0
+          ? {
+              ...cfgSenales,
+              ids: idsPropios,
+              params: {
+                ...cfgSenales.params,
+                ...((configBot?.params as Record<string, Record<string, number>>) ?? {}),
+              },
+            }
+          : cfgSenales;
+      const senal = cfgParaBot ? await senalDelBot(db, bot, cfgParaBot) : null;
       // Se declaran fuera del try para que el catch pueda auditar una orden real ya
       // ejecutada en Binance cuyo PnL no se aplicó (fallo de la RPC y del fallback).
       let exchangeOrderId: string | null = null;
@@ -1027,7 +1070,28 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         // Protección anti-duplicación: como máximo una entrada y su salida por bot
         // y ciclo. Binance además rechaza el duplicado por `newClientOrderId`.
         const idempotencyKey = `${bot.id}:${cycleKey}:${tickSecs}s`;
-        const size = Math.min(Number(bot.capital), Number(bot.max_capital)) * 0.02;
+        // Tamaño de la operacion: lo decide la estrategia DEL BOT (la misma
+        // funcion `decidir` que usa el backtest) con su estado de rachas. Sin
+        // estrategia propia, el 2 % por defecto de siempre.
+        const baseSize = Math.min(Number(bot.capital), Number(bot.max_capital)) * 0.02;
+        const defEstrategia = configBot?.strategy_id
+          ? buscarEstrategia(configBot.strategy_id)
+          : null;
+        const estadoEstrategia = {
+          ...estadoInicial(),
+          consecutivasGanadas: Number(configBot?.consecutive_wins ?? 0),
+          consecutivasPerdidas: Number(configBot?.consecutive_losses ?? 0),
+          nivel: Number(configBot?.martingale_level ?? 0),
+        };
+        const decisionEstrategia = defEstrategia
+          ? decidir(
+              defEstrategia,
+              { base: baseSize, capital: Number(bot.capital), minNotional: 0 },
+              estadoEstrategia,
+              (configBot?.params as Record<string, number>) ?? {},
+            )
+          : null;
+        const size = decisionEstrategia?.monto ?? baseSize;
 
         let side: "buy" | "sell";
         let quantity: number;
@@ -1206,6 +1270,40 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           continue;
         }
         ordersCreated++;
+
+        // Estado de la estrategia del bot: rachas y nivel de martingala. La
+        // estrategia puede pedir PARAR (racha de perdidas): entonces el bot
+        // se detiene, igual que en el panel de la estrategia.
+        if (defEstrategia && pnlDelta !== 0) {
+          try {
+            const nuevo = defEstrategia.registrarResultado(
+              estadoEstrategia,
+              pnlDelta,
+              (configBot?.params as Record<string, number>) ?? {},
+            );
+            await db
+              .from("engine_strategies")
+              .update({
+                consecutive_wins: nuevo.estado.consecutivasGanadas,
+                consecutive_losses: nuevo.estado.consecutivasPerdidas,
+                martingale_level: nuevo.estado.nivel,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("bot_id", bot.id);
+            if (nuevo.pausar) {
+              await stopBot(db, bot.id, bot.name, "estrategia_pausa", {
+                motivo: nuevo.motivo ?? "La estrategia pide parar tras una racha de perdidas.",
+              });
+            }
+          } catch (error) {
+            await log(
+              db,
+              bot.id,
+              "warn",
+              `No se pudo actualizar el estado de la estrategia: ${error instanceof Error ? error.message : "error desconocido"}`,
+            );
+          }
+        }
 
         const lossDelta = Math.max(0, -pnlDelta);
         const atomic = await applyBotExecutionAtomically(db, {

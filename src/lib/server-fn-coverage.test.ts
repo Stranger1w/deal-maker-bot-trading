@@ -27,6 +27,8 @@ const USUARIO = [
   "validarParMercado",
   "estadoAvisoRiesgo",
   "aceptarAvisoRiesgo",
+  "guardarConfigBot",
+  "leerConfigBot",
 ].sort();
 
 /**
