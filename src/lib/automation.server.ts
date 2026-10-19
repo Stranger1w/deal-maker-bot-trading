@@ -500,6 +500,11 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
   let ordersCreated = 0;
   let botsProcessed = 0;
 
+  // Log estructurado: en un cron de la nube, la salida del proceso es lo
+  // unico que se ve si el motor deja de hablar.
+  const { logEstructurado } = await import("./log.server");
+  logEstructurado("tick.inicio", { trigger });
+
   // La configuracion de la plataforma es la fila del ADMINISTRADOR (una fila
   // por usuario). Antes se leia con .limit(1): con mas de un usuario, el
   // motor leia (y escribia) la fila de otro usuario.
@@ -616,6 +621,20 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         }
       }
     }
+    logEstructurado(
+      "tick.fin",
+      {
+        trigger,
+        estado: result.status,
+        bots: result.botsProcessed,
+        ordenes: result.ordersCreated,
+        errores: result.errors,
+        reintentos: result.retries,
+        duracionMs: Date.now() - startedAt.getTime(),
+        notas: result.notes,
+      },
+      result.status === "failed" ? "error" : "info",
+    );
     return result;
   };
 

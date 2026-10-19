@@ -66,6 +66,22 @@ export async function raiseAlert(db: Db, alert: AlertInput) {
   if (error) {
     throw new Error(`No se pudo guardar la alerta "${alert.title}": ${error.message}`);
   }
+
+  // Aviso externo opcional (Telegram): el motor puede correr en un cron que
+  // nadie mira, y un limite de riesgo debe salir de la app. Si no hay
+  // Telegram configurado o no hay internet, esto no hace nada y no falla.
+  if (alert.severity === "critical" || alert.severity === "warning") {
+    try {
+      const { notificar } = await import("./notificar.server");
+      await notificar(
+        alert.severity === "critical" ? "critico" : "aviso",
+        alert.title,
+        alert.message,
+      );
+    } catch {
+      // Un fallo de la notificacion NUNCA rompe la alerta ni el motor.
+    }
+  }
 }
 
 export async function raiseAlertStandalone(alert: AlertInput) {
