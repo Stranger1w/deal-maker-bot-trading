@@ -96,3 +96,25 @@ export function duenosQueSuperan(
   }
   return superan.sort();
 }
+
+/**
+ * Duenos que alcanzaron SU PROPIO limite de perdida.
+ *
+ * Cada usuario tiene su propia fila en automation_settings y sus propios
+ * topes; el limite de la plataforma solo se aplica a quien no tenga fila
+ * propia. Asi el limite de un usuario nunca frena a otro ni se mide con los
+ * numeros de otro.
+ */
+export function duenosQueSuperanConLimitePropio(
+  mapa: ReadonlyMap<string, number>,
+  limiteDe: (clave: string) => number,
+  adminId: string | null | undefined,
+): string[] {
+  const superan: string[] = [];
+  for (const [clave, valor] of mapa) {
+    if (esDelAdmin(clave, adminId)) continue;
+    const limite = limiteDe(clave);
+    if (Number.isFinite(limite) && valor >= limite) superan.push(clave);
+  }
+  return superan.sort();
+}

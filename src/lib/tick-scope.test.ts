@@ -7,6 +7,7 @@ import {
   concentracionPct,
   duenoDe,
   duenosQueSuperan,
+  duenosQueSuperanConLimitePropio,
   esDelAdmin,
   perdidaDelAdmin,
   sumarPerdida,
@@ -114,5 +115,31 @@ describe("perdidas por dueno", () => {
     const mapa = new Map<string, number>();
     sumarPerdida(mapa, OTRO, 1000);
     expect(duenosQueSuperan(mapa, 100, null)).toEqual([]);
+  });
+});
+
+describe("duenosQueSuperanConLimitePropio", () => {
+  test("cada usuario se mide con SU limite, no con el de otro", () => {
+    const mapa = new Map<string, number>();
+    sumarPerdida(mapa, "usuario-2", 150);
+    sumarPerdida(mapa, "usuario-3", 150);
+    // usuario-2 tiene un tope propio de 100 (lo supera); usuario-3 uno de 300.
+    const limites: Record<string, number> = { "usuario-2": 100, "usuario-3": 300 };
+    const limiteDe = (clave: string) => limites[clave] ?? 1000;
+    expect(duenosQueSuperanConLimitePropio(mapa, limiteDe, ADMIN)).toEqual(["usuario-2"]);
+  });
+
+  test("nunca incluye al administrador ni a las filas sin dueno", () => {
+    const mapa = new Map<string, number>();
+    sumarPerdida(mapa, ADMIN, 1000);
+    sumarPerdida(mapa, null, 1000);
+    sumarPerdida(mapa, OTRO, 100);
+    expect(duenosQueSuperanConLimitePropio(mapa, () => 100, ADMIN)).toEqual([OTRO]);
+  });
+
+  test("un limite no numerico (NaN) no frena a nadie", () => {
+    const mapa = new Map<string, number>();
+    sumarPerdida(mapa, OTRO, 100);
+    expect(duenosQueSuperanConLimitePropio(mapa, () => Number.NaN, ADMIN)).toEqual([]);
   });
 });

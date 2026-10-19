@@ -1,14 +1,14 @@
-// Motor de automatizaciÃ³n 24/7 (server-only).
+// Motor de automatización 24/7 (server-only).
 // Se ejecuta desde un cron/worker durable en la nube: NO depende de la app Electron
-// ni de que la PC del usuario estÃ© encendida.
+// ni de que la PC del usuario esté encendida.
 //
-// Reglas de seguridad implementadas aquÃ­:
+// Reglas de seguridad implementadas aquí:
 //  - Kill switch global y motor deshabilitado por defecto.
 //  - Trading real deshabilitado por defecto: exige allow_real_trading + credenciales
 //    Binance verificadas + bot en modo "real" confirmado.
-//  - Controles de riesgo por bot y globales; al alcanzarse un lÃ­mite el bot se detiene,
+//  - Controles de riesgo por bot y globales; al alcanzarse un límite el bot se detiene,
 //    se audita y se registra una alerta.
-//  - ProtecciÃ³n anti-duplicados por clave de idempotencia Ãºnica por bot y ciclo.
+//  - Protección anti-duplicados por clave de idempotencia única por bot y ciclo.
 //  - Reintentos con backoff y registro de errores.
 
 import type { EngineSession } from "./engine-sessions.server";
@@ -18,7 +18,7 @@ import {
   claveDueno,
   concentracionPct,
   duenoDe,
-  duenosQueSuperan,
+  duenosQueSuperanConLimitePropio,
   esDelAdmin,
   perdidaDelAdmin,
   sumarPerdida,
@@ -41,6 +41,16 @@ export type TickResult = {
   notes: string;
 };
 
+/** Fila de automation_settings con los topes propios de un usuario. */
+type AjustesUsuario = {
+  id: string;
+  user_id?: string | null;
+  global_max_capital?: number | null;
+  max_pair_concentration_pct?: number | null;
+  global_max_daily_loss?: number | null;
+  global_max_weekly_drawdown_pct?: number | null;
+};
+
 async function withRetry<T>(fn: () => Promise<T>, onRetry: () => void, attempts = 3): Promise<T> {
   let lastError: unknown;
   for (let i = 0; i < attempts; i++) {
@@ -54,7 +64,7 @@ async function withRetry<T>(fn: () => Promise<T>, onRetry: () => void, attempts 
       }
     }
   }
-  throw lastError instanceof Error ? lastError : new Error("OperaciÃ³n fallida tras reintentos");
+  throw lastError instanceof Error ? lastError : new Error("Operación fallida tras reintentos");
 }
 
 async function log(db: Db, botId: string, level: "info" | "warn" | "error", message: string) {
@@ -62,8 +72,8 @@ async function log(db: Db, botId: string, level: "info" | "warn" | "error", mess
 }
 
 /**
- * Alerta del motor. La alerta SIEMPRE tiene dueÃ±o (alerts.user_id es NOT
- * NULL): si no se dice quiÃ©n, el insert falla y la alerta no se guarda.
+ * Alerta del motor. La alerta SIEMPRE tiene dueño (alerts.user_id es NOT
+ * NULL): si no se dice quién, el insert falla y la alerta no se guarda.
  *
  * Un fallo al guardar la alerta no puede tumbar el tick (se dejaria de
  * gestionar posiciones abiertas), asi que se registra en el log del servidor
@@ -78,10 +88,10 @@ async function raise(
   userId: string | null,
 ) {
   if (!userId) {
-    // Sin dueÃ±o no se puede guardar la alerta (alerts.user_id es NOT NULL).
+    // Sin dueño no se puede guardar la alerta (alerts.user_id es NOT NULL).
     // Se deja constancia en el log en lugar de perderla en silencio.
     console.error(
-      `[alertas] "${title}" sin dueÃ±o: no se puede guardar (alerts.user_id es NOT NULL)`,
+      `[alertas] "${title}" sin dueño: no se puede guardar (alerts.user_id es NOT NULL)`,
     );
     return;
   }
@@ -199,9 +209,9 @@ async function loadBinanceSecret(
 }
 
 /**
- * Ciclo real de un bot: entrada MARKET por importe (activo de cotizaciÃ³n) y salida
+ * Ciclo real de un bot: entrada MARKET por importe (activo de cotización) y salida
  * MARKET por cantidad cuando se alcanza el stop-loss o el take-profit (obligatorios
- * en Real). El P&L sale del precio real de ejecuciÃ³n de Binance, no de un nÃºmero
+ * en Real). El P&L sale del precio real de ejecución de Binance, no de un número
  * aleatorio. Devuelve null cuando no hay nada que operar en este ciclo.
  */
 async function realCycleOrder(
@@ -249,7 +259,7 @@ async function realCycleOrder(
       db,
       bot.id,
       "warn",
-      "Modo Real sin credenciales Binance utilizables: ciclo omitido (no se abre ninguna posiciÃ³n).",
+      "Modo Real sin credenciales Binance utilizables: ciclo omitido (no se abre ninguna posición).",
     );
     return null;
   }
@@ -274,7 +284,7 @@ async function realCycleOrder(
   const openQty = last?.side === "buy" ? Number(last.quantity ?? 0) : 0;
   const entryPrice = last?.side === "buy" ? Number(last.price ?? 0) : 0;
 
-  // Sin posiciÃ³n abierta: entrada por importe en el activo de cotizaciÃ³n.
+  // Sin posición abierta: entrada por importe en el activo de cotización.
   if (openQty <= 0 || entryPrice <= 0) {
     const order = await placeBinanceOrder({
       env,
@@ -322,14 +332,14 @@ async function realCycleOrder(
     };
   }
 
-  // PosiciÃ³n abierta: se cierra con stop-loss o take-profit.
+  // Posición abierta: se cierra con stop-loss o take-profit.
   const price = await fetchBinancePrice(symbol, env);
   if (!price) {
     await log(
       db,
       bot.id,
       "warn",
-      "Precio de Binance no disponible: se mantiene la posiciÃ³n abierta y no se abre nada nuevo.",
+      "Precio de Binance no disponible: se mantiene la posición abierta y no se abre nada nuevo.",
     );
     return null;
   }
@@ -430,7 +440,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
     runId = undefined;
   }
 
-  // Fase 1 Â· estado de la sesiÃ³n del motor en este tick. Se declaran antes de
+  // Fase 1 · estado de la sesión del motor en este tick. Se declaran antes de
   // finish() para que contadores y cierre funcionen en cualquier salida del
   // ciclo (incluidos los errores del catch final).
   let sesion: EngineSession | null = null;
@@ -439,8 +449,8 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
 
   const finish = async (result: TickResult, engineStatus: string, lastError: string | null) => {
     const durationMs = Date.now() - startedAt.getTime();
-    if (cierreEnCurso && !result.notes.includes("sesiÃ³n en cierre")) {
-      result.notes += " Â· sesiÃ³n en cierre (sin nuevas posiciones)";
+    if (cierreEnCurso && !result.notes.includes("sesión en cierre")) {
+      result.notes += " · sesión en cierre (sin nuevas posiciones)";
     }
     if (runId) {
       try {
@@ -476,8 +486,8 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         .eq("id", settingsId);
     }
 
-    // Fase 1 Â· sesiÃ³n: contadores de este tick y cierre final cuando ya no
-    // quedan posiciones abiertas (el motivo lo fijÃ³ el corte del tick).
+    // Fase 1 · sesión: contadores de este tick y cierre final cuando ya no
+    // quedan posiciones abiertas (el motivo lo fijó el corte del tick).
     if (sesion && sesion.status !== "closed") {
       try {
         const sesiones = await import("./engine-sessions.server");
@@ -508,7 +518,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
             if (cerrada) sesion = cerrada;
           }
         } catch {
-          // Best-effort: el prÃ³ximo tick reintenta el cierre.
+          // Best-effort: el próximo tick reintenta el cierre.
         }
       }
     }
@@ -524,16 +534,16 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           ordersCreated: 0,
           errors: 1,
           retries: 0,
-          notes: "Sin configuraciÃ³n de motor",
+          notes: "Sin configuración de motor",
         },
         "error",
-        "Sin configuraciÃ³n de motor",
+        "Sin configuración de motor",
       );
     }
 
-    // â”€â”€ Fase 1 Â· corte de sesiÃ³n (timer / Detener / Kill Switch) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â”€â”€ Fase 1 · corte de sesión (timer / Detener / Kill Switch) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Va antes de los cortes de kill switch y engine_enabled para que la
-    // sesiÃ³n quede bien resuelta en cualquier salida del ciclo.
+    // sesión quede bien resuelta en cualquier salida del ciclo.
     const {
       aperturasPermitidas,
       botTienePosicionAbierta,
@@ -549,7 +559,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
       sesion = await obtenerSesionActiva(db, adminId);
       sesionesOk = true;
     } catch {
-      // Sin tabla engine_sessions (migraciÃ³n pendiente): el ciclo sigue como
+      // Sin tabla engine_sessions (migración pendiente): el ciclo sigue como
       // antes, decidiendo solo con engine_enabled.
       sesion = null;
       sesionesOk = false;
@@ -557,20 +567,20 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
     if (sesionesOk) {
       try {
         if (sesion && settings.kill_switch) {
-          // El Kill Switch tiene prioridad: cierra la sesiÃ³n ya con ese
-          // motivo. Los bots quedan detenidos en un momento y nada gestionarÃ¡
-          // las posiciones despuÃ©s, asÃ­ que no se espera a ponerlas planas.
+          // El Kill Switch tiene prioridad: cierra la sesión ya con ese
+          // motivo. Los bots quedan detenidos en un momento y nada gestionará
+          // las posiciones después, así que no se espera a ponerlas planas.
           await marcarSesionParaCierre(db, sesion.id, "kill_switch");
           sesion = await cerrarSesion(db, sesion.id, "kill_switch");
         } else if (sesion && expiraPorTimer(sesion, new Date())) {
-          // VenciÃ³ el temporizador: la sesiÃ³n pasa a 'closing'. Este tick ya
+          // Venció el temporizador: la sesión pasa a 'closing'. Este tick ya
           // no abre posiciones nuevas y sigue gestionando las abiertas con
           // TP/SL; se cierra con motivo 'timer' cuando no queden abiertas.
           await marcarSesionParaCierre(db, sesion.id, "timer");
           sesion = { ...sesion, status: "closing", close_reason: "timer" };
         }
       } catch {
-        // Best-effort: si falla la transiciÃ³n, el prÃ³ximo tick la reintenta.
+        // Best-effort: si falla la transición, el próximo tick la reintenta.
       }
       cierreEnCurso = sesion?.status === "closing";
     }
@@ -596,9 +606,9 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
       );
     }
 
-    // Detener/manual deja engine_enabled apagado, pero mientras la sesiÃ³n
+    // Detener/manual deja engine_enabled apagado, pero mientras la sesión
     // siga en 'closing' el tick sigue para gestionar TP/SL de lo abierto y
-    // cerrar la sesiÃ³n cuando no queden posiciones (Fase 1).
+    // cerrar la sesión cuando no queden posiciones (Fase 1).
     if (!settings.engine_enabled && !cierreEnCurso) {
       return await finish(
         {
@@ -631,7 +641,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
       (c) => Boolean(c.api_key_cipher) && Boolean(c.api_secret_cipher),
     );
 
-    // RestricciÃ³n geogrÃ¡fica de Binance: se detecta en cada ciclo antes de operar.
+    // Restricción geográfica de Binance: se detecta en cada ciclo antes de operar.
     const {
       isBinanceGeoRestricted,
       safeBinanceError,
@@ -668,7 +678,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           await raise(
             "binance",
             "critical",
-            "Binance bloqueado por regiÃ³n del servidor",
+            "Binance bloqueado por región del servidor",
             GEO_RESTRICTED_MESSAGE,
             undefined,
             adminId,
@@ -676,7 +686,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         }
       }
     } catch {
-      // Fallo de red puntual: no se marca restricciÃ³n geogrÃ¡fica.
+      // Fallo de red puntual: no se marca restricción geográfica.
     }
 
     const realAllowed =
@@ -690,7 +700,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         "binance",
         "critical",
         "Binance no verificado",
-        "El trading real estÃ¡ autorizado pero la conexiÃ³n con Binance no estÃ¡ verificada. Los bots en Real quedan bloqueados hasta reconectar.",
+        "El trading real está autorizado pero la conexión con Binance no está verificada. Los bots en Real quedan bloqueados hasta reconectar.",
         undefined,
         adminId,
       );
@@ -719,6 +729,37 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
     const { data: allBots } = await db.from("bots").select("*");
     const capitales = capitalPorDueno((allBots ?? []) as unknown as BotCapital[]);
 
+    // Limites PROPIOS de cada usuario (Fase 3): cada usuario tiene su fila en
+    // automation_settings con sus topes. El limite de la plataforma (fila del
+    // administrador) se usa solo para quien no tenga fila propia.
+    const { data: ajustesVarios } = await db
+      .from("automation_settings")
+      .select(
+        "id,user_id,global_max_capital,max_pair_concentration_pct,global_max_daily_loss,global_max_weekly_drawdown_pct",
+      );
+    const ajustesPorDueno = new Map<string, AjustesUsuario>();
+    for (const fila of (ajustesVarios ?? []) as unknown as AjustesUsuario[]) {
+      const dueno = duenoDe(fila);
+      if (dueno) ajustesPorDueno.set(dueno, fila);
+    }
+    const maxCapitalDe = (clave: string) =>
+      Number(ajustesPorDueno.get(clave)?.global_max_capital ?? settings.global_max_capital);
+    const maxConcentracionDe = (clave: string) =>
+      Number(
+        ajustesPorDueno.get(clave)?.max_pair_concentration_pct ??
+          settings.max_pair_concentration_pct,
+      );
+    const maxPerdidaDiariaDe = (clave: string) =>
+      Number(ajustesPorDueno.get(clave)?.global_max_daily_loss ?? settings.global_max_daily_loss);
+    const maxPerdidaSemanalDe = (clave: string) =>
+      Number(
+        ajustesPorDueno.get(clave)?.global_max_weekly_drawdown_pct ??
+          settings.global_max_weekly_drawdown_pct,
+      );
+    /** Limite semanal (pct del capital) de cada dueno, con SU capital. */
+    const limiteSemanalDe = (clave: string) =>
+      (maxPerdidaSemanalDe(clave) * maxCapitalDe(clave)) / 100;
+
     const perdidaDia = new Map<string, number>();
     const perdidaSemana = new Map<string, number>();
 
@@ -726,7 +767,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
       botsProcessed++;
       const duenoId = duenoDe(bot);
       // Se declaran fuera del try para que el catch pueda auditar una orden real ya
-      // ejecutada en Binance cuyo PnL no se aplicÃ³ (fallo de la RPC y del fallback).
+      // ejecutada en Binance cuyo PnL no se aplicó (fallo de la RPC y del fallback).
       let exchangeOrderId: string | null = null;
       let pnlDelta = 0;
       try {
@@ -754,7 +795,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           continue;
         }
 
-        // Fase 3 Â· defensa en profundidad: el modo Real es solo del administrador
+        // Fase 3 · defensa en profundidad: el modo Real es solo del administrador
         // (promoteBotToReal exige admin + 2FA). Un bot Real de otro usuario se
         // detiene sin operar.
         if (bot.mode === "real" && !esDelAdmin(claveDueno(duenoId), adminId)) {
@@ -762,27 +803,32 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           continue;
         }
 
-        // Tope global de capital del EscuadrÃ³n y regla de diversificaciÃ³n (del dueno).
-        const capitalDueno = capitales.get(claveDueno(duenoId));
+        // Tope global de capital del Escuadrón y regla de diversificación (del dueno).
+        // Cada usuario se mide con SU propio tope (si no tiene fila propia, el
+        // de la plataforma).
+        const claveDuenoBot = claveDueno(duenoId);
+        const capitalDueno = capitales.get(claveDuenoBot);
         const squadCapital = capitalDueno?.squad ?? 0;
-        if (squadCapital > Number(settings.global_max_capital)) {
+        const maxCapitalDueno = maxCapitalDe(claveDuenoBot);
+        if (squadCapital > maxCapitalDueno) {
           await stopBot(db, bot.id, bot.name, "tope_global_capital_escuadron", {
             squad_capital: squadCapital,
-            max: Number(settings.global_max_capital),
+            max: maxCapitalDueno,
           });
           continue;
         }
         const pairShare = concentracionPct(capitalDueno, bot.pair);
-        if (pairShare > Number(settings.max_pair_concentration_pct)) {
+        const maxConcentracionDueno = maxConcentracionDe(claveDuenoBot);
+        if (pairShare > maxConcentracionDueno) {
           await stopBot(db, bot.id, bot.name, "concentracion_excesiva_por_par", {
             pair: bot.pair,
             concentration_pct: Number(pairShare.toFixed(2)),
-            max: Number(settings.max_pair_concentration_pct),
+            max: maxConcentracionDueno,
           });
           continue;
         }
 
-        // RestricciÃ³n geogrÃ¡fica: el bot Real se pausa de forma segura (sin abrir posiciones).
+        // Restricción geográfica: el bot Real se pausa de forma segura (sin abrir posiciones).
         if (bot.mode === "real" && geoRestricted) {
           await stopBot(db, bot.id, bot.name, "binance_restriccion_geografica", {
             code: "binance_geo_restricted",
@@ -801,12 +847,12 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
             db,
             bot.id,
             "warn",
-            "Ciclo omitido: el trading real requiere credenciales Binance verificadas y la autorizaciÃ³n global de trading real.",
+            "Ciclo omitido: el trading real requiere credenciales Binance verificadas y la autorización global de trading real.",
           );
           continue;
         }
 
-        // LÃ­mite de capital asignado
+        // Límite de capital asignado
         if (Number(bot.capital) > Number(bot.max_capital)) {
           await stopBot(db, bot.id, bot.name, "limite_capital_asignado", {
             capital: Number(bot.capital),
@@ -815,7 +861,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           continue;
         }
 
-        // MÃ¡ximo de operaciones por dÃ­a
+        // Máximo de operaciones por día
         if (tradesToday >= Number(bot.max_trades_per_day)) {
           await stopBot(db, bot.id, bot.name, "maximo_operaciones_diarias", {
             trades_today: tradesToday,
@@ -824,16 +870,16 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           continue;
         }
 
-        // Fase 1 Â· aperturas: sin sesiÃ³n activa (o en cierre por timer,
-        // Detener o Kill Switch) no se abren posiciones nuevas. Una posiciÃ³n
-        // real abierta sÃ­ pasa por realCycleOrder mÃ¡s abajo, que en ese caso
-        // solo harÃ¡ TP/SL sin entrar de nuevo.
+        // Fase 1 · aperturas: sin sesión activa (o en cierre por timer,
+        // Detener o Kill Switch) no se abren posiciones nuevas. Una posición
+        // real abierta sí pasa por realCycleOrder más abajo, que en ese caso
+        // solo hará TP/SL sin entrar de nuevo.
         const gestionandoAbierta =
           cierreEnCurso && bot.mode === "real" && (await botTienePosicionAbierta(db, bot));
         if (!puedeAbrir && !gestionandoAbierta) continue;
 
-        // ProtecciÃ³n anti-duplicaciÃ³n: como mÃ¡ximo una entrada y su salida por bot
-        // y ciclo. Binance ademÃ¡s rechaza el duplicado por `newClientOrderId`.
+        // Protección anti-duplicación: como máximo una entrada y su salida por bot
+        // y ciclo. Binance además rechaza el duplicado por `newClientOrderId`.
         const idempotencyKey = `${bot.id}:${cycleKey}:${tickSecs}s`;
         const size = Math.min(Number(bot.capital), Number(bot.max_capital)) * 0.02;
 
@@ -848,7 +894,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
 
         if (bot.mode === "real") {
           // Orden MARKET real en Binance (testnet primero): el P&L sale del precio
-          // real de ejecuciÃ³n, nunca de un nÃºmero aleatorio.
+          // real de ejecución, nunca de un número aleatorio.
           const outcome = await realCycleOrder(db, bot, size, minuteKey, settings);
           if (!outcome) continue;
           side = outcome.side;
@@ -862,13 +908,13 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           note = outcome.note;
           exchangeOrderId = outcome.orderId;
           if (outcome.dryRun) {
-            // allow_live_orders apagado: no se enviÃ³ nada a Binance, asÃ­ que no se
-            // registra ejecuciÃ³n ni se altera el P&L. Queda solo el aviso en el log.
+            // allow_live_orders apagado: no se envió nada a Binance, así que no se
+            // registra ejecución ni se altera el P&L. Queda solo el aviso en el log.
             await log(db, bot.id, "warn", `Ciclo real omitido (dry-run): ${outcome.note}`);
             continue;
           }
         } else {
-          // Demo: simulaciÃ³n interna con dinero falso. Nunca toca Binance.
+          // Demo: simulación interna con dinero falso. Nunca toca Binance.
           const stopLossAmount = (size * Number(bot.stop_loss_pct)) / 100;
           const rawPnl = (Math.random() - 0.45) * size * 0.05;
           pnlDelta = Number(Math.max(rawPnl, -stopLossAmount).toFixed(2));
@@ -912,12 +958,12 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           throw new Error(insert.error.message);
         }
 
-        // Trazabilidad honesta: entorno usado (testnet/producciÃ³n) y motivo del ciclo.
+        // Trazabilidad honesta: entorno usado (testnet/producción) y motivo del ciclo.
         await log(
           db,
           bot.id,
           execStatus === "error" ? "error" : "info",
-          `Orden ${side} ${quantity} ${bot.pair} @ ${price} Â· ${note}${execError ? ` Â· ${execError}` : ""}`,
+          `Orden ${side} ${quantity} ${bot.pair} @ ${price} · ${note}${execError ? ` · ${execError}` : ""}`,
         );
 
         // Fill parcial: no es silencioso. Queda constancia explicita de que la
@@ -946,7 +992,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         }
 
         // Orden rechazada por Binance: no se altera el P&L del bot ni se cuenta la
-        // operaciÃ³n como creada (la ejecuciÃ³n queda registrada con su error).
+        // operación como creada (la ejecución queda registrada con su error).
         if (execStatus === "error") {
           errors++;
           await audit(
@@ -985,7 +1031,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           await withRetry(
             async () => {
               // Intento completo (nube con PART7). Si la nube es vieja y faltan
-              // columnas, se reintenta con el subset bÃ¡sico para no romper el ciclo.
+              // columnas, se reintenta con el subset básico para no romper el ciclo.
               const full = {
                 pnl: newPnl,
                 peak_pnl: peak,
@@ -1043,7 +1089,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
             db,
             bot.id,
             "info",
-            `Take-profit alcanzado (${bot.take_profit_pct}%): posiciÃ³n cerrada con beneficio.`,
+            `Take-profit alcanzado (${bot.take_profit_pct}%): posición cerrada con beneficio.`,
           );
         }
         if (hitStopLoss) {
@@ -1051,11 +1097,11 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
             db,
             bot.id,
             "warn",
-            `Stop-loss por operaciÃ³n aplicado (${bot.stop_loss_pct}%).`,
+            `Stop-loss por operación aplicado (${bot.stop_loss_pct}%).`,
           );
         }
 
-        // PÃ©rdida mÃ¡xima diaria
+        // Pérdida máxima diaria
         if (dailyLoss >= Number(bot.max_daily_loss)) {
           await stopBot(db, bot.id, bot.name, "limite_perdida_diaria", {
             daily_loss: dailyLoss,
@@ -1089,7 +1135,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           "error",
           `Error en el ciclo del motor: ${error instanceof Error ? error.message : "desconocido"}`,
         );
-        // Orden real ejecutada en Binance pero el PnL no se aplicÃ³: la fila en
+        // Orden real ejecutada en Binance pero el PnL no se aplicó: la fila en
         // bot_executions queda sin sincronizar con bots. Se audita para que la
         // discrepancia sea un evento buscable y no una fila silenciosa.
         if (bot.mode === "real" && exchangeOrderId) {
@@ -1109,25 +1155,20 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
             db,
             bot.id,
             "error",
-            `Orden real ${exchangeOrderId} ejecutada pero el PnL no se aplicÃ³. Requiere reconciliaciÃ³n manual.`,
+            `Orden real ${exchangeOrderId} ejecutada pero el PnL no se aplicó. Requiere reconciliación manual.`,
           );
         }
       }
     }
 
-    // Fase 3 Â· limites de cada usuario (no administrador): se aplican con los
-    // mismos valores de automation_settings, pero solo detienen SUS bots; nunca
-    // activan el kill switch ni frenan al administrador u otros usuarios.
-    const limiteSemanal =
-      (Number(settings.global_max_weekly_drawdown_pct) * Number(settings.global_max_capital)) / 100;
-    for (const dueno of duenosQueSuperan(perdidaSemana, limiteSemanal, adminId)) {
+    // Fase 3 · limites de cada usuario (no administrador): cada uno se mide con
+    // SU propio tope (el de su fila de automation_settings; si no tiene fila
+    // propia, el de la plataforma). Solo detienen SUS bots; nunca activan el
+    // kill switch ni frenan al administrador u otros usuarios.
+    for (const dueno of duenosQueSuperanConLimitePropio(perdidaSemana, limiteSemanalDe, adminId)) {
       await stopBotsDeDueno(db, dueno, "drawdown_semanal_usuario");
     }
-    for (const dueno of duenosQueSuperan(
-      perdidaDia,
-      Number(settings.global_max_daily_loss),
-      adminId,
-    )) {
+    for (const dueno of duenosQueSuperanConLimitePropio(perdidaDia, maxPerdidaDiariaDe, adminId)) {
       await stopBotsDeDueno(db, dueno, "limite_global_perdida_diaria_usuario");
     }
 
@@ -1136,7 +1177,7 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
     const globalWeeklyLoss = perdidaDelAdmin(perdidaSemana, adminId);
     const globalDailyLoss = perdidaDelAdmin(perdidaDia, adminId);
 
-    // LÃ­mite global de pÃ©rdida semanal del EscuadrÃ³n
+    // Límite global de pérdida semanal del Escuadrón
     if (
       globalWeeklyLoss >=
       (Number(settings.global_max_weekly_drawdown_pct) * Number(settings.global_max_capital)) / 100
@@ -1157,8 +1198,8 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
       await raise(
         "risk",
         "critical",
-        "Drawdown semanal del EscuadrÃ³n alcanzado",
-        `Se pausaron todos los bots tras una pÃ©rdida semanal de ${globalWeeklyLoss.toFixed(2)}.`,
+        "Drawdown semanal del Escuadrón alcanzado",
+        `Se pausaron todos los bots tras una pérdida semanal de ${globalWeeklyLoss.toFixed(2)}.`,
         undefined,
         adminId,
       );
@@ -1169,14 +1210,14 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           ordersCreated,
           errors,
           retries,
-          notes: "Drawdown semanal del EscuadrÃ³n alcanzado",
+          notes: "Drawdown semanal del Escuadrón alcanzado",
         },
         "halted",
-        "Drawdown semanal del EscuadrÃ³n alcanzado",
+        "Drawdown semanal del Escuadrón alcanzado",
       );
     }
 
-    // LÃ­mite global de pÃ©rdida diaria â†’ kill switch automÃ¡tico
+    // Límite global de pérdida diaria â†’ kill switch automático
     if (globalDailyLoss >= Number(settings.global_max_daily_loss)) {
       await db
         .from("automation_settings")
@@ -1194,10 +1235,10 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           ordersCreated,
           errors,
           retries,
-          notes: "Kill switch automÃ¡tico: lÃ­mite global de pÃ©rdida diaria alcanzado",
+          notes: "Kill switch automático: límite global de pérdida diaria alcanzado",
         },
         "halted",
-        "LÃ­mite global de pÃ©rdida diaria alcanzado",
+        "Límite global de pérdida diaria alcanzado",
       );
     }
 
@@ -1207,9 +1248,9 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
     } else if (settings.allow_live_orders !== true) {
       notes = "Ciclo completado (real habilitado pero en dry-run: allow_live_orders desactivado)";
     } else if (realAllowed) {
-      notes = "Ciclo completado (real autorizado y ejecutando Ã³rdenes)";
+      notes = "Ciclo completado (real autorizado y ejecutando órdenes)";
     } else {
-      notes = "Ciclo completado (real bloqueado: revisar credenciales o geo-restricciÃ³n)";
+      notes = "Ciclo completado (real bloqueado: revisar credenciales o geo-restricción)";
     }
 
     return await finish(
@@ -1260,7 +1301,7 @@ async function stopBot(
     db,
     botId,
     "error",
-    `Bot detenido automÃ¡ticamente: ${reason} ${JSON.stringify(details)}`,
+    `Bot detenido automáticamente: ${reason} ${JSON.stringify(details)}`,
   );
   // La auditoria y la alerta quedan a nombre del dueno del bot para que lo vea.
   const { data: fila } = await db.from("bots").select("*").eq("id", botId).maybeSingle();
@@ -1270,8 +1311,8 @@ async function stopBot(
   await raise(
     "risk",
     "critical",
-    `Bot detenido por lÃ­mite de riesgo: ${botName}`,
-    `Motivo: ${reason}. Detalles: ${JSON.stringify(details)}. No quedan Ã³rdenes pendientes: el ciclo se cierra antes de abrir nuevas posiciones.`,
+    `Bot detenido por límite de riesgo: ${botName}`,
+    `Motivo: ${reason}. Detalles: ${JSON.stringify(details)}. No quedan órdenes pendientes: el ciclo se cierra antes de abrir nuevas posiciones.`,
     botId,
     duenoId,
   );
