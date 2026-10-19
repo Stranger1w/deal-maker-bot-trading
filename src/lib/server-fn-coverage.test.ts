@@ -25,6 +25,8 @@ const USUARIO = [
   "promoteRun",
   "listarMercados",
   "validarParMercado",
+  "estadoAvisoRiesgo",
+  "aceptarAvisoRiesgo",
 ].sort();
 
 /**

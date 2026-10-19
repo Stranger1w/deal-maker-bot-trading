@@ -925,6 +925,22 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           continue;
         }
 
+        // El take-profit tiene que cubrir el coste de ida y vuelta
+        // (comisiones + slippage) con margen. Si no lo cubre, cualquier
+        // operacion sale en perdida: se para el bot en lugar de quemarlo.
+        if (Number(bot.take_profit_pct) > 0) {
+          const { tpCubreCostes } = await import("./costes");
+          const veredicto = tpCubreCostes(Number(bot.take_profit_pct));
+          if (!veredicto.ok) {
+            await stopBot(db, bot.id, bot.name, "take_profit_no_cubre_costes", {
+              take_profit_pct: Number(bot.take_profit_pct),
+              coste_minimo_pct: veredicto.minimoPct,
+              motivo: veredicto.motivo,
+            });
+            continue;
+          }
+        }
+
         // Fase 3 · defensa en profundidad: el modo Real es solo del administrador
         // (promoteBotToReal exige admin + 2FA). Un bot Real de otro usuario se
         // detiene sin operar.

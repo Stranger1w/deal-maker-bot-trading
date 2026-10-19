@@ -41,7 +41,9 @@ import {
 } from "@/lib/dealmaker.functions";
 import { useSecuritySession } from "@/hooks/useSecuritySession";
 import {
+  aceptarAvisoRiesgo,
   evaluatePromotion,
+  estadoAvisoRiesgo,
   promoteBotToReal,
   saveBotRisk,
   saveSquadRisk,
@@ -130,6 +132,13 @@ function SquadTab() {
   const saveSquad = useServerFn(saveSquadRisk);
   const evaluate = useServerFn(evaluatePromotion);
   const promote = useServerFn(promoteBotToReal);
+  const leerAviso = useServerFn(estadoAvisoRiesgo);
+  const aceptarAviso = useServerFn(aceptarAvisoRiesgo);
+  // Aviso de riesgo: hay que leerlo y aceptarlo antes de poner un bot en Real.
+  const aviso = useQuery({
+    queryKey: ["aviso_riesgo"],
+    queryFn: () => leerAviso({}),
+  });
 
   const [view, setView] = useState<"cards" | "table">("cards");
   const [search, setSearch] = useState("");
@@ -740,6 +749,33 @@ function SquadTab() {
                     cambio a Real.
                   </p>
                 )}
+                {aviso.data && !aviso.data.aceptado && (
+                  <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/10 p-3">
+                    <p className="text-xs font-medium text-destructive">
+                      Aviso de riesgo: {aviso.data.texto}
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => {
+                        void aceptarAviso({})
+                          .then(() => {
+                            toast.success("Aviso de riesgo aceptado.");
+                            void qc.invalidateQueries({ queryKey: ["aviso_riesgo"] });
+                          })
+                          .catch((e: Error) => toast.error(e.message));
+                      }}
+                    >
+                      He leído el aviso y acepto el riesgo
+                    </Button>
+                  </div>
+                )}
+                {aviso.data?.aceptado && (
+                  <p className="text-xs text-muted-foreground">
+                    Aviso de riesgo aceptado (versión {aviso.data.version}).
+                  </p>
+                )}
               </>
             )}
           </div>
@@ -750,7 +786,7 @@ function SquadTab() {
             </Button>
             <Button
               onClick={confirmReal}
-              disabled={!check?.ok || !session.twoFactorVerified}
+              disabled={!check?.ok || !session.twoFactorVerified || !aviso.data?.aceptado}
               variant="destructive"
             >
               Sí, usar fondos reales

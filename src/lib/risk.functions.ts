@@ -9,6 +9,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireAdmin } from "@/integrations/supabase/admin-middleware";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 async function admin() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -64,6 +65,13 @@ export const saveBotRisk = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const db = await admin();
+    // El take-profit tiene que cubrir el coste de ida y vuelta (comisiones +
+    // slippage) con margen: con un take-profit mas pequeno se pierde dinero
+    // aunque el precio se mueva a favor.
+    const { tpCubreCostes } = await import("./costes");
+    const veredicto = tpCubreCostes(data.takeProfitPct);
+    if (!veredicto.ok) throw new Error(veredicto.motivo);
+
     const { error } = await db
       .from("bots")
       .update({
@@ -319,6 +327,14 @@ export const promoteBotToReal = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     assertTwoFactor(context.claims as unknown as Record<string, unknown>);
     const db = await admin();
+    // Aviso de riesgo: nadie puede poner un bot en Real sin haber leido y
+    // aceptado el aviso de que se puede perder TODO el capital.
+    const { avisoAceptado } = await import("./aviso-riesgo.server");
+    if (!(await avisoAceptado(db, context.userId))) {
+      throw new Error(
+        "Antes de activar un bot en Real tienes que leer y aceptar el aviso de riesgo (puedes perder todo el capital).",
+      );
+    }
     const { evaluatePromotionCore } = await import("./risk.server");
     const check = await evaluatePromotionCore(data.botId);
     if (!check.ok) throw new Error(check.reasons.join(" "));
@@ -419,6 +435,38 @@ export const createSecureWithdrawal = createServerFn({ method: "POST" })
       account.id,
       { amount: data.amount, method: data.method, two_factor: "aal2_verified" },
       context.userId,
+      context.userId,
+    );
+    return { ok: true };
+  });
+
+/* ------------------------- AVISO DE RIESGO -------------------------------- */
+
+/**
+ * Estado del aviso de riesgo del usuario actual (para la UI).
+ * No exige ser admin: cada uno acepta el aviso por su cuenta.
+ */
+export const estadoAvisoRiesgo = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const db = await admin();
+    const { leerEstadoAviso } = await import("./aviso-riesgo.server");
+    return leerEstadoAviso(db, context.userId);
+  });
+
+/** Registra que el usuario ha leido y aceptado el aviso de riesgo. */
+export const aceptarAvisoRiesgo = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const db = await admin();
+    const { registrarAceptacion, leerEstadoAviso } = await import("./aviso-riesgo.server");
+    await registrarAceptacion(db, context.userId);
+    await audit(
+      "risk.notice_accepted",
+      "user",
+      context.userId,
+      { version: (await leerEstadoAviso(db, context.userId)).version },
+      "operator",
       context.userId,
     );
     return { ok: true };
