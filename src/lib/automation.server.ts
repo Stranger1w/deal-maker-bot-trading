@@ -812,6 +812,21 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
     const { leerConfigSenales, senalDelBot } = await import("./senal-motor.server");
     const cfgSenales = await leerConfigSenales(db, adminId);
 
+    // ── Selector automático de par (Fase 3) ──────────────────────────────
+    // Solo para los bots que lo tienen ENCENDIDO (engine_strategies.auto_symbol,
+    // interruptor por bot) y SOLO en testnet de momento: cambiar el par con
+    // dinero real sin haberlo probado en testnet seria operar a ciegas.
+    const { resolveBinanceTradingEnv } = await import("./binance-trading.server");
+    const envTrading = await resolveBinanceTradingEnv();
+    const autoSymbolPermitido = envTrading === "testnet";
+    const { data: botsAuto } = await db
+      .from("engine_strategies" as never)
+      .select("bot_id" as never)
+      .eq("auto_symbol" as never, true as never);
+    const idsConAuto = new Set(
+      ((botsAuto ?? []) as unknown as { bot_id: string }[]).map((b) => b.bot_id),
+    );
+
     // Capital y concentracion se miden por dueno: los bots de un usuario no suman
     // al tope del administrador ni a los de otro usuario.
     const { data: allBots } = await db.from("bots").select("*");
@@ -854,6 +869,29 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
     for (const bot of bots ?? []) {
       botsProcessed++;
       const duenoId = duenoDe(bot);
+
+      // ── Reevaluacion del par (Auto) ──────────────────────────────────
+      // Va antes de la senal: si cambia el par, la senal y la operacion de
+      // este ciclo usan el par NUEVO. Nunca cambia con una posicion abierta
+      // (lo comprueba reevaluarBot) y nunca cada poco (histresis + intervalo).
+      if (autoSymbolPermitido && idsConAuto.has(bot.id)) {
+        try {
+          const { reevaluarBot } = await import("./asset-reevaluate.server");
+          const r = await reevaluarBot(db as never, bot.id, { aplicar: true });
+          if (r.aplicado && r.parNuevo) {
+            bot.pair = r.parNuevo;
+            await log(db, bot.id, "info", `Auto: par cambiado a ${r.parNuevo}. ${r.detalle}`);
+          }
+        } catch (error) {
+          await log(
+            db,
+            bot.id,
+            "warn",
+            `Auto: no se pudo reevaluar el par: ${error instanceof Error ? error.message : "error desconocido"}`,
+          );
+        }
+      }
+
       // La señal de los indicadores: la MISMA función que usa el backtest
       // (senalDe). Sin señal de compra no se abre nada; con señal de venta se
       // cierra lo que haya abierto.

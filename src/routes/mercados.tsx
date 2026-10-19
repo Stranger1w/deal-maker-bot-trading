@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { updateBotStrategy } from "@/lib/dealmaker.functions";
+import { reevaluarParBot } from "@/lib/engine.functions";
 import { dateTime, pct } from "@/lib/format";
 import {
   listarMercados,
@@ -155,6 +156,41 @@ function MercadosPage() {
   }, [rows, quoteActiva, search]);
 
   const botSel = (bots.data ?? []).find((b) => b.id === botId) ?? null;
+
+  // ── Selector automático de par (Auto) ──────────────────────────────────
+  // El tick ya reevalúa solo en testnet y solo para los bots con el
+  // interruptor encendido. Esto es la versión manual: qué par elegiría el
+  // selector ahora y por qué.
+  const reevaluar = useServerFn(reevaluarParBot);
+  const [auto, setAuto] = useState<{
+    parNuevo: string | null;
+    aplicado: boolean;
+    detalle: string;
+  } | null>(null);
+  const [reevaluando, setReevaluando] = useState(false);
+
+  async function reevaluarAhora() {
+    if (!botSel) return;
+    setReevaluando(true);
+    try {
+      const r = await reevaluar({ data: { botId: botSel.id } });
+      setAuto({
+        parNuevo: r.parNuevo,
+        aplicado: r.aplicado,
+        detalle: r.detalle,
+      });
+      if (r.aplicado) {
+        toast.success(`${botSel.name} ahora opera ${r.parNuevo}`);
+        void qc.invalidateQueries({ queryKey: ["bots"] });
+      } else {
+        toast.info(r.detalle);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo reevaluar el par");
+    } finally {
+      setReevaluando(false);
+    }
+  }
 
   const columnas: Column<ParMercado>[] = [
     ...COLUMNAS,
@@ -317,6 +353,54 @@ function MercadosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Selector automático de par (Auto)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            El selector puntúa los pares por volumen, volatilidad y momentum y elige el mejor para
+            el bot. En el motor, la reevaluación automática solo se hace para los bots con el
+            interruptor <strong>Auto</strong> encendido y <strong>solo en testnet</strong>. Aquí
+            puedes ver qué elegiría ahora y aplicarlo a mano.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={botId}
+              onValueChange={(v) => {
+                setBotId(v);
+                setAuto(null);
+              }}
+            >
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder="Elige un bot" />
+              </SelectTrigger>
+              <SelectContent>
+                {(bots.data ?? []).map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name} · {b.pair}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              disabled={!botSel || reevaluando}
+              onClick={() => void reevaluarAhora()}
+            >
+              {reevaluando ? "Evaluando…" : "Elegir el mejor par ahora"}
+            </Button>
+          </div>
+          {auto && (
+            <p className="text-xs text-muted-foreground">
+              {auto.aplicado
+                ? `Par aplicado: ${botSel?.name} → ${auto.parNuevo}. ${auto.detalle}`
+                : `No se cambió el par. ${auto.detalle}`}
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

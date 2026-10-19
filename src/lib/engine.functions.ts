@@ -204,6 +204,40 @@ export const listarSesionesMotor = createServerFn({ method: "POST" })
 /* ------------------------- CONFIGURACION DEL MOTOR ------------------------ */
 
 /**
+ * Reevalua ahora el par de un bot (el "Aplicar" manual del selector Auto).
+ *
+ * El tick ya reevalua solo los bots con `auto_symbol` encendido y solo en
+ * testnet. Esto es la version manual: la dice el administrador cuando quiere
+ * ver que par elegiria el selector AHORA, y aplica el cambio si procede.
+ *
+ * No cambia el par si el bot tiene una posicion abierta ni si el par
+ * elegido no supera los filtros de volumen y minimo del exchange.
+ */
+export const reevaluarParBot = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
+  .inputValidator((input: unknown) => z.object({ botId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const db = await admin();
+    const { reevaluarBot } = await import("./asset-reevaluate.server");
+    const resultado = await reevaluarBot(db as never, data.botId, {
+      aplicar: true,
+      forzarIntervalo: true,
+    });
+    await audit(
+      "asset.reevaluated_manual",
+      {
+        par_anterior: resultado.parAnterior,
+        par_nuevo: resultado.parNuevo,
+        aplicado: resultado.aplicado,
+        motivo: resultado.motivo,
+        detalle: resultado.detalle,
+      },
+      context.userId,
+    );
+    return resultado;
+  });
+
+/**
  * Configuracion de indicadores, estrategia y horizonte del motor.
  *
  * Sin esta fila el motor NO abre posiciones: la señal sale de los
