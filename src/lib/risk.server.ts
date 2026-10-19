@@ -1,5 +1,7 @@
 // Lógica de validación de riesgo compartida (server-only).
 
+import type { MetricasDemo } from "./promotion-gate";
+
 export type PromotionCheck = {
   ok: boolean;
   reasons: string[];
@@ -13,6 +15,10 @@ export type PromotionCheck = {
   hasStopLoss: boolean;
   hasTakeProfit: boolean;
   binanceVerified: boolean;
+  /** Metricas reales de las operaciones en demo (paper trading). */
+  metricasDemo: MetricasDemo;
+  /** Drawdown maximo admitido para el bot (%). */
+  maxDrawdownLimitePct: number;
 };
 
 /** Compara el bot en demo contra los criterios configurados y el benchmark buy-and-hold. */
@@ -68,24 +74,50 @@ export async function evaluatePromotionCore(botId: string): Promise<PromotionChe
   const hasTakeProfit = Number(bot.take_profit_pct) > 0;
   const binanceVerified = (creds ?? []).some((c) => c.connection_status === "ok");
 
-  const reasons: string[] = [];
-  if (!hasStopLoss) reasons.push("Falta stop-loss obligatorio.");
-  if (!hasTakeProfit) reasons.push("Falta take-profit obligatorio.");
-  if (demoDays < minDemoDays)
-    reasons.push(`Solo ${demoDays} de ${minDemoDays} días mínimos en demo.`);
-  if (demoTrades < minDemoTrades)
-    reasons.push(`Solo ${demoTrades} de ${minDemoTrades} operaciones demo mínimas.`);
-  if (benchmarkRequired && botReturnPct <= benchmarkReturnPct)
-    reasons.push(
-      `El bot (${botReturnPct}%) no supera el benchmark buy-and-hold de ${bot.pair} (${benchmarkReturnPct}%).`,
-    );
-  if (!binanceVerified) reasons.push("Las API Keys de Binance no están verificadas.");
+  // ── Evidencia real del paper trading ──────────────────────────────────
+  // Las operaciones CERRADAS en demo (cada venta trae su P&L). Con esto se
+  // miden el P&L neto, el win rate, el profit factor y el drawdown de
+  // verdad, en vez de fiarse solo del contador y del P&L acumulado.
+  const { metricasDeEjecuciones, evaluarGate } = await import("./promotion-gate");
+  const { data: ejecuciones } = await db
+    .from("bot_executions")
+    .select("side,pnl,created_at,status")
+    .eq("bot_id", botId)
+    .eq("mode", "demo");
+  const metricasDemo = metricasDeEjecuciones(
+    (
+      (ejecuciones ?? []) as {
+        side: string;
+        pnl: number | string | null;
+        created_at: string;
+      }[]
+    ).map((e) => ({ ...e, pnl: e.pnl })),
+    capital,
+  );
+
+  const maxDrawdownLimitePct = Number(bot.max_drawdown_pct ?? 0);
+  const gate = evaluarGate(
+    {
+      dias: demoDays,
+      minDias: minDemoDays,
+      minOperaciones: minDemoTrades,
+      maxDrawdownPct: maxDrawdownLimitePct,
+      exigirBenchmark: benchmarkRequired,
+      botReturnPct,
+      benchmarkReturnPct,
+      stopLossPct: Number(bot.stop_loss_pct ?? 0),
+      takeProfitPct: Number(bot.take_profit_pct ?? 0),
+      binanceVerificado: binanceVerified,
+      capital,
+    },
+    metricasDemo,
+  );
 
   return {
-    ok: reasons.length === 0,
-    reasons,
+    ok: gate.ok,
+    reasons: gate.razones,
     demoDays,
-    demoTrades,
+    demoTrades: metricasDemo.operaciones,
     minDemoDays,
     minDemoTrades,
     botReturnPct,
@@ -94,5 +126,7 @@ export async function evaluatePromotionCore(botId: string): Promise<PromotionChe
     hasStopLoss,
     hasTakeProfit,
     binanceVerified,
+    metricasDemo,
+    maxDrawdownLimitePct,
   };
 }

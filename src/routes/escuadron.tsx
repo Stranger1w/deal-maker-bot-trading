@@ -705,12 +705,28 @@ function SquadTab() {
                     label={`Operaciones demo ${check.demoTrades}/${check.minDemoTrades}`}
                   />
                   <Criterion
+                    ok={check.metricasDemo.pnlNeto > 0}
+                    label={`P&L neto en demo ${check.metricasDemo.pnlNeto.toFixed(2)}`}
+                  />
+                  <Criterion
+                    ok={
+                      check.maxDrawdownLimitePct <= 0 ||
+                      check.metricasDemo.maxDrawdownPct <= check.maxDrawdownLimitePct
+                    }
+                    label={`Drawdown demo ${check.metricasDemo.maxDrawdownPct.toFixed(2)} % / máx ${check.maxDrawdownLimitePct} %`}
+                  />
+                  <Criterion
                     ok={!check.benchmarkRequired || check.botReturnPct > check.benchmarkReturnPct}
                     label={`Bot ${check.botReturnPct}% vs buy-and-hold ${check.benchmarkReturnPct}%`}
                   />
                   <Criterion ok={check.binanceVerified} label="Binance verificado" />
                   <Criterion ok={session.twoFactorVerified} label="2FA verificada en la sesión" />
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  La compuerta exige <strong>evidencia</strong>, no solo tiempo: P&amp;L neto
+                  positivo en demo, drawdown dentro del límite y un mínimo de operaciones cerradas.
+                  Con pocas operaciones el azar manda.
+                </p>
                 {check.reasons.length > 0 && (
                   <ul className="list-disc space-y-1 pl-5 text-xs text-destructive">
                     {check.reasons.map((r) => (
