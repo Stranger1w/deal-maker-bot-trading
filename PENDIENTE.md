@@ -4,23 +4,37 @@ Estado verificado el **20/10/2026** (contra la base de datos y la app, no de
 memoria). Todo lo de la sección 1 es tuyo; lo de la 2 son decisiones; lo de
 la 3 son extras.
 
+> ✅ **Las 8 migraciones ya están aplicadas** (20-oct). La app lo confirma:
+> _Ajustes → Automatización → "Estado de la base de datos"_ → 8/8 en verde.
+> La auditoría de seguridad tambien: con la clave pública sin sesión, todo
+> devuelve 401; con la sesión de otro usuario, 403 (y `app_settings` le da 0
+> filas por no ser admin).
+
 ---
 
 ## 0. CÓMO RESOLVER CADA PENDIENTE (paso a paso)
 
-### A. Las 8 migraciones (10 minutos, un solo pegote)
+### A. Las 8 migraciones ✅ HECHO (20-oct)
 
-**He juntado las 8 en un único fichero**: `supabase/migrations/APLICAR-LAS-8-EN-UNO.sql`
+Las 8 están aplicadas y la app lo confirma: _Ajustes → Automatización →
+"Estado de la base de datos"_ → 8/8 en verde.
 
-1. Abre ese fichero en un editor de texto y **copia TODO** (Ctrl+A, Ctrl+C).
-2. Supabase → **SQL Editor** → **New query** → pega (Ctrl+V) → **Run**.
-3. Debe salir algo como _Success. No rows affected_ (es DDL, no toca filas).
-4. Vuelve a la app → _Ajustes → Automatización → "Estado de la base de datos"_:
-   las 8 deben salir en **verde**.
-5. Si falla: la transacción se deshace **entera** (no se aplica nada a medias).
-   Mándame el error tal cual y lo miramos.
+Si algún dia hay que volver a aplicarlas (por ejemplo si recreas la base), el
+fichero sigue en `supabase/migrations/APLICAR-LAS-8-EN-UNO.sql`: un solo
+pegote, una sola transacción (o entran todas o ninguna), idempotente.
 
-Es una sola transacción y además es idempotente: si lo repites, no rompe nada.
+Comprobado después de aplicarlas:
+
+- La **cache local** ya funciona: 1000 velas y 1000 lecturas de traders
+  guardadas (el sandbox mide sin volver a descargar).
+- El **entrenamiento** de mineros ya se guarda: _tjada → 1,61 MH/s con 4
+  hilos, x1,99_.
+- La **precisión** del dinero ya es la buena: las ganancias se guardan como
+  0,00000002 USD/día en vez de 0,00.
+- El motor de minería reparte la capacidad real: 225 KH/s por equipo (los
+  4 equipos con 1 hilo cada uno sobre 4 núcleos).
+- La **seguridad** aguanta: con la clave pública sin sesión, todo devuelve
+  401; con la sesión de otro usuario, 403.
 
 ### B. Los indicadores del motor (5 minutos)
 

@@ -55,11 +55,11 @@ function clienteFalso(existen: Set<string>) {
 }
 
 describe("comprobarMigraciones", () => {
-  test("detecta las seis migraciones y dice cuales faltan", async () => {
+  test("detecta las ocho migraciones y dice cuales faltan", async () => {
     // Estado real de la base del dueno: solo existe app_settings.
     const { cliente } = clienteFalso(new Set(["app_settings.value"]));
     const migraciones = await comprobarMigraciones(cliente);
-    expect(migraciones).toHaveLength(6);
+    expect(migraciones).toHaveLength(8);
     for (const m of migraciones) {
       expect(m.fichero.endsWith(".sql")).toBe(true);
       expect(m.titulo.length).toBeGreaterThan(0);
@@ -80,6 +80,8 @@ describe("comprobarMigraciones", () => {
         "automation_settings.riesgo_por_operacion",
         "engine_config.auto_symbol_max_spread_pct",
         "engine_cycles.*",
+        "mining_workers.hash_rate_max",
+        "market_candles.*",
       ]),
     );
     const migraciones = await comprobarMigraciones(cliente);
@@ -94,5 +96,7 @@ describe("comprobarMigraciones", () => {
     expect(consultas).toContain("from automation_settings");
     expect(consultas).toContain("from engine_config");
     expect(consultas).toContain("from engine_cycles");
+    expect(consultas).toContain("from mining_workers");
+    expect(consultas).toContain("from market_candles");
   });
 });

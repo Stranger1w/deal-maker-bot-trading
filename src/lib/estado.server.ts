@@ -75,6 +75,8 @@ export async function comprobarMigraciones(db: ClienteEsquema): Promise<Migracio
   const riesgo = await existeColumna(db, "automation_settings", "riesgo_por_operacion");
   const spread = await existeColumna(db, "engine_config", "auto_symbol_max_spread_pct");
   const diario = await existeTabla(db, "engine_cycles");
+  const mineriaReal = await existeColumna(db, "mining_workers", "hash_rate_max");
+  const cacheMercado = await existeTabla(db, "market_candles");
 
   return [
     {
@@ -124,6 +126,22 @@ export async function comprobarMigraciones(db: ClienteEsquema): Promise<Migracio
         "Guarda un registro de cada ciclo del motor para poder auditar qué decidió y por qué. Opcional: sin ella el motor sigue igual.",
       aplicada: diario,
       comprobacion: "tabla engine_cycles",
+    },
+    {
+      fichero: "20261026000000_mineria_real.sql",
+      titulo: "Minería real (hash rate medido, luz y entrenamiento)",
+      paraQueSirve:
+        "Guarda el hash rate medido de verdad, la ganancia bruta, el coste de la luz y el entrenamiento de cada equipo. Sin ella, la minería va con cifras básicas.",
+      aplicada: mineriaReal,
+      comprobacion: "columna hash_rate_max en mining_workers",
+    },
+    {
+      fichero: "20261027000000_cache_mercado.sql",
+      titulo: "Cache local de datos de mercado",
+      paraQueSirve:
+        "Guarda las velas y los datos de traders en la base: el sandbox mide con lo que ya hay y solo descarga lo que falta. Sin ella, se descarga cada vez.",
+      aplicada: cacheMercado,
+      comprobacion: "tabla market_candles",
     },
   ];
 }
