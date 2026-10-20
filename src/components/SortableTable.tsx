@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -16,6 +15,45 @@ export type Column<T> = {
 };
 
 /** Tabla de alto contraste con ordenación ascendente/descendente al pulsar el encabezado. */
+/**
+ * Indicador de orden: dos flechitas apiladas, la activa marcada.
+ *
+ * Antes se cambiaba el icono entero (flecha doble -> arriba -> abajo) y
+ * ademas salia un "sin orden" con un icono de doble flecha que confuncia.
+ * Ahora se ve siempre hacia donde se puede ordenar, y hacia donde esta
+ * ordenado ahora mismo.
+ */
+function FlechasOrden({ dir }: { dir: "asc" | "desc" }) {
+  return (
+    <span className="inline-flex flex-col items-center gap-[1px] leading-none">
+      <svg
+        width="8"
+        height="5"
+        viewBox="0 0 8 5"
+        className={cn(
+          "transition-colors",
+          dir === "asc" ? "text-primary" : "text-muted-foreground/35",
+        )}
+        aria-hidden
+      >
+        <path d="M4 0.5 L7.5 4.5 H0.5 Z" fill="currentColor" />
+      </svg>
+      <svg
+        width="8"
+        height="5"
+        viewBox="0 0 8 5"
+        className={cn(
+          "transition-colors",
+          dir === "desc" ? "text-primary" : "text-muted-foreground/35",
+        )}
+        aria-hidden
+      >
+        <path d="M4 4.5 L0.5 0.5 H7.5 Z" fill="currentColor" />
+      </svg>
+    </span>
+  );
+}
+
 export function SortableTable<T>({
   rows,
   columns,
@@ -61,7 +99,6 @@ export function SortableTable<T>({
               {columns.map((col) => {
                 const sortable = !!col.value;
                 const active = sort?.key === col.key;
-                const Icon = !active ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
                 return (
                   <th
                     key={col.key}
@@ -78,12 +115,12 @@ export function SortableTable<T>({
                         onClick={() => toggle(col.key)}
                         className={cn(
                           "inline-flex items-center gap-1.5 rounded-sm transition-colors hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
-                          active && "text-primary",
+                          active && "text-foreground",
                         )}
                         title={`Ordenar por ${col.label}`}
                       >
                         {col.label}
-                        <Icon className="size-3.5 opacity-70" aria-hidden />
+                        <FlechasOrden dir={active ? sort.dir : "asc"} />
                       </button>
                     ) : (
                       col.label

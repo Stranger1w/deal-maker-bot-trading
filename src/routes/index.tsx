@@ -233,33 +233,42 @@ function Dashboard() {
         </section>
       )}
 
-      {/* Salud: cinco comprobaciones, con el detalle de cada una. */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">¿Está todo bien?</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-            {salud.map((h) => (
-              <div key={h.label} className="row-subtle rounded-lg px-3 py-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium">{h.label}</span>
-                  <StatusPill tone={h.ok ? "success" : "danger"}>
-                    {h.ok ? "bien" : "revisar"}
-                  </StatusPill>
-                </div>
-                <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">{h.detail}</p>
-                {h.accion ? (
-                  <p className="mt-1.5 text-[11px] leading-snug text-primary/90">{h.accion}</p>
-                ) : null}
+      {/* Gráfica + salud lado a lado: la curva se ve sin bajar. */}
+      <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+        <ComparisonCharts />
+
+        <div className="space-y-4">
+          {/* Salud: cinco comprobaciones, con el detalle de cada una. */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">¿Está todo bien?</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                {salud.map((h) => (
+                  <div key={h.label} className="row-subtle rounded-lg px-3 py-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium">{h.label}</span>
+                      <StatusPill tone={h.ok ? "success" : "danger"}>
+                        {h.ok ? "bien" : "revisar"}
+                      </StatusPill>
+                    </div>
+                    <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+                      {h.detail}
+                    </p>
+                    {h.accion ? (
+                      <p className="mt-1.5 text-[11px] leading-snug text-primary/90">{h.accion}</p>
+                    ) : null}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="mt-4 border-t border-border pt-4">
-            <KillSwitchStatus />
-          </div>
-        </CardContent>
-      </Card>
+              <div className="mt-4 border-t border-border pt-4">
+                <KillSwitchStatus />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       {/* Pasos siguientes: lo que de verdad falta. */}
       {pendientes > 0 && (
@@ -334,8 +343,6 @@ function Dashboard() {
           </CardContent>
         </Card>
       </div>
-
-      <ComparisonCharts />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
