@@ -33,6 +33,10 @@ const USUARIO = [
   // se filtran por el user_id de la sesion) y el estado del esquema, que no
   // es informacion privada de nadie.
   "estadoApp",
+  // Lectura del estado de las credenciales del propio usuario. La tabla esta
+  // bloqueada por RLS (el navegador recibe 403) y solo se devuelven campos
+  // seguros: los ultimos 4 caracteres y el estado. Nunca el secreto.
+  "leerCredencialesBinance",
 ].sort();
 
 /**

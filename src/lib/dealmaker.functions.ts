@@ -27,6 +27,59 @@ async function audit(
   } as never);
 }
 
+/* ------------------------------ BINANCE ------------------------------- */
+
+/**
+ * Estado de las credenciales de Binance de ESTE usuario.
+ *
+ * POR QUE ES UNA FUNCION DE SERVIDOR Y NO UNA CONSULTA DEL NAVEGADOR
+ * La tabla binance_credentials esta bloqueada por RLS (el navegador recibe un
+ * 403). Consultarla desde el cliente hacia que la app dijera "todavia no hay
+ * credenciales guardadas" aunque estuvieran guardadas y verificadas: el
+ * dueno veia su cuenta como vacia.
+ *
+ * Aqui solo se devuelven campos SEGUROS: los ultimos 4 caracteres y el
+ * estado. El secreto cifrado no sale jamas del servidor.
+ */
+export const leerCredencialesBinance = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const db = await admin();
+    const { data, error } = await db
+      .from("binance_credentials")
+      .select(
+        "id, api_key_last4, api_secret_last4, market_mode, connection_status, last_tested_at, geo_restricted, last_error_code, last_error_message",
+      )
+      .eq("user_id", context.userId)
+      .limit(1);
+    if (error) throw new Error(error.message);
+    const fila = (data ?? [])[0] as
+      | {
+          id: string;
+          api_key_last4: string;
+          api_secret_last4: string;
+          market_mode: string;
+          connection_status: string;
+          last_tested_at: string | null;
+          geo_restricted: boolean;
+          last_error_code: string | null;
+          last_error_message: string | null;
+        }
+      | undefined;
+    if (!fila) return null;
+    return {
+      id: fila.id,
+      api_key_last4: fila.api_key_last4,
+      api_secret_last4: fila.api_secret_last4,
+      market_mode: fila.market_mode,
+      connection_status: fila.connection_status,
+      last_tested_at: fila.last_tested_at,
+      geo_restricted: fila.geo_restricted,
+      last_error_code: fila.last_error_code,
+      last_error_message: fila.last_error_message,
+    };
+  });
+
 /* ------------------------------- FONDOS ------------------------------- */
 
 export const createDeposit = createServerFn({ method: "POST" })

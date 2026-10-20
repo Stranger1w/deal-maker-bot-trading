@@ -18,12 +18,12 @@ import { SkeletonCifras } from "@/components/Skeleton";
 import { StatusPill, statusTone } from "@/components/StatusPill";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { estadoApp } from "@/lib/estado.functions";
+import { leerCredencialesBinance } from "@/lib/dealmaker.functions";
 import { dateTime, money } from "@/lib/format";
 import {
   alertsQuery,
   auditQuery,
   automationQuery,
-  binanceQuery,
   botsQuery,
   executionsQuery,
   fundsQuery,
@@ -56,11 +56,18 @@ function Dashboard() {
   const bots = useQuery(botsQuery);
   const workers = useQuery(workersQuery);
   const audit = useQuery(auditQuery);
-  const binance = useQuery(binanceQuery);
   const engine = useQuery(automationQuery);
   const alerts = useQuery(alertsQuery);
   const reports = useQuery(reportsQuery);
   const ejecuciones = useQuery(executionsQuery);
+  // Estado de Binance: lo lee el servidor (la tabla esta bloqueada por RLS
+  // y desde el navegador daba 403: la app decia "sin configurar" cuando si
+  // estaba verificada).
+  const leerCredenciales = useServerFn(leerCredencialesBinance);
+  const binance = useQuery({
+    queryKey: ["binance_settings"],
+    queryFn: () => leerCredenciales({}),
+  });
 
   // Hay operaciones cerradas (ventas): hay algo que medir.
   const hayOperaciones = (ejecuciones.data ?? []).some((e) => e.side === "sell");

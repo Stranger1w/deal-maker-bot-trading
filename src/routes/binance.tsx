@@ -19,11 +19,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { saveBinanceCredentials, testBinanceConnection } from "@/lib/dealmaker.functions";
+import {
+  leerCredencialesBinance,
+  saveBinanceCredentials,
+  testBinanceConnection,
+} from "@/lib/dealmaker.functions";
 import { checkBackendRegion } from "@/lib/region.functions";
 import { GEO_RESTRICTED_HINTS, GEO_RESTRICTED_MESSAGE } from "@/lib/binance-region";
 import { dateTime } from "@/lib/format";
-import { binanceQuery, regionProbeQuery } from "@/lib/queries";
+import { regionProbeQuery } from "@/lib/queries";
 
 export const Route = createFileRoute("/binance")({
   head: () => ({
@@ -49,7 +53,14 @@ type Market = "spot" | "futures" | "both";
 
 function BinancePage() {
   const qc = useQueryClient();
-  const settings = useQuery(binanceQuery);
+  // El estado de las credenciales lo lee el SERVIDOR: la tabla esta
+  // bloqueada por RLS y desde el navegador salia un 403, asi que la app
+  // decia "todavia no hay credenciales" aunque estuvieran guardadas.
+  const leerCredenciales = useServerFn(leerCredencialesBinance);
+  const settings = useQuery({
+    queryKey: ["binance_settings"],
+    queryFn: () => leerCredenciales({}),
+  });
   const test = useServerFn(testBinanceConnection);
   const save = useServerFn(saveBinanceCredentials);
 

@@ -267,18 +267,14 @@ export const payoutsQuery = queryOptions({
     ),
 });
 
-export const binanceQuery = queryOptions({
-  queryKey: ["binance_settings"],
-  queryFn: async () =>
-    unwrap<BinanceSettings[]>(
-      await supabase
-        .from("binance_credentials")
-        .select(
-          "id,api_key_last4,api_secret_last4,market_mode,connection_status,last_tested_at,geo_restricted,last_error_code,last_error_message",
-        )
-        .limit(1),
-    ).at(0) ?? null,
-});
+/**
+ * OJO: el estado de las credenciales de Binance ya NO se lee desde el
+ * navegador. La tabla binance_credentials esta bloqueada por RLS (403) y
+ * por eso la app decia "todavia no hay credenciales" aunque las hubiera.
+ * Ahora se lee con la funcion de servidor leerCredencialesBinance.
+ *
+ * export const binanceQuery = queryOptions({ ... });
+ */
 
 /* ------------------- MOTOR DE AUTOMATIZACIÓN Y GRÁFICAS ------------------ */
 
