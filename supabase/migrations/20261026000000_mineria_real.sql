@@ -43,6 +43,32 @@ alter table public.mining_payouts
 alter table public.mining_payouts
   alter column amount type numeric(24,10);
 
+-- 1c) Campo de ENTRENAMIENTO de los mineros:
+--   - 'hilos': cuantos nucleos usa cada equipo.
+--   - 'hash_rate_max': lo que rinde de verdad la maquina con esos hilos.
+--   - mining_entrenamientos: la curva medida (1, 2, 3, 4 hilos) de cada
+--     equipo, con la medicion real (SHA-256 de verdad, con workers reales).
+create table if not exists public.mining_entrenamientos (
+  id uuid primary key default gen_random_uuid(),
+  worker_id uuid references public.mining_workers (id) on delete cascade,
+  user_id uuid not null,
+  hilos integer not null default 1,
+  hash_rate numeric not null default 0,
+  hash_unit text not null default 'MH/s',
+  duracion_ms integer not null default 0,
+  hashes bigint not null default 0,
+  curva jsonb,
+  nota text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.mining_workers
+  add column if not exists hilos integer not null default 1,
+  add column if not exists hash_rate_max numeric;
+
+create index if not exists mining_entrenamientos_worker_fecha_idx
+  on public.mining_entrenamientos (worker_id, created_at desc);
+
 -- 2) El precio del kWh (por dueno, como el resto de automation_settings).
 alter table public.automation_settings
   add column if not exists mineria_kwh_usd numeric not null default 0.15;

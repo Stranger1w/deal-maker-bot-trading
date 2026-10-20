@@ -141,6 +141,24 @@ datos"** se llena la cache.
 > Los datos de traders (posicionamiento de las cuentas grandes) **solo los
 > publica Binance Futures**: las demas plataformas se usan para precios.
 
+### El hash rate es real, y el campo de entrenamiento lo mide en serio
+
+El hash rate **no es simulado**: se mide con SHA-256 de verdad (el mismo
+algoritmo que usan los mineros de CPU), contando los hashes reales. Pero
+hasta ahora se medía en **un solo núcleo** de tu i7-5600U (4 núcleos), así
+que la app se quedaba en ~300 KH/s cuando la máquina da bastante más.
+
+Ahora hay un **campo de entrenamiento de mineros** en _Minería_:
+
+- Mide la curva real (1, 2, 3 y 4 hilos) con workers reales.
+- Cada equipo guarda sus hilos y el motor **reparte la capacidad real** de la
+  máquina según los hilos de cada uno (nunca más de lo que la máquina da).
+- Medido en tu PC: 284 → 557 → 641 → **673 KH/s** (x2,37 que con un hilo).
+
+> Hasta que apliques la migración `20261026000000` (que añade la tabla
+> `mining_entrenamientos` y las columnas `hilos` / `hash_rate_max`), la
+> medición se enseña pero **no se guarda**: la app te lo avisa.
+
 ### Las monedas y los pools ya no se escriben a mano
 
 En _Minería → Agregar worker_, la **moneda** y el **pool** son listas con datos

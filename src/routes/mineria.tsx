@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Pickaxe, Play, RotateCcw, Square } from "lucide-react";
+import { Pickaxe, Play, RotateCcw, Square, Dumbbell, Database } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
@@ -25,6 +25,8 @@ import { createWorker, setWorkerStatus } from "@/lib/dealmaker.functions";
 import {
   avanzarMineria,
   compararMineria,
+  entrenarEnjambreMineria,
+  entrenarWorkerMineria,
   estadoMineria,
   guardarCosteLuz,
   medirHashrateMineria,
@@ -117,6 +119,51 @@ function MiningPage() {
   });
 
   const [midiendo, setMidiendo] = useState(false);
+
+  // Campo de entrenamiento: medir el hash rate real con N hilos.
+  const entrenarFn = useServerFn(entrenarWorkerMineria);
+  const entrenarEnjambreFn = useServerFn(entrenarEnjambreMineria);
+  const [entrenando, setEntrenando] = useState(false);
+  const [entrenamiento, setEntrenamiento] = useState<{
+    workerNombre: string;
+    nucleos: number;
+    curva: Array<{ hilos: number; valor: number; unidad: string; hashes: number }>;
+    hilosElegidos: number;
+    valor: number;
+    unidad: string;
+    antesHashPorSegundo: number;
+    mejora: number;
+    aviso: string | null;
+  } | null>(null);
+
+  const entrenar = async (workerId: string, workerNombre: string) => {
+    setEntrenando(true);
+    try {
+      const r = await entrenarFn({ data: { workerId } });
+      setEntrenamiento(r);
+      toast.success(
+        `${workerNombre}: ${r.valor.toFixed(2)} ${r.unidad} con ${r.hilosElegidos} hilo(s) (x${r.mejora.toFixed(2)} que con uno)`,
+      );
+      void qc.invalidateQueries();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo entrenar");
+    } finally {
+      setEntrenando(false);
+    }
+  };
+
+  const entrenarTodos = async () => {
+    setEntrenando(true);
+    try {
+      const r = await entrenarEnjambreFn({});
+      toast.success(r.mensaje);
+      void qc.invalidateQueries();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo entrenar el enjambre");
+    } finally {
+      setEntrenando(false);
+    }
+  };
 
   // Las listas REALES de monedas y pools (leidas de los pools y de Binance).
   const opcionesFn = useServerFn(listarOpcionesMineria);
@@ -380,6 +427,94 @@ function MiningPage() {
           </div>
         }
       />
+
+      {/* Campo de entrenamiento: MEDIR el hash rate real con N hilos. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex flex-wrap items-center justify-between gap-2">
+            <span className="flex items-center gap-2">
+              <Dumbbell className="size-4 text-primary" /> Campo de entrenamiento de mineros
+            </span>
+            <Button
+              variant="secondary"
+              onClick={() => void entrenarTodos()}
+              disabled={entrenando || list.length === 0}
+            >
+              {entrenando ? "Midiendo…" : "Entrenar a todo el enjambre"}
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Entrenar aquí es <strong>medir</strong>, no regalar potencia: se mide SHA-256 de verdad
+            con workers reales y se guarda cuánto rinde esta máquina con 1, 2, 3 o 4 hilos. Cada
+            equipo usa los hilos que le tocan y el motor reparte la capacidad REAL de la máquina (no
+            hay hash rate inventado).
+          </p>
+
+          {entrenamiento && (
+            <div className="space-y-2 rounded-md border border-success/40 bg-success/10 px-3 py-2">
+              <p className="text-sm font-medium">
+                {entrenamiento.workerNombre}: {entrenamiento.valor.toFixed(2)}{" "}
+                {entrenamiento.unidad} con {entrenamiento.hilosElegidos} hilo(s)
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Antes (1 hilo): {(entrenamiento.antesHashPorSegundo / 1e6).toFixed(3)} MH/s · mejora
+                x{entrenamiento.mejora.toFixed(2)} · núcleos de la máquina: {entrenamiento.nucleos}
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[11px]">
+                  <thead>
+                    <tr className="border-b border-border/60 text-left text-muted-foreground">
+                      <th className="py-1 pr-3 font-medium">Hilos</th>
+                      <th className="py-1 pr-3 font-medium">Hash rate medido</th>
+                      <th className="py-1 font-medium">Hashes reales</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entrenamiento.curva.map((c) => (
+                      <tr key={c.hilos} className="border-b border-border/40">
+                        <td className="py-1 pr-3 tabular">{c.hilos}</td>
+                        <td className="py-1 pr-3 tabular">
+                          {c.valor.toFixed(2)} {c.unidad}
+                        </td>
+                        <td className="py-1 tabular">{c.hashes.toLocaleString("es")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {entrenamiento.aviso && (
+                <p className="text-[11px] text-warning">{entrenamiento.aviso}</p>
+              )}
+            </div>
+          )}
+
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {list.map((w) => (
+              <div
+                key={w.id}
+                className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-xs"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{w.name}</p>
+                  <p className="tabular text-[11px] text-muted-foreground">
+                    {Number(w.hash_rate).toFixed(2)} {w.hash_unit}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => void entrenar(w.id, w.name)}
+                  disabled={entrenando}
+                >
+                  {entrenando ? "…" : "Entrenar"}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Lo que de verdad: el hash rate medido en esta maquina y el
           resultado despues de pagar la luz. */}

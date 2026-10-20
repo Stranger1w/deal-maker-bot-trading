@@ -17,13 +17,8 @@
  */
 
 import { medirHashRateMaquina } from "./hashrate";
-import {
-  aUnidadLegible,
-  balanceDiario,
-  repartirHashRate,
-  workersActivos,
-  type HashRatePropio,
-} from "./modelo";
+import { medirCapacidad, repartirPorHilos } from "./entrenamiento";
+import { aUnidadLegible, balanceDiario, workersActivos, type HashRatePropio } from "./modelo";
 import { obtenerRed, type NetworkConfig } from "./red";
 
 type Db = Awaited<ReturnType<typeof getDb>>;
@@ -51,6 +46,8 @@ type WorkerMina = {
   net_daily_usd?: number | null;
   last_payout_at?: string | null;
   network_config?: NetworkConfig | null;
+  /** Cuantos nucleos usa este equipo. */
+  hilos?: number | null;
 };
 
 /** Precio por kWh por defecto si el dueno no lo pone (0,15 USD es tipico). */
@@ -102,7 +99,7 @@ export async function tickMineria(
   const conNuevas = await db
     .from("mining_workers")
     .select(
-      "id,user_id,name,coin,pool,status,hash_rate,hash_unit,uptime_seconds,estimated_daily_earnings,updated_at,last_seen_at,power_watts,gross_daily_usd,net_daily_usd,last_payout_at,network_config",
+      "id,user_id,name,coin,pool,status,hash_rate,hash_unit,uptime_seconds,estimated_daily_earnings,updated_at,last_seen_at,power_watts,gross_daily_usd,net_daily_usd,last_payout_at,network_config,hilos",
     )
     .in("status", ["mining", "offline"]);
   let filas: unknown[] | null = (conNuevas.data ?? []) as unknown[];
@@ -110,7 +107,7 @@ export async function tickMineria(
     const antiguas = await db
       .from("mining_workers")
       .select(
-        "id,user_id,name,coin,pool,status,hash_rate,hash_unit,uptime_seconds,estimated_daily_earnings,updated_at",
+        "id,user_id,name,coin,pool,status,hash_rate,hash_unit,uptime_seconds,estimated_daily_earnings,updated_at,hilos",
       )
       .in("status", ["mining", "offline"]);
     if (antiguas.error) {
@@ -159,19 +156,26 @@ export async function tickMineria(
 
   for (const [userId, lista] of porUsuario) {
     const activos = workersActivos(lista);
-    const hashPorWorker = repartirHashRate(hashMaquina, activos);
+    // La capacidad de la MAQUINA se mide con los hilos que usan los equipos
+    // activos (SHA-256 de verdad, con workers reales) y se reparte entre
+    // ellos segun los hilos de cada uno.
+    const hilosPorWorker = lista.map((w) => Math.max(1, Number(w.hilos ?? 1)));
+    const hilosTotales = hilosPorWorker.reduce((s, h) => s + h, 0);
+    const capacidad = await medirCapacidad(hilosTotales, 1200);
+    const hashPorWorker = repartirPorHilos(capacidad.hashPorSegundo, hilosPorWorker);
 
-    for (const w of lista) {
+    for (const [indice, w] of lista.entries()) {
+      const hashDeEste = hashPorWorker[indice] ?? 0;
       const config = (w.network_config ?? null) as NetworkConfig | null;
       const red = await obtenerRed(w.coin, config);
       const precioKwh = await leerPrecioKwh(db, userId);
       const watts = Number(w.power_watts ?? 0) || POTENCIA_POR_DEFECTO;
 
       const hashPropio: HashRatePropio = {
-        hashPorSegundo: hashPorWorker,
-        hashPorSegundoRed: aUnidadLegible(hashPorWorker).valor,
-        hashPorSegundoHashes: hashPorWorker,
-        unidad: aUnidadLegible(hashPorWorker).unidad,
+        hashPorSegundo: hashDeEste,
+        hashPorSegundoRed: aUnidadLegible(hashDeEste).valor,
+        hashPorSegundoHashes: hashDeEste,
+        unidad: aUnidadLegible(hashDeEste).unidad,
       };
       const balance = balanceDiario(hashPropio, red, watts, precioKwh);
 
@@ -182,8 +186,8 @@ export async function tickMineria(
         : 0;
 
       const patch = {
-        hash_rate: aUnidadLegible(hashPorWorker).valor,
-        hash_unit: aUnidadLegible(hashPorWorker).unidad,
+        hash_rate: aUnidadLegible(hashDeEste).valor,
+        hash_unit: aUnidadLegible(hashDeEste).unidad,
         uptime_seconds: Number(w.uptime_seconds ?? 0) + transcurrido,
         // La cifra que cuenta el enjambre son las GANANCIAS (lo que da la
         // red). El coste de la luz se guarda aparte, en su columna, y se
@@ -277,7 +281,7 @@ export async function tickMineria(
         netoUsd: 0,
         workers: 0,
       };
-      acc.hashRateTotal += hashPorWorker;
+      acc.hashRateTotal += hashDeEste;
       acc.brutoUsd += balance.brutoUsd;
       acc.luzUsd += balance.luzUsd;
       acc.netoUsd += balance.netoUsd;

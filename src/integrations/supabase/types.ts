@@ -1100,6 +1100,48 @@ export type Database = {
         }
         Relationships: []
       }
+      mining_entrenamientos: {
+        Row: {
+          created_at: string
+          curva: Json | null
+          duracion_ms: number
+          hashes: number
+          hash_rate: number
+          hash_unit: string
+          hilos: number
+          id: string
+          nota: string | null
+          user_id: string
+          worker_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          curva?: Json | null
+          duracion_ms?: number
+          hashes?: number
+          hash_rate: number
+          hash_unit?: string
+          hilos: number
+          id?: string
+          nota?: string | null
+          user_id: string
+          worker_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          curva?: Json | null
+          duracion_ms?: number
+          hashes?: number
+          hash_rate?: number
+          hash_unit?: string
+          hilos?: number
+          id?: string
+          nota?: string | null
+          user_id?: string
+          worker_id?: string | null
+        }
+        Relationships: []
+      }
       mining_hashrate_history: {
         Row: {
           coin: string
@@ -1295,7 +1337,9 @@ export type Database = {
           estimated_daily_earnings: number
           gross_daily_usd: number | null
           hash_rate: number
+          hash_rate_max: number | null
           hash_unit: string
+          hilos: number
           id: string
           last_payout_at: string | null
           last_seen_at: string | null
@@ -1315,7 +1359,9 @@ export type Database = {
           created_at?: string
           estimated_daily_earnings?: number
           hash_rate?: number
+          hash_rate_max?: number | null
           hash_unit?: string
+          hilos?: number
           id?: string
           name: string
           pool: string
@@ -1336,7 +1382,9 @@ export type Database = {
           created_at?: string
           estimated_daily_earnings?: number
           hash_rate?: number
+          hash_rate_max?: number | null
           hash_unit?: string
+          hilos?: number
           id?: string
           name?: string
           pool?: string

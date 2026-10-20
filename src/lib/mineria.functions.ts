@@ -350,6 +350,35 @@ async function guardarComparativa(
   }
 }
 
+/**
+ * Entrena a un equipo: mide de verdad (SHA-256 real con workers reales)
+ * cuanto rinde la maquina con 1, 2, 3... hilos y guarda la curva.
+ */
+export const entrenarWorkerMineria = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
+  .inputValidator((input: unknown) => z.object({ workerId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const db = await admin();
+    const { entrenarWorker } = await import("./mineria/entrenamiento");
+    return await entrenarWorker(db, data.workerId, context.userId);
+  });
+
+/** Entrena a todo el enjambre de golpe. */
+export const entrenarEnjambreMineria = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
+  .handler(async ({ context }) => {
+    const db = await admin();
+    const { entrenarEnjambre } = await import("./mineria/entrenamiento");
+    const resultados = await entrenarEnjambre(db, context.userId);
+    return {
+      resultados,
+      mensaje:
+        resultados.length > 0
+          ? `Enjambre entrenado: ${resultados.length} equipo(s) medidos con SHA-256 real.`
+          : "No hay equipos que entrenar.",
+    };
+  });
+
 /** Guarda el precio del kWh del dueno. */ export const guardarCosteLuz = createServerFn({
   method: "POST",
 })
