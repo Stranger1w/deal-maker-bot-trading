@@ -71,7 +71,7 @@ select column_name from information_schema.columns
 cd C:\Users\Usuario\.copilot\repos\deal-maker-bot-trading
 $env:PATH = "C:\Users\Usuario\.bun\bin;" + $env:PATH
 
-# Tipos, lint y tests: deben salir 0 errores y 295 tests en verde
+# Tipos, lint y tests: deben salir 0 errores y 309 tests en verde
 node node_modules\typescript\bin\tsc --noEmit
 node node_modules\eslint\bin\eslint.js .
 bun test src
@@ -84,6 +84,17 @@ Lo que estás mirando es la **honestidad del sistema**: la estrategia por
 defecto pierde (−1,42 %) y solo gana al 3 % de las estrategias aleatorias.
 No es un fallo del programa: es el resultado real, y por eso el motor
 exige evidencia antes de dejarte pasar un bot a Real.
+
+**Lo que ya está comprobado** (no hace falta que lo repitas):
+
+| Qué                               | Cómo se comprobó                                                     |
+| --------------------------------- | -------------------------------------------------------------------- |
+| El endpoint del motor             | Llamada real: secreto incorrecto → 401, correcto → 200 y ciclo hecho |
+| Las 6 migraciones pendientes      | Comprobación real del esquema (siguen pendientes: aplícalas tú)      |
+| Aislamiento entre usuarios        | Con el 2º usuario: solo ve su bot, ni app_settings ni credenciales   |
+| Las 11 páginas                    | Abiertas una a una con tu sesión: todas muestran los datos de verdad |
+| Configuración del motor (guardar) | Upsert probado con `on_conflict=user_id` (y luego restaurado)        |
+| Tipos, lint y tests               | 0 errores, 309 tests en verde                                        |
 
 ---
 
@@ -105,7 +116,16 @@ botón **Motor**.
 
 ---
 
-## 4. Reconstruir el `.exe` (con el código nuevo)
+## 4. El `.exe` (ya está compilado)
+
+**Ya lo he compilado por ti** con todo el código de arriba:
+
+```
+dist\Deal Maker Setup 1.0.0.exe   (107 MB, 19/10/2026)
+```
+
+Instálalo y ábrelo: es la app de escritorio (funciona en local, sin
+internet). Para **recompilarlo** cuando haya cambios nuevos:
 
 ```powershell
 cd C:\Users\Usuario\.copilot\repos\deal-maker-bot-trading
