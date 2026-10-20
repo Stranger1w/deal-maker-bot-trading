@@ -124,11 +124,16 @@ export function costeLuzDiario(watts: number, precioKwhUsd: number): number {
 
 /** Resultado completo de un equipo (o del enjambre). */
 export type Balance = {
-  /** Ingreso bruto por dia, en USD. */
+  /**
+   * La ganancia que cuenta el enjambre: lo que da la red por tu hash rate.
+   * NO descuenta la luz (eso es `luzUsd`, que se informa aparte).
+   */
+  gananciaUsd: number;
+  /** Alias de `gananciaUsd` (el bruto de siempre). */
   brutoUsd: number;
-  /** Coste de luz por dia, en USD. */
+  /** Coste de luz al dia, en USD (se informa aparte, no se resta). */
   luzUsd: number;
-  /** Bruto menos luz. */
+  /** Bruto menos luz (queda a mano, pero el enjambre no lo usa como titular). */
   netoUsd: number;
   /** Monedas al dia (antes de la luz). */
   monedasDia: number;
@@ -136,8 +141,8 @@ export type Balance = {
   cuotaRed: number;
   /** Veredicto en palabras claras. */
   veredicto: string;
-  /** true si el equipo NO llega a cubrir la luz. */
-  noSaleACuenta: boolean;
+  /** true si la luz se come lo que se gana. */
+  laLuzSeLoCome: boolean;
 };
 
 /** Calcula el balance diario de un equipo. */
@@ -150,7 +155,7 @@ export function balanceDiario(
   const bruto = red ? gananciaBrutaDiaria(hashPropio, red) : { usd: 0, monedas: 0, cuotaRed: 0 };
   const luzUsd = costeLuzDiario(watts, precioKwhUsd);
   const netoUsd = bruto.usd - luzUsd;
-  const noSaleACuenta = netoUsd <= 0;
+  const laLuzSeLoCome = luzUsd > bruto.usd;
 
   let veredicto: string;
   if (!red) {
@@ -159,22 +164,35 @@ export function balanceDiario(
   } else if (bruto.usd <= 0) {
     veredicto =
       "Tu hash rate es una fraccion de la red: la recompensa diaria te da cero. No hay ganancia posible con esta maquina.";
-  } else if (noSaleACuenta) {
-    veredicto = `Ganas ${bruto.usd.toFixed(4)} USD al dia y la luz te cuesta ${luzUsd.toFixed(4)} USD: pierdes ${Math.abs(netoUsd).toFixed(4)} USD al dia. Minar en casa NO sale a cuenta.`;
   } else {
-    veredicto = `Ganas ${bruto.usd.toFixed(4)} USD al dia y la luz te cuesta ${luzUsd.toFixed(4)} USD: sobran ${netoUsd.toFixed(4)} USD al dia (sin contar el desgaste del equipo ni el calor).`;
+    veredicto = `Ganas ${bruto.usd.toFixed(8)} USD al dia con tu hash rate.`;
+    if (laLuzSeLoCome) {
+      // Dato, no sermoneo: la luz se informa aparte (no se resta de la cifra
+      // principal) y se dice cuanto se lleva.
+      veredicto += ` La luz de este equipo se lleva ${luzUsd.toFixed(4)} USD al dia.`;
+    }
   }
 
   return {
+    gananciaUsd: bruto.usd,
     brutoUsd: bruto.usd,
     luzUsd,
     netoUsd,
     monedasDia: bruto.monedas,
     cuotaRed: bruto.cuotaRed,
     veredicto,
-    noSaleACuenta,
+    laLuzSeLoCome,
   };
 }
+
+/**
+ * Capacidad del enjambre: cuantos equipos puede tener un dueno.
+ *
+ * Todos los equipos comparten el MISMO CPU, asi que mas equipos no dan mas
+ * hash rate (el reparto se reparte). El limite existe para que la pantalla no
+ * se llene de filas que no aportan nada.
+ */
+export const CAPACIDAD_ENJAMBRE = 6;
 
 /**
  * Como se reparten los workers de una maquina: todos usan el MISMO CPU, asi

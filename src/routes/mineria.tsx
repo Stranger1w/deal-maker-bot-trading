@@ -22,6 +22,7 @@ import {
   guardarCosteLuz,
   medirHashrateMineria,
 } from "@/lib/mineria.functions";
+import { CAPACIDAD_ENJAMBRE } from "@/lib/mineria/modelo";
 import { dateTime, money, uptime } from "@/lib/format";
 import { payoutsQuery, workersQuery, type Payout, type Worker } from "@/lib/queries";
 
@@ -159,8 +160,23 @@ function MiningPage() {
   const refresh = () => void qc.invalidateQueries({ queryKey: ["mining_workers"] });
 
   const list = workers.data ?? [];
+
+  /**
+   * Ganancia diaria de un equipo: el valor VIVO que calcula el motor (con los
+   * datos de la red y el precio reales). Si aun no se ha medido, se usa el
+   * valor guardado en la base.
+   */
+  const gananciaDe = (workerId: string): number => {
+    const vivo = estado.data?.workers.find((w) => w.id === workerId)?.gananciaUsd;
+    if (typeof vivo === "number") return vivo;
+    const fila = list.find((w) => w.id === workerId);
+    return Number(fila?.estimated_daily_earnings ?? 0);
+  };
   const mining = list.filter((w) => w.status === "mining");
-  const totalEarnings = list.reduce((s, w) => s + Number(w.estimated_daily_earnings), 0);
+  // El total vivo que calcula el motor (si no, el guardado en la base).
+  const totalEarnings =
+    estado.data?.totales.gananciaUsd ??
+    list.reduce((s, w) => s + Number(w.estimated_daily_earnings), 0);
   const byUnit = mining.reduce<Record<string, number>>((acc, w) => {
     acc[w.hash_unit] = (acc[w.hash_unit] ?? 0) + Number(w.hash_rate);
     return acc;
@@ -237,16 +253,15 @@ function MiningPage() {
     },
     {
       key: "earnings",
-      label: "Est./día",
+      label: "Ganancia/día",
       align: "right",
-      value: (w) => Number(w.estimated_daily_earnings),
-      render: (w) => (
-        <span
-          className={Number(w.estimated_daily_earnings) >= 0 ? "text-success" : "text-destructive"}
-        >
-          {usdFino(Number(w.estimated_daily_earnings))}
-        </span>
-      ),
+      value: (w) => gananciaDe(w.id),
+      render: (w) => {
+        const valor = gananciaDe(w.id);
+        return (
+          <span className={valor >= 0 ? "text-success" : "text-destructive"}>{usdFino(valor)}</span>
+        );
+      },
     },
     {
       key: "actions",
@@ -359,45 +374,37 @@ function MiningPage() {
                   </p>
                 </div>
                 <div className="row-subtle rounded-lg px-3 py-2">
-                  <p className="kicker">Bruto / día</p>
-                  <p className="mt-1 text-2xl font-semibold text-success">
-                    {usdFino(estado.data.totales.brutoUsd)}
+                  <p className="kicker">Ganancias / día</p>
+                  <p className="metric-glow mt-1 text-2xl font-semibold text-success">
+                    {usdFino(estado.data.totales.gananciaUsd)}
                   </p>
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    Lo que da la red por tu hash rate, antes de la luz
+                    Lo que da la red por tu hash rate
                   </p>
                 </div>
                 <div className="row-subtle rounded-lg px-3 py-2">
                   <p className="kicker">Coste de la luz / día</p>
-                  <p className="mt-1 text-2xl font-semibold text-destructive">
+                  <p className="mt-1 text-2xl font-semibold text-muted-foreground">
                     {money(estado.data.totales.luzUsd, "USD")}
                   </p>
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    A {estado.data.totales.precioKwh.toFixed(2)} USD el kWh
+                    A {estado.data.totales.precioKwh.toFixed(2)} USD el kWh (no se descuenta de la
+                    ganancia)
                   </p>
                 </div>
                 <div className="row-subtle rounded-lg px-3 py-2">
-                  <p className="kicker">Neto / día</p>
-                  <p
-                    className={`mt-1 text-2xl font-semibold ${
-                      estado.data.totales.netoUsd > 0 ? "text-success" : "text-destructive"
-                    }`}
-                  >
-                    {usdFino(estado.data.totales.netoUsd)}
+                  <p className="kicker">Equipos</p>
+                  <p className="mt-1 text-2xl font-semibold">
+                    {estado.data.workers.length}
+                    <span className="text-base text-muted-foreground"> / {CAPACIDAD_ENJAMBRE}</span>
                   </p>
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    Bruto menos la luz: la verdad
+                    Capacidad del enjambre (comparten el mismo CPU)
                   </p>
                 </div>
               </div>
 
-              <p
-                className={`rounded-md border px-3 py-2 text-sm ${
-                  estado.data.totales.netoUsd > 0
-                    ? "border-success/40 bg-success/10"
-                    : "border-destructive/40 bg-destructive/10"
-                }`}
-              >
+              <p className="rounded-md border border-border bg-secondary/30 px-3 py-2 text-sm">
                 {estado.data.veredicto}
               </p>
 
@@ -538,7 +545,10 @@ function MiningPage() {
           <CardContent>
             <p className="tabular text-3xl font-semibold">
               {mining.length}
-              <span className="text-base text-muted-foreground"> / {list.length} minando</span>
+              <span className="text-base text-muted-foreground">
+                {" "}
+                / {list.length} minando · tope {CAPACIDAD_ENJAMBRE}
+              </span>
             </p>
           </CardContent>
         </Card>
@@ -548,30 +558,52 @@ function MiningPage() {
         <CardHeader>
           <CardTitle>Agregar worker</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-5">
-          <div className="space-y-1.5">
-            <Label>Nombre</Label>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Moneda objetivo</Label>
-            <Input value={form.coin} onChange={(e) => setForm({ ...form, coin: e.target.value })} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Pool</Label>
-            <Input value={form.pool} onChange={(e) => setForm({ ...form, pool: e.target.value })} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>ID hardware / rig</Label>
-            <Input
-              value={form.rigId}
-              onChange={(e) => setForm({ ...form, rigId: e.target.value })}
-            />
-          </div>
-          <div className="flex items-end">
-            <Button className="w-full" onClick={addWorker}>
-              Añadir
-            </Button>
+        <CardContent className="space-y-3">
+          {list.length >= CAPACIDAD_ENJAMBRE ? (
+            <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+              El enjambre ya tiene {CAPACIDAD_ENJAMBRE} equipos (su tope). Todos comparten el mismo
+              CPU: uno mas no daria mas hash rate, solo partiria el mismo. Borra alguno para añadir
+              otro.
+            </p>
+          ) : null}
+          <div className="grid gap-3 md:grid-cols-5">
+            <div className="space-y-1.5">
+              <Label>Nombre</Label>
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Moneda objetivo</Label>
+              <Input
+                value={form.coin}
+                onChange={(e) => setForm({ ...form, coin: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Pool</Label>
+              <Input
+                value={form.pool}
+                onChange={(e) => setForm({ ...form, pool: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>ID hardware / rig</Label>
+              <Input
+                value={form.rigId}
+                onChange={(e) => setForm({ ...form, rigId: e.target.value })}
+              />
+            </div>
+            <div className="flex items-end">
+              <Button
+                className="w-full"
+                onClick={addWorker}
+                disabled={list.length >= CAPACIDAD_ENJAMBRE}
+              >
+                Añadir ({list.length}/{CAPACIDAD_ENJAMBRE})
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

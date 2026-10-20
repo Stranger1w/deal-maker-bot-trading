@@ -51,6 +51,6 @@ describe("mineria: unidades y balance (regresion)", () => {
       0.15,
     );
     expect(b.netoUsd).toBeLessThan(0);
-    expect(b.noSaleACuenta).toBe(true);
+    expect(b.laLuzSeLoCome).toBe(true);
   });
 });

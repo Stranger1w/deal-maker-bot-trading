@@ -109,7 +109,7 @@ export const estadoMineria = createServerFn({ method: "POST" })
         precioKwh,
       );
       if (esActivo) {
-        brutoTotal += balance.brutoUsd;
+        brutoTotal += balance.gananciaUsd;
         luzTotal += balance.luzUsd;
         netoTotal += balance.netoUsd;
       }
@@ -124,7 +124,8 @@ export const estadoMineria = createServerFn({ method: "POST" })
         hashUnit: aUnidadLegible(esActivo ? hashPorWorker : 0).unidad,
         uptimeSegundos: Number(w.uptime_seconds ?? 0),
         potenciaWatts: watts,
-        brutoUsd: balance.brutoUsd,
+        gananciaUsd: balance.gananciaUsd,
+        brutoUsd: balance.gananciaUsd,
         luzUsd: balance.luzUsd,
         netoUsd: balance.netoUsd,
         veredicto: balance.veredicto,
@@ -142,12 +143,14 @@ export const estadoMineria = createServerFn({ method: "POST" })
       });
     }
 
+    // El enjambre cuenta las GANANCIAS. La luz se informa aparte.
     const veredicto =
       activos === 0
         ? "No hay ningun equipo minando: enciende uno y se medira el hash rate real de esta maquina."
-        : netoTotal <= 0
-          ? `El enjambre pierde ${Math.abs(netoTotal).toFixed(4)} USD al dia: la luz cuesta mas que lo que se mina. Minar en casa NO sale a cuenta.`
-          : `El enjambre gana ${netoTotal.toFixed(4)} USD al dia netos de luz (sin contar el desgaste ni el calor).`;
+        : `El enjambre gana ${brutoTotal.toFixed(8)} USD al dia.` +
+          (luzTotal > 0
+            ? ` La luz de los equipos se lleva ${luzTotal.toFixed(4)} USD al dia.`
+            : "");
 
     return {
       medido: {
@@ -161,6 +164,7 @@ export const estadoMineria = createServerFn({ method: "POST" })
       workersActivos: activos,
       workers,
       totales: {
+        gananciaUsd: brutoTotal,
         brutoUsd: brutoTotal,
         luzUsd: luzTotal,
         netoUsd: netoTotal,
@@ -303,7 +307,7 @@ async function guardarComparativa(
       status: "completed",
       best_coin: comparativa.mejor?.coin ?? null,
       best_pool: null,
-      estimated_daily_usd: comparativa.mejor?.netoUsd ?? 0,
+      estimated_daily_usd: comparativa.mejor?.gananciaUsd ?? 0,
       ai_notes:
         `Hash rate MEDIDO en esta maquina: ${hashRate.hashPorSegundoRed.toFixed(2)} ${hashRate.unidad}. ` +
         `Comparativa con los datos de la red y el precio reales. ${comparativa.veredicto}`,
@@ -330,7 +334,7 @@ async function guardarComparativa(
         pool: "datos de la red",
         hash_rate: f.hashRate,
         hash_unit: f.hashUnit,
-        gross_daily_usd: f.brutoUsd,
+        gross_daily_usd: f.gananciaUsd ?? f.brutoUsd,
         power_daily_usd: f.luzUsd,
         net_daily_usd: f.netoUsd,
         promoted: false,

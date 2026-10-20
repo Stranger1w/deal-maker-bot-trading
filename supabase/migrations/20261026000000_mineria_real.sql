@@ -32,6 +32,17 @@ alter table public.mining_workers
   add column if not exists last_payout_at timestamptz,
   add column if not exists network_config jsonb;
 
+-- 1b) Mas precision en las cifras de dinero.
+-- Con numeric(12,2) la ganancia real de un PC de casa (0,0000000066 USD al
+-- dia) se guardaba como 0,00 y no se podia ni leer ni comparar. Con 10
+-- decimales cabe cualquier cifra de minado sin perder nada.
+alter table public.mining_workers
+  alter column estimated_daily_earnings type numeric(24,10);
+alter table public.mining_payouts
+  alter column usd_value type numeric(24,10);
+alter table public.mining_payouts
+  alter column amount type numeric(24,10);
+
 -- 2) El precio del kWh (por dueno, como el resto de automation_settings).
 alter table public.automation_settings
   add column if not exists mineria_kwh_usd numeric not null default 0.15;
@@ -63,6 +74,11 @@ select column_name, data_type, column_default
   from information_schema.columns
  where table_name = 'automation_settings' and column_name = 'mineria_kwh_usd';
 -- debe salir: numeric, 0.15
+
+select column_name, data_type, numeric_precision, numeric_scale
+  from information_schema.columns
+ where table_name = 'mining_workers' and column_name = 'estimated_daily_earnings';
+-- debe salir: numeric, 24, 10 (antes 12, 2 y las ganancias reales se perdian)
 
 select column_name, data_type
   from information_schema.columns

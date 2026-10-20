@@ -692,6 +692,18 @@ export const createWorker = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const db = await admin();
+    // Capacidad del enjambre: todos los equipos comparten el mismo CPU, asi
+    // que mas equipos no dan mas hash rate. El limite es de 6.
+    const { CAPACIDAD_ENJAMBRE } = await import("./mineria/modelo");
+    const { data: actuales } = await db
+      .from("mining_workers")
+      .select("id")
+      .eq("user_id", context.userId);
+    if ((actuales ?? []).length >= CAPACIDAD_ENJAMBRE) {
+      throw new Error(
+        `El enjambre ya tiene ${CAPACIDAD_ENJAMBRE} equipos (su tope). Todos comparten el mismo CPU: uno mas no daria mas hash rate, solo partiria el mismo.`,
+      );
+    }
     // types.ts aun no incluye mining_workers.user_id: cast.
     const { error } = await db.from("mining_workers").insert({
       name: data.name,

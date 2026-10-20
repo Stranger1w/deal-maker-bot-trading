@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  CAPACIDAD_ENJAMBRE,
   aHashesPorSegundo,
   aUnidadLegible,
   balanceDiario,
@@ -95,30 +96,40 @@ describe("coste de la luz", () => {
   });
 });
 
-describe("balance diario (la verdad del caso)", () => {
-  test("un PC de casa da una cifra ridicula y la luz se lo come: no sale a cuenta", () => {
+describe("balance diario (lo que cuenta el enjambre son las GANANCIAS)", () => {
+  test("la ganancia NO descuenta la luz: la luz se informa aparte", () => {
     const balance = balanceDiario(hashDe(3e6), RED, 65, 0.15);
     // 3 MH/s sobre 600 EH/s: una fraccion diminuta de la red.
-    expect(balance.brutoUsd).toBeGreaterThan(0);
-    expect(balance.brutoUsd).toBeLessThan(0.001);
+    expect(balance.gananciaUsd).toBeGreaterThan(0);
+    expect(balance.gananciaUsd).toBeLessThan(0.001);
+    // La ganancia es el bruto: la luz NO se resta.
+    expect(balance.gananciaUsd).toBe(balance.brutoUsd);
+    // Pero la luz se sigue calculando y se sigue informando.
     expect(balance.luzUsd).toBeCloseTo(0.234, 6);
     expect(balance.netoUsd).toBeLessThan(0);
-    expect(balance.noSaleACuenta).toBe(true);
-    expect(balance.veredicto).toContain("NO sale a cuenta");
+    expect(balance.laLuzSeLoCome).toBe(true);
+    expect(balance.veredicto).toContain("Ganas");
+    expect(balance.veredicto).toContain("luz");
   });
 
   test("sin datos de red lo dice en vez de inventar", () => {
     const balance = balanceDiario(hashDe(3e6), null, 65, 0.15);
-    expect(balance.brutoUsd).toBe(0);
+    expect(balance.gananciaUsd).toBe(0);
     expect(balance.veredicto).toContain("Sin datos de la red");
   });
 
-  test("un ASIC gigante si sale a cuenta (comprobacion del signo)", () => {
+  test("con una maquina grande la ganancia es mayor que la luz", () => {
     // 100 PH/s sobre 600 EH/s -> 1/6000 de la red -> 0,075 BTC al dia.
     const balance = balanceDiario(hashDe(100e15), RED, 3500, 0.15);
-    expect(balance.brutoUsd).toBeGreaterThan(balance.luzUsd);
-    expect(balance.noSaleACuenta).toBe(false);
-    expect(balance.veredicto).toContain("sobran");
+    expect(balance.gananciaUsd).toBeGreaterThan(balance.luzUsd);
+    expect(balance.laLuzSeLoCome).toBe(false);
+    expect(balance.veredicto).toContain("Ganas");
+  });
+});
+
+describe("capacidad del enjambre", () => {
+  test("son 6 equipos", () => {
+    expect(CAPACIDAD_ENJAMBRE).toBe(6);
   });
 });
 

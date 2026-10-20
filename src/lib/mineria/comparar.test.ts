@@ -29,23 +29,28 @@ describe("comparativa de monedas con tu equipo", () => {
     expect(r.veredicto).toContain("No hay datos de red");
   });
 
-  test("con datos reales dice que no sale a cuenta (PC de casa)", () => {
+  test("con datos reales la ganancia no descuenta la luz", () => {
     const redes = new Map([["BTC", RED_BTC]]);
     const r = compararMonedas(["BTC"], redes, hash(3e6), 65, 0.15);
-    expect(r.ningunaSaleACuenta).toBe(true);
+    // La ganancia es el bruto (la luz no se resta).
+    expect(r.filas[0]?.gananciaUsd).toBeGreaterThan(0);
+    expect(r.filas[0]?.gananciaUsd).toBe(r.filas[0]?.brutoUsd);
+    // Pero la luz se sigue calculando y se sigue informando.
+    expect(r.filas[0]?.luzUsd).toBeGreaterThan(0);
     expect(r.filas[0]?.netoUsd).toBeLessThan(0);
-    expect(r.veredicto).toContain("NO sale a cuenta");
+    expect(r.ningunaSaleACuenta).toBe(true);
+    expect(r.veredicto).toContain("ganancia");
   });
 
-  test("el mejor es el de mayor neto", () => {
+  test("el mejor es el de mayor ganancia", () => {
     const redes = new Map([
       ["BTC", RED_BTC],
       ["KAS", { ...RED_BTC, coin: "KAS", hashRateRed: 1e18, precioUsd: 0.2 }],
     ]);
     const r = compararMonedas(["BTC", "KAS"], redes, hash(100e15), 3500, 0.15);
     expect(r.mejor).not.toBeNull();
-    expect(r.mejor!.netoUsd).toBeGreaterThanOrEqual(
-      r.filas.reduce((min, f) => Math.min(min, f.netoUsd), Infinity),
+    expect(r.mejor!.gananciaUsd).toBeGreaterThanOrEqual(
+      r.filas.reduce((min, f) => Math.min(min, f.gananciaUsd), Infinity),
     );
   });
 });

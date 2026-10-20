@@ -74,6 +74,8 @@ export type ResultadoMineria = {
     userId: string;
     workers: number;
     hashRateTotal: number;
+    /** Las ganancias (lo que cuenta el enjambre). */
+    gananciaUsd: number;
     brutoUsd: number;
     luzUsd: number;
     netoUsd: number;
@@ -183,10 +185,12 @@ export async function tickMineria(
         hash_rate: aUnidadLegible(hashPorWorker).valor,
         hash_unit: aUnidadLegible(hashPorWorker).unidad,
         uptime_seconds: Number(w.uptime_seconds ?? 0) + transcurrido,
-        // El dato que se ve es el NETO: la luz tambien es dinero.
-        estimated_daily_earnings: Number(balance.netoUsd.toFixed(6)),
-        gross_daily_usd: Number(balance.brutoUsd.toFixed(6)),
-        net_daily_usd: Number(balance.netoUsd.toFixed(6)),
+        // La cifra que cuenta el enjambre son las GANANCIAS (lo que da la
+        // red). El coste de la luz se guarda aparte, en su columna, y se
+        // informa en la pantalla: no se resta de esta cifra.
+        estimated_daily_earnings: Number(balance.gananciaUsd.toFixed(8)),
+        gross_daily_usd: Number(balance.gananciaUsd.toFixed(8)),
+        net_daily_usd: Number(balance.netoUsd.toFixed(8)),
         power_watts: watts,
         last_seen_at: ahoraIso,
         updated_at: ahoraIso,
@@ -292,14 +296,19 @@ export async function tickMineria(
   }
 
   const porUsuarioSalida = [...resumen.entries()].map(([userId, acc]) => {
+    // El enjambre cuenta las GANANCIAS. La luz se informa aparte.
     const veredicto =
-      acc.netoUsd <= 0
-        ? `El enjambre pierde ${Math.abs(acc.netoUsd).toFixed(4)} USD al dia: la luz se come lo que se mina. Minar en casa no sale a cuenta.`
-        : `El enjambre gana ${acc.netoUsd.toFixed(4)} USD al dia netos de luz.`;
+      acc.brutoUsd <= 0
+        ? `El enjambre no gana nada con este hash rate (${acc.brutoUsd.toFixed(8)} USD al dia).`
+        : `El enjambre gana ${acc.brutoUsd.toFixed(8)} USD al dia.` +
+          (acc.luzUsd > acc.brutoUsd
+            ? ` La luz se lleva ${acc.luzUsd.toFixed(4)} USD al dia.`
+            : ` La luz cuesta ${acc.luzUsd.toFixed(4)} USD al dia.`);
     return {
       userId,
       workers: acc.workers,
       hashRateTotal: acc.hashRateTotal,
+      gananciaUsd: acc.brutoUsd,
       brutoUsd: acc.brutoUsd,
       luzUsd: acc.luzUsd,
       netoUsd: acc.netoUsd,

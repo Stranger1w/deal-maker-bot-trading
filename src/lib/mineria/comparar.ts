@@ -19,9 +19,11 @@ export type FilaComparativa = {
   /** Hash rate que le tocaria a esta moneda si la minaras. */
   hashRate: number;
   hashUnit: string;
-  /** Lo que da la red por ese hash rate, al dia, en USD. */
+  /** La ganancia que cuenta el enjambre: lo que da la red (sin la luz). */
+  gananciaUsd: number;
+  /** Alias de `gananciaUsd`. */
   brutoUsd: number;
-  /** Lo que cuesta la luz al dia. */
+  /** Coste de luz al dia (se informa aparte: no se resta de la ganancia). */
   luzUsd: number;
   /** Bruto menos luz. */
   netoUsd: number;
@@ -69,7 +71,8 @@ export function compararMonedas(
       coin,
       hashRate: hashRate.hashPorSegundoRed,
       hashUnit: hashRate.unidad,
-      brutoUsd: balance.brutoUsd,
+      gananciaUsd: balance.gananciaUsd,
+      brutoUsd: balance.gananciaUsd,
       luzUsd: balance.luzUsd,
       netoUsd: balance.netoUsd,
       monedasDia: balance.monedasDia,
@@ -82,17 +85,18 @@ export function compararMonedas(
   }
 
   const conDatos = filas.filter((f) => f.red !== null);
-  const mejor = conDatos.length ? conDatos.reduce((a, b) => (b.netoUsd > a.netoUsd ? b : a)) : null;
+  // La mejor fila por ganancia (lo que cuenta el enjambre).
+  const mejor = conDatos.length
+    ? conDatos.reduce((a, b) => (b.gananciaUsd > a.gananciaUsd ? b : a))
+    : null;
   const ningunaSaleACuenta = conDatos.length > 0 && conDatos.every((f) => f.netoUsd <= 0);
 
   let veredicto: string;
   if (!conDatos.length) {
     veredicto =
       "No hay datos de red de ninguna de las monedas: no se puede comparar nada. Pide en el pool los numeros (hash rate de la red, recompensa por bloque y tiempo de bloque) y metelos en el equipo.";
-  } else if (ningunaSaleACuenta) {
-    veredicto = `Ninguna de las ${conDatos.length} moneda(s) con datos cubre el coste de la luz: minar en casa NO sale a cuenta.`;
   } else if (mejor) {
-    veredicto = `La mejor es ${mejor.coin} (${mejor.netoUsd.toFixed(4)} USD/dia netos de luz). Aun asi, sin contar el desgaste del equipo ni el calor.`;
+    veredicto = `La mejor es ${mejor.coin} (${mejor.gananciaUsd.toFixed(8)} USD/dia de ganancia).`;
   } else {
     veredicto = "Sin comparacion posible con los datos disponibles.";
   }
