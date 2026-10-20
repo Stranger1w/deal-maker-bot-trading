@@ -73,3 +73,24 @@ jobs:
             echo "::error::El motor respondio $codigo"
             exit 1
           fi
+
+      - name: Llamar al motor de mineria
+        env:
+          DEAL_MAKER_URL: ${{ secrets.DEAL_MAKER_URL }}
+          DEAL_MAKER_CRON_KEY: ${{ secrets.DEAL_MAKER_CRON_KEY }}
+        run: |
+          # El enjambre de mineria (mide el hash rate real). Si falla, el
+          # trading sigue: por eso este paso no rompe el workflow.
+          url="${DEAL_MAKER_URL%/automation-tick}/mining-tick"
+          codigo=$(curl -sS -X POST \
+            -H "Authorization: Bearer $DEAL_MAKER_CRON_KEY" \
+            -o /tmp/mining.json -w "%{http_code}" \
+            "$url" 2>&1) || {
+            echo "::warning::No se pudo llamar al motor de mineria"
+            exit 0
+          }
+          echo "HTTP $codigo"
+          cat /tmp/mining.json || true
+          if [ "$codigo" != "200" ]; then
+            echo "::warning::El motor de mineria respondio $codigo"
+          fi

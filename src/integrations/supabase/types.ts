@@ -130,6 +130,7 @@ export type Database = {
       }
       automation_settings: {
         Row: {
+          mineria_kwh_usd: number
           riesgo_por_operacion: number
           stop_por_atr: number | null
           filtro_regimen: boolean
@@ -167,6 +168,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          mineria_kwh_usd?: number
           riesgo_por_operacion: number
           stop_por_atr: number | null
           filtro_regimen: boolean
@@ -204,6 +206,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          mineria_kwh_usd?: number
           riesgo_por_operacion?: number
           stop_por_atr?: number | null
           filtro_regimen?: boolean
@@ -1261,6 +1264,12 @@ export type Database = {
           updated_at?: string
           uptime_seconds?: number
           user_id: string
+          last_seen_at?: string | null
+          power_watts?: number | null
+          gross_daily_usd?: number | null
+          net_daily_usd?: number | null
+          last_payout_at?: string | null
+          network_config?: Json | null
         }
         Update: {
           coin?: string
@@ -1276,6 +1285,12 @@ export type Database = {
           updated_at?: string
           uptime_seconds?: number
           user_id?: string
+          last_seen_at?: string | null
+          power_watts?: number | null
+          gross_daily_usd?: number | null
+          net_daily_usd?: number | null
+          last_payout_at?: string | null
+          network_config?: Json | null
         }
         Relationships: []
       }

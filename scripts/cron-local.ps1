@@ -143,7 +143,7 @@ for ($intento = 1; $intento -le 3; $intento++) {
     Escribir "cron-local: $resumen"
     if ($respuesta.notes) { Escribir "cron-local: $($respuesta.notes)" }
     if ($respuesta.status -eq "failed") { exit 1 }
-    exit 0
+    break
   } catch {
     if ($intento -lt 3) {
       Escribir "cron-local: fallo la llamada ($($_.Exception.Message)); reintento en 5 s."
@@ -153,4 +153,14 @@ for ($intento = 1; $intento -le 3; $intento++) {
       exit 1
     }
   }
+}
+
+# ── 4) Y el enjambre de mineria (mide el hash rate real de la maquina) ─────
+$urlMineria = $Url -replace "/automation-tick$", "/mining-tick"
+try {
+  $mineria = Invoke-RestMethod -Uri $urlMineria -Method Post -Headers @{ Authorization = "Bearer $secreto" } -TimeoutSec 120
+  Escribir ("cron-local: mineria equipos=$($mineria.workersActualizados) hash=$([math]::Round($mineria.hashRateMaquina)) H/s pagos=$($mineria.payoutsGenerados) errores=$($mineria.errores.Count)")
+} catch {
+  # La mineria no es critica: si falla, el trading sigue.
+  Escribir "cron-local: el tick de mineria fallo ($($_.Exception.Message))"
 }

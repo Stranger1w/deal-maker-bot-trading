@@ -26,6 +26,7 @@ idempotentes: si te equivocas y las repites, no se rompe nada.
 | 4   | `20261023000000_realismo_ejecucion.sql`            | Tope por riesgo, filtro de régimen, límite por par, enfriamiento | Sí (el motor los usa)                                       |
 | 5   | `20261024000000_auto_symbol_spread.sql`            | Filtro de spread en el selector automático                       | Opcional                                                    |
 | 6   | `20261025000000_engine_cycles.sql`                 | Tabla del diario del motor                                       | Opcional (sin ella el motor va igual, pero no hay diario)   |
+| 7   | `20261026000000_mineria_real.sql`                  | Hash rate real, ganancia neta y precio de la luz por equipo      | Sí (para la minería; sin ella va con las cifras básicas)    |
 
 Estas tres las tenías ya aplicadas a mano el 14-oct, pero ahora también están
 en el repo (para que no se pierdan y para que el código y la base encajen):
@@ -43,6 +44,19 @@ después de aplicarlo y comprueba que sale lo que dice.
 > base de datos"** hay una comprobación real del esquema (no una lista fija):
 > te marca cada migración como "aplicada" o "falta". Cuando las apliques,
 > vuelve a mirarla y se pondrán todas en verde.
+
+### Qué hace ahora la minería (para que sepas qué esperas)
+
+La minería **ya no es de adorno**: mide el hash rate real de tu PC (SHA-256 de
+verdad), reparte ese hash rate entre los equipos que estén minando (todos
+usan el mismo CPU), saca la recompensa de la red de datos vivos
+(mempool.space) y el precio de Binance, y **resta el coste de la luz**.
+
+En esta máquina el resultado es: **233-295 KH/s, 0,000000008 USD al día de
+bruto y 0,70 USD al día de luz → −0,70 USD al día**. O sea: en un PC de casa
+minar no sale a cuenta, y la app te lo dice con tus números, no con una
+estimación optimista. El botón **"Medir ahora"** repeatsa la medición cuando
+quieras.
 
 > **Ojo con la `20261014100000`**: cambia el índice de "una sesión viva" de
 > global a **por usuario**. Si tienes el motor corriendo, para el cron antes

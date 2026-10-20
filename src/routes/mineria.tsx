@@ -15,6 +15,12 @@ import { Label } from "@/components/ui/label";
 import { AlertsPanel } from "@/components/AlertsPanel";
 import { SortableTable, type Column } from "@/components/SortableTable";
 import { createWorker, setWorkerStatus } from "@/lib/dealmaker.functions";
+import {
+  avanzarMineria,
+  estadoMineria,
+  guardarCosteLuz,
+  medirHashrateMineria,
+} from "@/lib/mineria.functions";
 import { dateTime, money, uptime } from "@/lib/format";
 import { payoutsQuery, workersQuery, type Payout, type Worker } from "@/lib/queries";
 
@@ -37,12 +43,82 @@ export const Route = createFileRoute("/mineria")({
   component: MiningPage,
 });
 
+/**
+ * Dollars de verdad: cuando la cifra es tan pequena que sale "0,00", se
+ * dice "< 0,0001 USD" en vez de aparentar que no hay nada. Un ASIC da
+ * 7e-09 USD al dia: ocultarlo seria mentira por omision.
+ */
+function usdFino(valor: number): string {
+  const v = Number(valor ?? 0);
+  if (!Number.isFinite(v)) return "—";
+  if (v !== 0 && Math.abs(v) < 0.0001) return "< 0,0001 USD";
+  return money(v, "USD");
+}
+
 function MiningPage() {
   const qc = useQueryClient();
   const workers = useQuery(workersQuery);
   const payouts = useQuery(payoutsQuery);
   const control = useServerFn(setWorkerStatus);
   const create = useServerFn(createWorker);
+
+  // Estado real del enjambre (hash rate medido, ganancia neta, luz).
+  const estadoFn = useServerFn(estadoMineria);
+  const medirFn = useServerFn(medirHashrateMineria);
+  const avanzarFn = useServerFn(avanzarMineria);
+  const guardarLuzFn = useServerFn(guardarCosteLuz);
+
+  const estado = useQuery({
+    queryKey: ["estado_mineria"],
+    queryFn: () => estadoFn({}),
+    refetchInterval: 60000,
+  });
+
+  const [midiendo, setMidiendo] = useState(false);
+  const [precioKwh, setPrecioKwh] = useState<string>("");
+
+  const medir = async () => {
+    setMidiendo(true);
+    try {
+      const r = await medirFn({});
+      toast.success(
+        `Medido: ${r.valor.toFixed(2)} ${r.unidad} (${r.muestras.toLocaleString("es")} hashes reales)`,
+      );
+      void qc.invalidateQueries();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo medir");
+    } finally {
+      setMidiendo(false);
+    }
+  };
+
+  const avanzar = async () => {
+    try {
+      const r = await avanzarFn({});
+      toast.success(
+        `Enjambre avanzado: ${r.workersActualizados} equipos, ${r.payoutsGenerados} pagos, ${r.errores.length} errores`,
+      );
+      void qc.invalidateQueries();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo avanzar el enjambre");
+    }
+  };
+
+  const guardarLuz = async () => {
+    const valor = Number(precioKwh);
+    if (!Number.isFinite(valor) || valor < 0) {
+      toast.error("Pon un precio del kWh válido");
+      return;
+    }
+    try {
+      await guardarLuzFn({ data: { precioKwh: valor } });
+      toast.success("Precio de la luz guardado");
+      setPrecioKwh("");
+      void qc.invalidateQueries();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar");
+    }
+  };
 
   const [form, setForm] = useState({ name: "", coin: "BTC", pool: "", rigId: "" });
   const [search, setSearch] = useState("");
@@ -132,7 +208,11 @@ function MiningPage() {
       align: "right",
       value: (w) => Number(w.estimated_daily_earnings),
       render: (w) => (
-        <span className="text-success">{money(Number(w.estimated_daily_earnings), "USD")}</span>
+        <span
+          className={Number(w.estimated_daily_earnings) >= 0 ? "text-success" : "text-destructive"}
+        >
+          {usdFino(Number(w.estimated_daily_earnings))}
+        </span>
       ),
     },
     {
@@ -217,6 +297,116 @@ function MiningPage() {
         }
       />
 
+      {/* Lo que de verdad: el hash rate medido en esta maquina y el
+          resultado despues de pagar la luz. */}
+      <Card className="border-primary/40">
+        <CardHeader>
+          <CardTitle className="flex flex-wrap items-center gap-2">
+            Tu equipo, medido de verdad
+            <StatusPill tone={estado.data ? "success" : "warning"}>
+              {estado.data ? "medido" : "sin medir"}
+            </StatusPill>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {estado.isLoading && <p className="text-sm text-muted-foreground">Midiendo…</p>}
+          {estado.data && (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="row-subtle rounded-lg px-3 py-2">
+                  <p className="kicker">Hash rate de esta máquina</p>
+                  <p className="metric-glow mt-1 text-2xl font-semibold">
+                    {estado.data.medido.valor.toFixed(2)}
+                    <span className="ml-1 text-sm text-muted-foreground">
+                      {estado.data.medido.unidad}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Medido con SHA-256 real el {dateTime(estado.data.medido.medidoAt)}
+                  </p>
+                </div>
+                <div className="row-subtle rounded-lg px-3 py-2">
+                  <p className="kicker">Bruto / día</p>
+                  <p className="mt-1 text-2xl font-semibold text-success">
+                    {usdFino(estado.data.totales.brutoUsd)}
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Lo que da la red por tu hash rate, antes de la luz
+                  </p>
+                </div>
+                <div className="row-subtle rounded-lg px-3 py-2">
+                  <p className="kicker">Coste de la luz / día</p>
+                  <p className="mt-1 text-2xl font-semibold text-destructive">
+                    {money(estado.data.totales.luzUsd, "USD")}
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    A {estado.data.totales.precioKwh.toFixed(2)} USD el kWh
+                  </p>
+                </div>
+                <div className="row-subtle rounded-lg px-3 py-2">
+                  <p className="kicker">Neto / día</p>
+                  <p
+                    className={`mt-1 text-2xl font-semibold ${
+                      estado.data.totales.netoUsd > 0 ? "text-success" : "text-destructive"
+                    }`}
+                  >
+                    {usdFino(estado.data.totales.netoUsd)}
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Bruto menos la luz: la verdad
+                  </p>
+                </div>
+              </div>
+
+              <p
+                className={`rounded-md border px-3 py-2 text-sm ${
+                  estado.data.totales.netoUsd > 0
+                    ? "border-success/40 bg-success/10"
+                    : "border-destructive/40 bg-destructive/10"
+                }`}
+              >
+                {estado.data.veredicto}
+              </p>
+
+              <p className="text-xs text-muted-foreground">
+                Todos los equipos comparten el MISMO CPU: por eso el hash rate se reparte entre los
+                que están minando. Con tres equipos no ganas tres veces.
+              </p>
+
+              {estado.data.aviso && (
+                <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+                  {estado.data.aviso}
+                </p>
+              )}
+
+              <div className="flex flex-wrap items-end gap-2">
+                <Button variant="secondary" onClick={() => void medir()} disabled={midiendo}>
+                  {midiendo ? "Midiendo…" : "Medir ahora"}
+                </Button>
+                <Button variant="ghost" onClick={() => void avanzar()}>
+                  Avanzar el enjambre
+                </Button>
+                <div className="w-40 space-y-1">
+                  <Label htmlFor="kwh">Precio del kWh (USD)</Label>
+                  <Input
+                    id="kwh"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder={estado.data.totales.precioKwh.toFixed(2)}
+                    value={precioKwh}
+                    onChange={(e) => setPrecioKwh(e.target.value)}
+                  />
+                </div>
+                <Button variant="ghost" onClick={() => void guardarLuz()} disabled={!precioKwh}>
+                  Guardar
+                </Button>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
@@ -232,7 +422,7 @@ function MiningPage() {
               </p>
             ))}
           </CardContent>
-        </Card>
+        </Card>{" "}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">

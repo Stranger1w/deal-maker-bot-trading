@@ -25,6 +25,7 @@ import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } fr
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as ApiPublicAutomationTickRouteImport } from './routes/api/public/automation-tick'
 import { Route as ApiPublicMaintenanceRouteImport } from './routes/api/public/maintenance'
+import { Route as ApiPublicMiningTickRouteImport } from './routes/api/public/mining-tick'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -107,6 +108,11 @@ const ApiPublicMaintenanceRoute = ApiPublicMaintenanceRouteImport.update({
   path: '/api/public/maintenance',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicMiningTickRoute = ApiPublicMiningTickRouteImport.update({
+  id: '/api/public/mining-tick',
+  path: '/api/public/mining-tick',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -125,6 +131,7 @@ export interface FileRoutesByFullPath {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
   '/api/public/maintenance': typeof ApiPublicMaintenanceRoute
+  '/api/public/mining-tick': typeof ApiPublicMiningTickRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -143,6 +150,7 @@ export interface FileRoutesByTo {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
   '/api/public/maintenance': typeof ApiPublicMaintenanceRoute
+  '/api/public/mining-tick': typeof ApiPublicMiningTickRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -162,6 +170,7 @@ export interface FileRoutesById {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
   '/api/public/maintenance': typeof ApiPublicMaintenanceRoute
+  '/api/public/mining-tick': typeof ApiPublicMiningTickRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -182,6 +191,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/api/public/automation-tick'
     | '/api/public/maintenance'
+    | '/api/public/mining-tick'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -200,6 +210,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/api/public/automation-tick'
     | '/api/public/maintenance'
+    | '/api/public/mining-tick'
   id:
     | '__root__'
     | '/'
@@ -218,6 +229,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/api/public/automation-tick'
     | '/api/public/maintenance'
+    | '/api/public/mining-tick'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -237,6 +249,7 @@ export interface RootRouteChildren {
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   ApiPublicAutomationTickRoute: typeof ApiPublicAutomationTickRoute
   ApiPublicMaintenanceRoute: typeof ApiPublicMaintenanceRoute
+  ApiPublicMiningTickRoute: typeof ApiPublicMiningTickRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -353,6 +366,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicMaintenanceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/mining-tick': {
+      id: '/api/public/mining-tick'
+      path: '/api/public/mining-tick'
+      fullPath: '/api/public/mining-tick'
+      preLoaderRoute: typeof ApiPublicMiningTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -374,6 +394,7 @@ const rootRouteChildren: RootRouteChildren = {
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   ApiPublicAutomationTickRoute: ApiPublicAutomationTickRoute,
   ApiPublicMaintenanceRoute: ApiPublicMaintenanceRoute,
+  ApiPublicMiningTickRoute: ApiPublicMiningTickRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

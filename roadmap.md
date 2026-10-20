@@ -86,4 +86,9 @@
       "Estado de la base de datos") en vez de una lista fija
 - [x] Arreglado el bug que hacía pasar las credenciales de Binance por inexistentes
       (la tabla está bloqueada por RLS y se leía desde el navegador)
+- [x] **Motor de minería real**: mide el hash rate SHA-256 de verdad en la máquina,
+      lo reparte entre los equipos (comparten CPU), saca la red y el precio de
+      fuentes vivas (mempool.space + Binance) y resta el coste de la luz. El
+      veredicto es honesto: en un PC de casa sale a −0,70 USD/día
+      (migración `20261026000000`)
 - [ ] Fase 7: re-cifrar credenciales reales con la clave nueva y apagar flags
