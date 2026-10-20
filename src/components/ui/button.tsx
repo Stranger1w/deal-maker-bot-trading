@@ -9,8 +9,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        /* Melocoton pastel con degradado y relieve suave. */
-        default: "btn-melon bg-primary text-primary-foreground",
+        /* Naranja fluorescente con degradado y relieve suave. */
+        default: "btn-naranja bg-primary text-primary-foreground",
         /* Naranja fluorescente: la parada de emergencia (nada de rosa). */
         destructive: "btn-parada bg-destructive text-destructive-foreground",
         outline:

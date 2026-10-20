@@ -83,8 +83,8 @@
   --popover-foreground: oklch(0.965 0.008 80);
 
   /* Acento principal: melocoton / coral pastel (sustituye al ambar). */
-  --primary: oklch(0.79 0.125 45);
-  --primary-foreground: oklch(0.2 0.03 45);
+  --primary: oklch(0.84 0.155 68);
+  --primary-foreground: oklch(0.19 0.035 60);
   --secondary: oklch(0.285 0.024 264);
   --secondary-foreground: oklch(0.96 0.008 80);
   --muted: oklch(0.26 0.022 264);
@@ -94,7 +94,7 @@
 
   /* Parada: naranja intenso (nada de rosa). Se distingue del melocoton
      principal por la intensidad, no por el tono. */
-  --destructive: oklch(0.7 0.165 30);
+  --destructive: oklch(0.68 0.17 44);
   --destructive-foreground: oklch(0.99 0.012 70);
   /* Ganancias: verde menta / jade palido (sustituye al verde intenso). */
   --success: oklch(0.82 0.105 168);
@@ -105,10 +105,10 @@
   /* Separadores: finos y pastel. */
   --border: oklch(0.33 0.026 264);
   --input: oklch(0.35 0.026 264);
-  --ring: oklch(0.79 0.125 45);
+  --ring: oklch(0.84 0.155 68);
 
   --chart-1: oklch(0.82 0.105 168);
-  --chart-2: oklch(0.7 0.165 30);
+  --chart-2: oklch(0.68 0.17 44);
   --chart-3: oklch(0.86 0.105 95);
   --chart-4: oklch(0.74 0.1 240);
   --chart-5: oklch(0.76 0.11 315);
@@ -118,7 +118,7 @@
    * No se usan los verdes y rojos de la app (verde = ganancia, rojo =
    * perdida): en una linea de datos, esos colores mienten.
    */
-  --data-1: oklch(0.8 0.14 55);
+  --data-1: oklch(0.83 0.155 66);
   --data-2: oklch(0.85 0.1 165);
   --data-3: oklch(0.89 0.11 90);
   --data-4: oklch(0.74 0.09 200);
@@ -129,15 +129,15 @@
    */
   --sidebar: oklch(0.968 0.012 85);
   --sidebar-foreground: oklch(0.34 0.02 70);
-  --sidebar-primary: oklch(0.79 0.125 45);
-  --sidebar-primary-foreground: oklch(0.2 0.03 45);
+  --sidebar-primary: oklch(0.84 0.155 68);
+  --sidebar-primary-foreground: oklch(0.19 0.035 60);
   --sidebar-accent: oklch(0.935 0.028 82);
   --sidebar-accent-foreground: oklch(0.3 0.022 70);
   --sidebar-border: oklch(0.9 0.022 85);
-  --sidebar-ring: oklch(0.79 0.125 45);
+  --sidebar-ring: oklch(0.84 0.155 68);
 
   /* Halo pastel calido de fondo y sombra suave de las superficies. */
-  --glow: oklch(0.79 0.125 45 / 0.075);
+  --glow: oklch(0.84 0.155 68 / 0.075);
   --shadow-card: 0 1px 0 0 oklch(1 0 0 / 0.035) inset, 0 18px 40px -24px oklch(0 0 0 / 0.7);
 }
 .dark {
@@ -246,7 +246,7 @@
   }
 
   /* Boton principal: melocoton pastel con degradado y relieve suave. */
-  .btn-melon {
+  .btn-naranja {
     background-image: linear-gradient(
       180deg,
       color-mix(in oklch, var(--color-primary) 92%, white) 0%,
@@ -260,13 +260,13 @@
       box-shadow 200ms ease,
       filter 200ms ease;
   }
-  .btn-melon:hover {
+  .btn-naranja:hover {
     filter: brightness(1.04);
     box-shadow:
       0 1px 0 0 oklch(1 0 0 / 0.3) inset,
       0 14px 30px -12px color-mix(in oklch, var(--color-primary) 70%, transparent);
   }
-  .btn-melon:active {
+  .btn-naranja:active {
     transform: translateY(1px);
   }
 
