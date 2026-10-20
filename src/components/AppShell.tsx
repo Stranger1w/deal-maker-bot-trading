@@ -143,7 +143,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <nav className="flex flex-col gap-5">
       {NAV_GRUPOS.map((grupo) => (
         <div key={grupo.title} className="flex flex-col gap-0.5">
-          <p className="kicker px-3 pb-1 text-sidebar-foreground/65">{grupo.title}</p>
+          <p className="kicker px-3 pb-1 text-sidebar-foreground/60">{grupo.title}</p>
           {grupo.items.map((item) => {
             const activo = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
             return (
@@ -196,7 +196,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">
                   Deal Maker
                 </span>
-                <span className="mt-0.5 text-[10px] uppercase tracking-[0.18em] text-sidebar-foreground/65">
+                <span className="mt-0.5 text-[10px] uppercase tracking-[0.18em] text-sidebar-foreground/60">
                   Trading
                 </span>
               </span>

@@ -9,10 +9,10 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        /* Naranja fluorescente con degradado y relieve suave. */
-        default: "btn-naranja bg-primary text-primary-foreground",
-        /* Naranja fluorescente: la parada de emergencia (nada de rosa). */
-        destructive: "btn-parada bg-destructive text-destructive-foreground",
+        /* Ambar neon con degradado y relieve. */
+        default: "btn-neon bg-primary text-primary-foreground",
+        /* Rojo neon: la parada de emergencia. */
+        destructive: "btn-neon-rojo bg-destructive text-destructive-foreground",
         outline:
           "border border-input bg-background/60 shadow-sm hover:bg-accent hover:text-accent-foreground",
         secondary: "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
