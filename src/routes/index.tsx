@@ -2,6 +2,12 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight } from "lucide-react";
 
+import { ActividadPanel } from "@/components/ActividadPanel";
+import type {
+  BotResumen as ActividadBot,
+  MovimientoResumen as ActividadMovimiento,
+  WorkerResumen as ActividadWorker,
+} from "@/components/ActividadPanel";
 import { AlertsPanel } from "@/components/AlertsPanel";
 import { ComparisonCharts } from "@/components/ComparisonCharts";
 import { KillSwitchButton, KillSwitchStatus } from "@/components/KillSwitchButton";
@@ -233,42 +239,45 @@ function Dashboard() {
         </section>
       )}
 
-      {/* Gráfica + salud lado a lado: la curva se ve sin bajar. */}
+      {/* Gráfica + actividad lado a lado: todo lo importante en la primera pantalla. */}
       <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
         <ComparisonCharts />
 
-        <div className="space-y-4">
-          {/* Salud: cinco comprobaciones, con el detalle de cada una. */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">¿Está todo bien?</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                {salud.map((h) => (
-                  <div key={h.label} className="row-subtle rounded-lg px-3 py-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium">{h.label}</span>
-                      <StatusPill tone={h.ok ? "success" : "danger"}>
-                        {h.ok ? "bien" : "revisar"}
-                      </StatusPill>
-                    </div>
-                    <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
-                      {h.detail}
-                    </p>
-                    {h.accion ? (
-                      <p className="mt-1.5 text-[11px] leading-snug text-primary/90">{h.accion}</p>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 border-t border-border pt-4">
-                <KillSwitchStatus />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <ActividadPanel
+          bots={botList as unknown as ActividadBot[]}
+          workers={workerList as unknown as ActividadWorker[]}
+          movimientos={(audit.data ?? []) as unknown as ActividadMovimiento[]}
+          limite={6}
+        />
       </div>
+
+      {/* Salud: cinco comprobaciones, con el detalle de cada una. */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">¿Está todo bien?</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+            {salud.map((h) => (
+              <div key={h.label} className="row-subtle rounded-lg px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium">{h.label}</span>
+                  <StatusPill tone={h.ok ? "success" : "danger"}>
+                    {h.ok ? "bien" : "revisar"}
+                  </StatusPill>
+                </div>
+                <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">{h.detail}</p>
+                {h.accion ? (
+                  <p className="mt-1.5 text-[11px] leading-snug text-primary/90">{h.accion}</p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 border-t border-border pt-4">
+            <KillSwitchStatus />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Pasos siguientes: lo que de verdad falta. */}
       {pendientes > 0 && (
@@ -343,105 +352,6 @@ function Dashboard() {
           </CardContent>
         </Card>
       </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              Mis bots
-              <Link to="/escuadron" className="text-xs text-primary hover:underline">
-                Ver todos
-              </Link>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {botList.slice(0, 5).map((bot) => (
-              <div
-                key={bot.id}
-                className="row-subtle flex items-center justify-between rounded-lg px-3 py-2 text-sm"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{bot.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {bot.pair} · {bot.mode.toUpperCase()}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`metric text-sm ${Number(bot.pnl) >= 0 ? "text-success" : "text-destructive"}`}
-                  >
-                    {money(Number(bot.pnl))}
-                  </span>
-                  <StatusPill tone={statusTone(bot.status)}>{bot.status}</StatusPill>
-                </div>
-              </div>
-            ))}
-            {botList.length === 0 && (
-              <p className="text-sm text-muted-foreground">Todavía no tienes bots.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              Equipos de minería
-              <Link to="/mineria" className="text-xs text-primary hover:underline">
-                Ver todos
-              </Link>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {workerList.slice(0, 5).map((w) => (
-              <div
-                key={w.id}
-                className="row-subtle flex items-center justify-between rounded-lg px-3 py-2 text-sm"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{w.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {w.coin} · {w.pool}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="metric text-sm">
-                    {Number(w.hash_rate).toFixed(2)} {w.hash_unit}
-                  </span>
-                  <StatusPill tone={statusTone(w.status)}>{w.status}</StatusPill>
-                </div>
-              </div>
-            ))}
-            {workerList.length === 0 && (
-              <p className="text-sm text-muted-foreground">No hay equipos de minería.</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            Últimos movimientos
-            <Link to="/fondos" className="text-xs text-primary hover:underline">
-              Ver mi dinero
-            </Link>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {(audit.data ?? []).slice(0, 6).map((e) => (
-            <div
-              key={e.id}
-              className="row-subtle flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm"
-            >
-              <span className="tabular text-xs text-muted-foreground">
-                {dateTime(e.created_at)}
-              </span>
-              <span className="font-medium">{e.action}</span>
-              <span className="text-xs text-muted-foreground">{e.entity_id ?? e.entity}</span>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
     </div>
   );
 }
