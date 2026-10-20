@@ -11,8 +11,8 @@ const buttonVariants = cva(
       variant: {
         /* Melocoton pastel con degradado y relieve suave. */
         default: "btn-melon bg-primary text-primary-foreground",
-        /* Rosa salmon suave: la parada de emergencia, sin rojo puro. */
-        destructive: "btn-salmon bg-destructive text-destructive-foreground",
+        /* Naranja fluorescente: la parada de emergencia (nada de rosa). */
+        destructive: "btn-parada bg-destructive text-destructive-foreground",
         outline:
           "border border-input bg-background/60 shadow-sm hover:bg-accent hover:text-accent-foreground",
         secondary: "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",

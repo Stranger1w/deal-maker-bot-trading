@@ -92,9 +92,10 @@
   --accent: oklch(0.32 0.032 258);
   --accent-foreground: oklch(0.965 0.008 80);
 
-  /* Parada: rosa salmon suave (sustituye al rojo puro). */
-  --destructive: oklch(0.73 0.115 18);
-  --destructive-foreground: oklch(0.985 0.008 60);
+  /* Parada: naranja intenso (nada de rosa). Se distingue del melocoton
+     principal por la intensidad, no por el tono. */
+  --destructive: oklch(0.7 0.165 30);
+  --destructive-foreground: oklch(0.99 0.012 70);
   /* Ganancias: verde menta / jade palido (sustituye al verde intenso). */
   --success: oklch(0.82 0.105 168);
   --success-foreground: oklch(0.18 0.03 168);
@@ -107,7 +108,7 @@
   --ring: oklch(0.79 0.125 45);
 
   --chart-1: oklch(0.82 0.105 168);
-  --chart-2: oklch(0.73 0.115 18);
+  --chart-2: oklch(0.7 0.165 30);
   --chart-3: oklch(0.86 0.105 95);
   --chart-4: oklch(0.74 0.1 240);
   --chart-5: oklch(0.76 0.11 315);
@@ -269,8 +270,8 @@
     transform: translateY(1px);
   }
 
-  /* Boton de parada: rosa salmon suave con resplandor pastel. */
-  .btn-salmon {
+  /* Boton de parada: naranja fluorescente con resplandor. */
+  .btn-parada {
     background-image: linear-gradient(
       180deg,
       color-mix(in oklch, var(--color-destructive) 88%, white) 0%,
@@ -285,13 +286,13 @@
       box-shadow 200ms ease,
       filter 200ms ease;
   }
-  .btn-salmon:hover {
+  .btn-parada:hover {
     filter: brightness(1.05);
     box-shadow:
       0 1px 0 0 oklch(1 0 0 / 0.32) inset,
       0 16px 34px -12px color-mix(in oklch, var(--color-destructive) 85%, transparent);
   }
-  .btn-salmon:active {
+  .btn-parada:active {
     transform: translateY(1px);
   }
 }
