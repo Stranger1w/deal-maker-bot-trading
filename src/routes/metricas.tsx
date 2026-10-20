@@ -1,14 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useState } from "react";
+import { toast } from "sonner";
 import { AlertTriangle } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { Explicar, GLOSARIO } from "@/components/Explicar";
 import { SortableTable, type Column } from "@/components/SortableTable";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { informeMetricasMotor } from "@/lib/metricas.functions";
+import { actualizarHistoricoReal } from "@/lib/historial.functions";
 import { money, pct } from "@/lib/format";
 import type { ResumenGrupo } from "@/lib/metricas";
 
@@ -102,6 +106,22 @@ function MetricasPage() {
     refetchInterval: 60000,
   });
 
+  // Refresco del historico REAL (precios de Binance + curvas de los bots).
+  const refrescarFn = useServerFn(actualizarHistoricoReal);
+  const [refrescando, setRefrescando] = useState(false);
+  const refrescar = async () => {
+    setRefrescando(true);
+    try {
+      const r = await refrescarFn({});
+      toast.success(r.mensaje);
+      void datos.refetch();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo refrescar el histórico");
+    } finally {
+      setRefrescando(false);
+    }
+  };
+
   const d = datos.data;
 
   return (
@@ -110,6 +130,11 @@ function MetricasPage() {
         eyebrow="Análisis"
         title="Métricas honestas"
         subtitle="Lo que el motor ha hecho de verdad: P&L real por bot, por indicador, por par y por hora. Las cifras no demuestran rentabilidad; con pocas operaciones son ruido."
+        action={
+          <Button variant="secondary" onClick={() => void refrescar()} disabled={refrescando}>
+            {refrescando ? "Refrescando…" : "Refrescar histórico real"}
+          </Button>
+        }
       />
 
       {datos.isLoading && <p className="text-sm text-muted-foreground">Calculando…</p>}

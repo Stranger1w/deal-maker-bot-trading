@@ -380,6 +380,7 @@ export type Database = {
       bot_executions: {
         Row: {
           attempts: number
+          user_id: string
           bot_id: string | null
           bot_name: string
           created_at: string
@@ -399,6 +400,7 @@ export type Database = {
         }
         Insert: {
           attempts?: number
+          user_id?: string
           bot_id?: string | null
           bot_name: string
           created_at?: string
@@ -418,6 +420,7 @@ export type Database = {
         }
         Update: {
           attempts?: number
+          user_id?: string
           bot_id?: string | null
           bot_name?: string
           created_at?: string
