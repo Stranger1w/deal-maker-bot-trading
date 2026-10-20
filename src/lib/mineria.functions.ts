@@ -196,8 +196,159 @@ export const avanzarMineria = createServerFn({ method: "POST" })
     return await tickMineria(db, { forzarMidir: false });
   });
 
-/** Guarda el precio del kWh del dueno. */
-export const guardarCosteLuz = createServerFn({ method: "POST" })
+/**
+ * Compara las monedas con el hash rate REAL de esta maquina y los datos
+ * reales de la red y del precio. Es lo que sustituye a los datos de ejemplo
+ * que habia en mining_sandboxes (120 TH/s de una maquina dedicada).
+ */
+export const compararMineria = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
+  .handler(async ({ context }) => {
+    const db = await admin();
+    const { medirHashRateMaquina } = await import("./mineria/hashrate");
+    const { aUnidadLegible } = await import("./mineria/modelo");
+    const { obtenerRed } = await import("./mineria/red");
+    const { compararMonedas } = await import("./mineria/comparar");
+    const { PRECIO_KWH_POR_DEFECTO, POTENCIA_POR_DEFECTO } = await import("./mineria/tick");
+
+    const medicion = medirHashRateMaquina(1500);
+    const hashRate = {
+      hashPorSegundo: medicion.hashPorSegundo,
+      hashPorSegundoRed: medicion.valor,
+      hashPorSegundoHashes: medicion.hashPorSegundo,
+      unidad: medicion.unidad,
+    };
+
+    // Las monedas: las de los equipos del dueno (y BTC siempre).
+    const { data: workers } = await db
+      .from("mining_workers")
+      .select("id, name, coin, pool")
+      .eq("user_id", context.userId);
+    const monedas = [...new Set((workers ?? []).map((w) => String(w.coin).toUpperCase()))];
+    if (!monedas.includes("BTC")) monedas.push("BTC");
+
+    // Potencia y config manual: columnas nuevas (migracion 20261026000000).
+    // Si no estan, se usan los valores por defecto.
+    const extras = new Map<string, { power_watts?: number | null; network_config?: unknown }>();
+    try {
+      const { data: conExtras } = await db
+        .from("mining_workers")
+        .select("id, power_watts, network_config")
+        .eq("user_id", context.userId);
+      for (const w of conExtras ?? []) {
+        extras.set(w.id as string, w as { power_watts?: number | null; network_config?: unknown });
+      }
+    } catch {
+      // Sin migracion: valores por defecto.
+    }
+
+    // Precio del kWh.
+    const { data: ajustes } = await db
+      .from("automation_settings")
+      .select("mineria_kwh_usd")
+      .eq("user_id", context.userId)
+      .limit(1);
+    const precioKwh = Number((ajustes ?? [])[0]?.mineria_kwh_usd ?? 0) || PRECIO_KWH_POR_DEFECTO;
+
+    // Datos de red: BTC en vivo; el resto, la config manual del equipo.
+    const redes = new Map<string, Awaited<ReturnType<typeof obtenerRed>>>();
+    for (const coin of monedas) {
+      const worker = (workers ?? []).find((w) => String(w.coin).toUpperCase() === coin);
+      const config = (extras.get(worker?.id ?? "")?.network_config ?? null) as Parameters<
+        typeof obtenerRed
+      >[1];
+      redes.set(coin, await obtenerRed(coin, config));
+    }
+
+    const watts =
+      Number(extras.get((workers ?? [])[0]?.id ?? "")?.power_watts ?? 0) || POTENCIA_POR_DEFECTO;
+    const comparativa = compararMonedas(monedas, redes, hashRate, watts, precioKwh);
+
+    // Se guarda en mining_sandboxes (la comparativa) y mining_training_runs
+    // (una fila por moneda), sustituyendo a los datos de ejemplo.
+    const sandboxId = await guardarComparativa(db, context.userId, comparativa, hashRate, {
+      coins: monedas,
+      watts,
+      precioKwh,
+      medidoAt: medicion.medidoAt,
+    });
+
+    return { ...comparativa, sandboxId, watts, precioKwh, medido: medicion };
+  });
+
+/** Guarda la comparativa en las tablas de la app (best-effort). */
+async function guardarComparativa(
+  db: Awaited<ReturnType<typeof admin>>,
+  userId: string,
+  comparativa: Awaited<ReturnType<typeof import("./mineria/comparar").compararMonedas>>,
+  hashRate: { hashPorSegundo: number; hashPorSegundoRed: number; unidad: string },
+  contexto: { coins: string[]; watts: number; precioKwh: number; medidoAt: string },
+): Promise<string | null> {
+  try {
+    const { data: existente } = await db
+      .from("mining_sandboxes")
+      .select("id")
+      .eq("user_id", userId)
+      .limit(1);
+    const fila = {
+      name: `Comparativa con tu equipo (${contexto.medidoAt.slice(0, 10)})`,
+      coins: contexto.coins,
+      pools: [],
+      simulated_hash_rate: hashRate.hashPorSegundoRed,
+      simulated_hash_unit: hashRate.unidad,
+      power_cost_usd_kwh: contexto.precioKwh,
+      date_from: new Date().toISOString().slice(0, 10),
+      date_to: new Date().toISOString().slice(0, 10),
+      speed: 1,
+      status: "completed",
+      best_coin: comparativa.mejor?.coin ?? null,
+      best_pool: null,
+      estimated_daily_usd: comparativa.mejor?.netoUsd ?? 0,
+      ai_notes:
+        `Hash rate MEDIDO en esta maquina: ${hashRate.hashPorSegundoRed.toFixed(2)} ${hashRate.unidad}. ` +
+        `Comparativa con los datos de la red y el precio reales. ${comparativa.veredicto}`,
+      updated_at: new Date().toISOString(),
+    };
+    let sandboxId: string | null = null;
+    if (existente && existente.length > 0) {
+      sandboxId = existente[0]!.id as string;
+      await db.from("mining_sandboxes").update(fila).eq("id", sandboxId).eq("user_id", userId);
+    } else {
+      const { data: nuevo } = await db
+        .from("mining_sandboxes")
+        .insert({ ...fila, user_id: userId })
+        .select("id")
+        .limit(1);
+      sandboxId = (nuevo ?? [])[0]?.id ?? null;
+    }
+    if (sandboxId) {
+      await db.from("mining_training_runs").delete().eq("sandbox_id", sandboxId);
+      const filas = comparativa.filas.map((f) => ({
+        sandbox_id: sandboxId,
+        worker_name: f.coin,
+        coin: f.coin,
+        pool: "datos de la red",
+        hash_rate: f.hashRate,
+        hash_unit: f.hashUnit,
+        gross_daily_usd: f.brutoUsd,
+        power_daily_usd: f.luzUsd,
+        net_daily_usd: f.netoUsd,
+        promoted: false,
+        suggested_params: { veredicto: f.veredicto, red: f.red?.fuente ?? null },
+      }));
+      if (filas.length) await db.from("mining_training_runs").insert(filas);
+    }
+    return sandboxId;
+  } catch {
+    // Si las tablas no estan o faltan columnas, la comparativa se enseña
+    // igual: no se pierde nada por no guardarla.
+    return null;
+  }
+}
+
+/** Guarda el precio del kWh del dueno. */ export const guardarCosteLuz = createServerFn({
+  method: "POST",
+})
   .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
     z.object({ precioKwh: z.number().min(0).max(10) }).parse(input),

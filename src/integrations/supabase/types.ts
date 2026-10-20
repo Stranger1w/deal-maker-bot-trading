@@ -1242,11 +1242,17 @@ export type Database = {
           coin: string
           created_at: string
           estimated_daily_earnings: number
+          gross_daily_usd: number | null
           hash_rate: number
           hash_unit: string
           id: string
+          last_payout_at: string | null
+          last_seen_at: string | null
           name: string
+          net_daily_usd: number | null
+          network_config: Json | null
           pool: string
+          power_watts: number | null
           rig_id: string
           status: string
           updated_at: string

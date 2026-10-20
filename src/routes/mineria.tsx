@@ -17,6 +17,7 @@ import { SortableTable, type Column } from "@/components/SortableTable";
 import { createWorker, setWorkerStatus } from "@/lib/dealmaker.functions";
 import {
   avanzarMineria,
+  compararMineria,
   estadoMineria,
   guardarCosteLuz,
   medirHashrateMineria,
@@ -67,6 +68,38 @@ function MiningPage() {
   const medirFn = useServerFn(medirHashrateMineria);
   const avanzarFn = useServerFn(avanzarMineria);
   const guardarLuzFn = useServerFn(guardarCosteLuz);
+  const compararFn = useServerFn(compararMineria);
+
+  const [comparativa, setComparativa] = useState<{
+    filas: Array<{
+      coin: string;
+      hashRate: number;
+      hashUnit: string;
+      brutoUsd: number;
+      luzUsd: number;
+      netoUsd: number;
+      monedasDia: number;
+      motivo: string | null;
+      veredicto: string;
+    }>;
+    mejor: { coin: string; netoUsd: number } | null;
+    veredicto: string;
+    ningunaSaleACuenta: boolean;
+  } | null>(null);
+  const [comparando, setComparando] = useState(false);
+
+  const comparar = async () => {
+    setComparando(true);
+    try {
+      const r = await compararFn({});
+      setComparativa(r);
+      void qc.invalidateQueries();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo comparar");
+    } finally {
+      setComparando(false);
+    }
+  };
 
   const estado = useQuery({
     queryKey: ["estado_mineria"],
@@ -402,6 +435,69 @@ function MiningPage() {
                   Guardar
                 </Button>
               </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex flex-wrap items-center justify-between gap-2">
+            <span>Compara monedas con TU equipo</span>
+            <Button variant="secondary" onClick={() => void comparar()} disabled={comparando}>
+              {comparando ? "Comparando…" : "Comparar ahora"}
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Usa el hash rate medido en esta máquina, los datos reales de la red y el precio real
+            para ver cuánto da cada moneda y cuánto cuesta la luz. Antes aquí había números de
+            ejemplo de una máquina dedicada (120 TH/s): no eran de este equipo.
+          </p>
+          {comparativa && (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-border text-left text-muted-foreground">
+                      <th className="py-1.5 pr-3 font-medium">Moneda</th>
+                      <th className="py-1.5 pr-3 font-medium">Bruto/día</th>
+                      <th className="py-1.5 pr-3 font-medium">Luz/día</th>
+                      <th className="py-1.5 pr-3 font-medium">Neto/día</th>
+                      <th className="py-1.5 font-medium">Nota</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {comparativa.filas.map((f) => (
+                      <tr key={f.coin} className="border-b border-border/50">
+                        <td className="py-1.5 pr-3 font-medium">{f.coin}</td>
+                        <td className="py-1.5 pr-3 tabular">{usdFino(f.brutoUsd)}</td>
+                        <td className="py-1.5 pr-3 tabular text-destructive">
+                          {usdFino(f.luzUsd)}
+                        </td>
+                        <td
+                          className={`py-1.5 pr-3 tabular ${
+                            f.netoUsd > 0 ? "text-success" : "text-destructive"
+                          }`}
+                        >
+                          {usdFino(f.netoUsd)}
+                        </td>
+                        <td className="py-1.5 text-muted-foreground">{f.motivo ?? f.veredicto}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p
+                className={`rounded-md border px-3 py-2 text-sm ${
+                  comparativa.ningunaSaleACuenta
+                    ? "border-destructive/40 bg-destructive/10"
+                    : "border-success/40 bg-success/10"
+                }`}
+              >
+                {comparativa.veredicto}
+              </p>
             </>
           )}
         </CardContent>
