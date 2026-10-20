@@ -66,78 +66,82 @@
 }
 
 :root {
-  --radius: 0.875rem;
-
-  /* Fondo: casi negro con un punto de azul, para que el texto no canse. */
-  --background: oklch(0.16 0.012 255);
-  --foreground: oklch(0.975 0.004 80);
-
-  /* Superficies: un pelin por encima del fondo, sin caer en un gris plano. */
-  --card: oklch(0.205 0.014 255);
-  --card-foreground: oklch(0.975 0.004 80);
-  --popover: oklch(0.225 0.016 255);
-  --popover-foreground: oklch(0.975 0.004 80);
-
-  /* Acento: ambar calido (la marca). */
-  --primary: oklch(0.83 0.155 72);
-  --primary-foreground: oklch(0.18 0.02 70);
-  --secondary: oklch(0.275 0.016 255);
-  --secondary-foreground: oklch(0.96 0.004 80);
-  --muted: oklch(0.255 0.014 255);
-  --muted-foreground: oklch(0.76 0.016 250);
-  --accent: oklch(0.31 0.028 250);
-  --accent-foreground: oklch(0.975 0.004 80);
-
-  --destructive: oklch(0.63 0.205 22);
-  --destructive-foreground: oklch(0.98 0.004 250);
-  --success: oklch(0.74 0.165 155);
-  --success-foreground: oklch(0.16 0.02 250);
-  --warning: oklch(0.83 0.15 85);
-  --warning-foreground: oklch(0.16 0.02 250);
-
-  --border: oklch(0.31 0.016 255);
-  --input: oklch(0.33 0.016 255);
-  --ring: oklch(0.83 0.155 72);
-
-  --chart-1: oklch(0.74 0.165 155);
-  --chart-2: oklch(0.63 0.205 22);
-  --chart-3: oklch(0.83 0.15 85);
-  --chart-4: oklch(0.68 0.13 235);
-  --chart-5: oklch(0.72 0.15 300);
+  --radius: 1rem;
 
   /*
-   * Paleta de DATOS (solo para las series de las graficas).
-   *
-   * Dos colores y punto: NARANJA y MENTA. Los dos contrastan con el fondo
-   * oscuro y se distinguen entre si de un vistazo (uno calido, otro frio),
-   * que es justo lo que hace falta para comparar dos series.
-   *
+   * Lienzo: gris azulado oscuro PASTEL (no negro puro). Es la zona donde se
+   * trabaja; el rail lateral de la izquierda es claro. Las dos columnas
+   * quedan separadas por el contraste, sin lineas duras.
+   */
+  --background: oklch(0.178 0.018 264);
+  --foreground: oklch(0.965 0.008 80);
+
+  /* Superficies: apenas un punto por encima del lienzo, con sombra suave. */
+  --card: oklch(0.222 0.02 264);
+  --card-foreground: oklch(0.965 0.008 80);
+  --popover: oklch(0.238 0.022 264);
+  --popover-foreground: oklch(0.965 0.008 80);
+
+  /* Acento principal: melocoton / coral pastel (sustituye al ambar). */
+  --primary: oklch(0.79 0.125 45);
+  --primary-foreground: oklch(0.2 0.03 45);
+  --secondary: oklch(0.285 0.024 264);
+  --secondary-foreground: oklch(0.96 0.008 80);
+  --muted: oklch(0.26 0.022 264);
+  --muted-foreground: oklch(0.755 0.02 250);
+  --accent: oklch(0.32 0.032 258);
+  --accent-foreground: oklch(0.965 0.008 80);
+
+  /* Parada: rosa salmon suave (sustituye al rojo puro). */
+  --destructive: oklch(0.73 0.115 18);
+  --destructive-foreground: oklch(0.985 0.008 60);
+  /* Ganancias: verde menta / jade palido (sustituye al verde intenso). */
+  --success: oklch(0.82 0.105 168);
+  --success-foreground: oklch(0.18 0.03 168);
+  --warning: oklch(0.86 0.105 95);
+  --warning-foreground: oklch(0.18 0.03 95);
+
+  /* Separadores: finos y pastel. */
+  --border: oklch(0.33 0.026 264);
+  --input: oklch(0.35 0.026 264);
+  --ring: oklch(0.79 0.125 45);
+
+  --chart-1: oklch(0.82 0.105 168);
+  --chart-2: oklch(0.73 0.115 18);
+  --chart-3: oklch(0.86 0.105 95);
+  --chart-4: oklch(0.74 0.1 240);
+  --chart-5: oklch(0.76 0.11 315);
+
+  /*
+   * Paleta de DATOS (solo para las series de las graficas): NARANJA y MENTA.
    * No se usan los verdes y rojos de la app (verde = ganancia, rojo =
    * perdida): en una linea de datos, esos colores mienten.
-   * Las variantes 3 y 4 solo se usan cuando hay mas de dos series.
    */
-  --data-1: oklch(0.82 0.165 62);
-  --data-2: oklch(0.86 0.125 168);
-  --data-3: oklch(0.9 0.13 92);
-  --data-4: oklch(0.72 0.115 196);
+  --data-1: oklch(0.8 0.14 55);
+  --data-2: oklch(0.85 0.1 165);
+  --data-3: oklch(0.89 0.11 90);
+  --data-4: oklch(0.74 0.09 200);
 
-  --sidebar: oklch(0.185 0.014 255);
-  --sidebar-foreground: oklch(0.95 0.004 80);
-  --sidebar-primary: oklch(0.83 0.155 72);
-  --sidebar-primary-foreground: oklch(0.18 0.02 70);
-  --sidebar-accent: oklch(0.26 0.016 255);
-  --sidebar-accent-foreground: oklch(0.975 0.004 80);
-  --sidebar-border: oklch(0.29 0.015 255);
-  --sidebar-ring: oklch(0.83 0.155 72);
+  /*
+   * Rail lateral: crema pastel muy claro con texto gris carbon suave. Es la
+   * columna "clara" de la app; el contenido va en oscuro pastel.
+   */
+  --sidebar: oklch(0.968 0.012 85);
+  --sidebar-foreground: oklch(0.34 0.02 70);
+  --sidebar-primary: oklch(0.79 0.125 45);
+  --sidebar-primary-foreground: oklch(0.2 0.03 45);
+  --sidebar-accent: oklch(0.935 0.028 82);
+  --sidebar-accent-foreground: oklch(0.3 0.022 70);
+  --sidebar-border: oklch(0.9 0.022 85);
+  --sidebar-ring: oklch(0.79 0.125 45);
 
-  /* Halo calido de fondo y sombra de las superficies. */
-  --glow: oklch(0.83 0.155 72 / 0.07);
-  --shadow-card: 0 1px 0 0 oklch(1 0 0 / 0.03) inset, 0 12px 32px -18px oklch(0 0 0 / 0.6);
+  /* Halo pastel calido de fondo y sombra suave de las superficies. */
+  --glow: oklch(0.79 0.125 45 / 0.075);
+  --shadow-card: 0 1px 0 0 oklch(1 0 0 / 0.035) inset, 0 18px 40px -24px oklch(0 0 0 / 0.7);
 }
-
 .dark {
-  --background: oklch(0.16 0.012 255);
-  --foreground: oklch(0.975 0.004 80);
+  --background: oklch(0.178 0.018 264);
+  --foreground: oklch(0.965 0.008 80);
 }
 
 @layer base {
@@ -183,6 +187,14 @@
     box-shadow: var(--shadow-card);
   }
 
+  /* Cristal: translucido, con desenfoque y borde pastel fino. */
+  .glass {
+    background-color: color-mix(in oklch, var(--color-background) 72%, transparent);
+    backdrop-filter: blur(14px) saturate(1.2);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+    border-bottom: 1px solid color-mix(in oklch, var(--color-primary) 22%, transparent);
+  }
+
   /* Fila o bloque de datos dentro de una tarjeta. */
   .row-subtle {
     border: 1px solid var(--color-border);
@@ -205,6 +217,14 @@
     letter-spacing: -0.02em;
   }
 
+  /* Cifras grandes: jade pastel con un brillo muy sutil. */
+  .metric-glow {
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-mono);
+    letter-spacing: -0.02em;
+    text-shadow: 0 0 22px color-mix(in oklch, var(--color-success) 35%, transparent);
+  }
+
   /* Barra de acento fina (arriba de una tarjeta). */
   .accent-top {
     position: relative;
@@ -219,9 +239,60 @@
     background: linear-gradient(
       90deg,
       transparent,
-      color-mix(in oklch, var(--color-primary) 55%, transparent),
+      color-mix(in oklch, var(--color-primary) 60%, transparent),
       transparent
     );
+  }
+
+  /* Boton principal: melocoton pastel con degradado y relieve suave. */
+  .btn-melon {
+    background-image: linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--color-primary) 92%, white) 0%,
+      var(--color-primary) 100%
+    );
+    box-shadow:
+      0 1px 0 0 oklch(1 0 0 / 0.28) inset,
+      0 10px 24px -12px color-mix(in oklch, var(--color-primary) 60%, transparent);
+    transition:
+      transform 150ms ease,
+      box-shadow 200ms ease,
+      filter 200ms ease;
+  }
+  .btn-melon:hover {
+    filter: brightness(1.04);
+    box-shadow:
+      0 1px 0 0 oklch(1 0 0 / 0.3) inset,
+      0 14px 30px -12px color-mix(in oklch, var(--color-primary) 70%, transparent);
+  }
+  .btn-melon:active {
+    transform: translateY(1px);
+  }
+
+  /* Boton de parada: rosa salmon suave con resplandor pastel. */
+  .btn-salmon {
+    background-image: linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--color-destructive) 88%, white) 0%,
+      var(--color-destructive) 100%
+    );
+    color: var(--color-destructive-foreground);
+    box-shadow:
+      0 1px 0 0 oklch(1 0 0 / 0.3) inset,
+      0 10px 26px -12px color-mix(in oklch, var(--color-destructive) 75%, transparent);
+    transition:
+      transform 150ms ease,
+      box-shadow 200ms ease,
+      filter 200ms ease;
+  }
+  .btn-salmon:hover {
+    filter: brightness(1.05);
+    box-shadow:
+      0 1px 0 0 oklch(1 0 0 / 0.32) inset,
+      0 16px 34px -12px color-mix(in oklch, var(--color-destructive) 85%, transparent);
+  }
+  .btn-salmon:active {
+    transform: translateY(1px);
   }
 }
 

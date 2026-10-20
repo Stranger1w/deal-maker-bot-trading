@@ -359,7 +359,7 @@ function Cifra({
   return (
     <div className="bg-card px-5 py-4">
       <p className="kicker">{etiqueta}</p>
-      <p className={`metric mt-2 text-2xl font-semibold ${color}`}>{valor}</p>
+      <p className={`metric-glow mt-2 text-2xl font-semibold ${color}`}>{valor}</p>
       <p className="mt-1 text-xs leading-snug text-muted-foreground">{pie}</p>
     </div>
   );

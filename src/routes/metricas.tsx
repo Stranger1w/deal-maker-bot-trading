@@ -124,7 +124,7 @@ function MetricasPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-semibold tabular">{d.totales.operaciones}</p>
+                <p className="metric-glow text-2xl font-semibold">{d.totales.operaciones}</p>
                 <p className="text-xs text-muted-foreground">
                   {d.totales.conSenal} % con la señal registrada
                 </p>
@@ -136,7 +136,7 @@ function MetricasPage() {
               </CardHeader>
               <CardContent>
                 <p
-                  className={`text-2xl font-semibold tabular ${d.totales.pnlNeto >= 0 ? "text-positive" : "text-destructive"}`}
+                  className={`metric-glow text-2xl font-semibold ${d.totales.pnlNeto >= 0 ? "text-positive" : "text-destructive"}`}
                 >
                   {money(d.totales.pnlNeto)}
                 </p>
@@ -154,7 +154,7 @@ function MetricasPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-semibold tabular">
+                <p className="metric-glow text-2xl font-semibold">
                   {d.totales.maxDrawdownPct.toFixed(2)} %
                 </p>
                 <p className="text-xs text-muted-foreground">Sobre la curva de P&L acumulado</p>
@@ -165,7 +165,9 @@ function MetricasPage() {
                 <CardTitle className="text-sm text-muted-foreground">Costes estimados</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-semibold tabular">{money(d.totales.costeEstimado)}</p>
+                <p className="metric-glow text-2xl font-semibold">
+                  {money(d.totales.costeEstimado)}
+                </p>
                 <p className="text-xs text-muted-foreground">Comisiones + slippage</p>
               </CardContent>
             </Card>

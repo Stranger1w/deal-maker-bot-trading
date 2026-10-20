@@ -143,7 +143,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <nav className="flex flex-col gap-5">
       {NAV_GRUPOS.map((grupo) => (
         <div key={grupo.title} className="flex flex-col gap-0.5">
-          <p className="kicker px-3 pb-1">{grupo.title}</p>
+          <p className="kicker px-3 pb-1 text-sidebar-foreground/65">{grupo.title}</p>
           {grupo.items.map((item) => {
             const activo = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
             return (
@@ -153,17 +153,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 onClick={() => setMovil(false)}
                 title={colapsada ? item.label : undefined}
                 className={cn(
-                  "group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  "group relative flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200",
                   activo
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
                 )}
               >
                 {activo && (
-                  <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-primary" />
+                  <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-sidebar-primary" />
                 )}
                 <item.icon
-                  className={cn("size-4 shrink-0", activo ? "text-primary" : "opacity-70")}
+                  className={cn(
+                    "size-4 shrink-0 transition-transform duration-200",
+                    activo ? "text-sidebar-primary" : "opacity-60 group-hover:opacity-100",
+                  )}
                 />
                 {!colapsada && <span className="truncate">{item.label}</span>}
               </Link>
@@ -179,7 +182,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Barra lateral (escritorio) */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-border bg-sidebar/40 backdrop-blur-sm transition-[width] duration-200 md:flex",
+          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200 md:flex",
           colapsada ? "w-[4.25rem]" : "w-60",
         )}
       >
@@ -190,8 +193,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </span>
             {!colapsada && (
               <span className="flex flex-col leading-none">
-                <span className="text-sm font-semibold tracking-tight">Deal Maker</span>
-                <span className="mt-0.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">
+                  Deal Maker
+                </span>
+                <span className="mt-0.5 text-[10px] uppercase tracking-[0.18em] text-sidebar-foreground/65">
                   Trading
                 </span>
               </span>
@@ -201,14 +206,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="flex-1 overflow-y-auto px-2 pb-4">{navegacion}</div>
 
-        <div className="flex items-center gap-2 border-t border-border p-3">
+        <div className="flex items-center gap-2 border-t border-sidebar-border p-3">
           <KillSwitchButton className="flex-1" />
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setColapsada((v) => !v)}
             aria-label={colapsada ? "Expandir el menú" : "Contraer el menú"}
-            className="text-muted-foreground"
+            className="text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
           >
             <Menu className={cn("size-4 transition-transform", colapsada && "rotate-90")} />
           </Button>
@@ -217,8 +222,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Menú móvil */}
       <Sheet open={movil} onOpenChange={setMovil}>
-        <SheetContent side="left" className="w-72 p-0">
-          <SheetHeader className="border-b border-border p-4">
+        <SheetContent
+          side="left"
+          className="w-72 border-sidebar-border bg-sidebar p-0 text-sidebar-foreground"
+        >
+          <SheetHeader className="border-b border-sidebar-border p-4">
             <SheetTitle className="flex items-center gap-2.5">
               <span className="grid size-7 place-items-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
                 D
@@ -237,7 +245,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           colapsada ? "md:pl-[4.25rem]" : "md:pl-60",
         )}
       >
-        <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-md">
+        <header className="glass sticky top-0 z-30">
           <div className="mx-auto flex h-14 max-w-[110rem] items-center gap-3 px-4 md:px-8">
             <Button
               variant="ghost"
