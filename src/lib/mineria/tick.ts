@@ -242,12 +242,13 @@ export async function tickMineria(
         });
       }
 
-      // Pago diario: una vez al dia, con lo acumulado desde el ultimo.
-      // El pool paga lo BRUTO; la luz la pagas tu (y por eso el neto sale
-      // negativo en un PC de casa). Un "pago" negativo no existe.
-      const ultimoPago = w.last_payout_at ? Date.parse(w.last_payout_at) : 0;
+      // Pago diario: una vez al dia. Para saber cuando fue el ultimo se
+      // mira la tabla de pagos (que existe siempre) y, si esta, la columna
+      // last_payout_at del worker.
+      const ultimoPago = await leerUltimoPago(db, w);
       if (Date.now() - ultimoPago > 24 * 3600 * 1000) {
         const { error: errorPago } = await db.from("mining_payouts").insert({
+          worker_id: w.id,
           coin: w.coin,
           pool: w.pool,
           amount: Number(balance.monedasDia.toFixed(8)),
@@ -318,8 +319,48 @@ export async function tickMineria(
   };
 }
 
-/** Precio del kWh del dueno (de su fila de automation_settings). */
-async function leerPrecioKwh(db: Db, userId: string): Promise<number> {
+/**
+ * Cuando fue el ultimo pago de este worker (en milisegundos, 0 si nunca).
+ *
+ * Se mira primero la columna last_payout_at del worker (migracion nueva) y,
+ * si no esta, la tabla de pagos: asi el motor NO paga cada minuto mientras
+ * el dueno no aplique la migracion.
+ */
+async function leerUltimoPago(db: Db, w: WorkerMina): Promise<number> {
+  if (w.last_payout_at) {
+    const marca = Date.parse(w.last_payout_at);
+    if (Number.isFinite(marca)) return marca;
+  }
+  const conWorker = await db
+    .from("mining_payouts")
+    .select("paid_at")
+    .eq("user_id", w.user_id)
+    .eq("worker_id", w.id)
+    .order("paid_at", { ascending: false })
+    .limit(1);
+  if (!conWorker.error && (conWorker.data ?? []).length > 0) {
+    const marca = Date.parse((conWorker.data ?? [])[0]?.paid_at ?? "");
+    if (Number.isFinite(marca)) return marca;
+  }
+  const sinWorker = await db
+    .from("mining_payouts")
+    .select("paid_at")
+    .eq("user_id", w.user_id)
+    .eq("coin", w.coin)
+    .eq("pool", w.pool)
+    .order("paid_at", { ascending: false })
+    .limit(1);
+  if (!sinWorker.error && (sinWorker.data ?? []).length > 0) {
+    const marca = Date.parse((sinWorker.data ?? [])[0]?.paid_at ?? "");
+    if (Number.isFinite(marca)) return marca;
+  }
+  return 0;
+}
+
+/** Precio del kWh del dueno (de su fila de automation_settings). */ async function leerPrecioKwh(
+  db: Db,
+  userId: string,
+): Promise<number> {
   // La columna es nueva (migracion 20261026000000): si no esta, se usa el
   // precio por defecto sin que el motor se caiga.
   const { data, error } = await db

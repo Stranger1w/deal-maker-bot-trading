@@ -1092,6 +1092,7 @@ export type Database = {
       }
       mining_payouts: {
         Row: {
+          worker_id: string | null
           amount: number
           coin: string
           id: string
@@ -1101,6 +1102,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          worker_id?: string | null
           amount: number
           coin: string
           id?: string
@@ -1110,6 +1112,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          worker_id?: string | null
           amount?: number
           coin?: string
           id?: string

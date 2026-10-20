@@ -36,9 +36,17 @@ alter table public.mining_workers
 alter table public.automation_settings
   add column if not exists mineria_kwh_usd numeric not null default 0.15;
 
+-- 3) El pago, con su equipo: para no pagar dos veces el mismo dia.
+alter table public.mining_payouts
+  add column if not exists worker_id uuid references public.mining_workers (id) on delete set null;
+
 -- 3) Indice para el historico por worker (la grafica lo lee por fecha).
 create index if not exists mining_hashrate_history_worker_fecha_idx
   on public.mining_hashrate_history (worker_id, recorded_on desc);
+
+-- 4) Indice para no pagar dos veces el mismo dia.
+create index if not exists mining_payouts_worker_fecha_idx
+  on public.mining_payouts (worker_id, paid_at desc);
 
 commit;
 
@@ -55,3 +63,8 @@ select column_name, data_type, column_default
   from information_schema.columns
  where table_name = 'automation_settings' and column_name = 'mineria_kwh_usd';
 -- debe salir: numeric, 0.15
+
+select column_name, data_type
+  from information_schema.columns
+ where table_name = 'mining_payouts' and column_name = 'worker_id';
+-- debe salir: worker_id, uuid
