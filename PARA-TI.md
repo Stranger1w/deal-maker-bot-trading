@@ -161,22 +161,37 @@ cabecera `Authorization: Bearer <secreto>`. Ya está hecho y **probado de
 extremo a extremo** (llamada real → 200; llamada con secreto equivocado →
 401). Solo falta quién lo llama cada minuto.
 
-### Paso 1: el secreto (ya lo puedes hacer desde la app)
+### Opción A: en tu PC (ya montada, funciona ya)
 
-**Ajustes → Automatización → "Motor 24/7 (cron en la nube)" → "Generar
-secreto"**. Sale un valor que **solo se muestra una vez**: cópialo y pégalo en
-el cron.
+Como tu PC **ya tiene internet**, el motor puede correr aquí mismo: la app
+de escritorio levanta el servidor en `127.0.0.1:3127` y una tarea programada
+de Windows lo llama cada minuto.
 
-El secreto se guarda en `app_settings` (clave `cron_secret`), que solo lee el
-administrador. Si prefieres el entorno del servidor, también vale
-`LOVABLE_CRON_SECRET` (tiene prioridad).
+```powershell
+cd C:\Users\Usuario\.copilot\repos\deal-maker-bot-trading
 
-> Ya hay uno configurado en la base (lo generé al probar el motor). Puedes
-> generar otro desde la app cuando quieras: el anterior deja de valer.
+# Instalar la tarea (llama al motor cada minuto)
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\instalar-cron-local.ps1
 
-**Dónde tiene que vivir**: en un entorno **con internet** (tu PC no lo tiene,
-y el motor necesita llegar a la API de Binance). Opciones, de menos a más
-curious:
+# Probar un ciclo a mano
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\cron-local.ps1
+
+# Quitarla (si la quieres en la nube)
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\instalar-cron-local.ps1 -Desinstalar
+```
+
+**Ya la he instalado y probado en tu PC**: la tarea "DealMaker Motor" corre
+cada minuto y el motor avanza (`estado=completed`, 0 errores).
+
+> **Límite honesto de esta opción**: no es 24/7 de verdad. Si apagas el PC o
+> cierras la app, el motor deja de hablar (la app detecta que pasan más de
+> 2 intervalos sin tick y te lo avisa en el panel). Para 24/7 de verdad, mira
+> la opción B.
+
+### Opción B: en la nube (lo único que es 24/7 de verdad)
+
+Despliega la app en un servidor con URL pública (Lovable Cloud, Cloudflare
+Workers o un VPS) y pon el cron allí:
 
 | Opción                                 | Coste                                                                  | Nota                                                                                                                                                                                                                                              |
 | -------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -189,6 +204,19 @@ curious:
 > este entorno no hay acceso al buscador web, y no quiero darte cifras de
 > memoria. Cuando tengas internet, confirmamos el límite exacto del servicio
 > que elijas antes de montarlo.
+
+### El secreto del cron (ya lo puedes hacer desde la app)
+
+**Ajustes → Automatización → "Motor 24/7 (cron en la nube)" → "Generar
+secreto"**. Sale un valor que **solo se muestra una vez**: cópialo y pégalo en
+el cron.
+
+El secreto se guarda en `app_settings` (clave `cron_secret`), que solo lee el
+administrador. Si prefieres el entorno del servidor, también vale
+`LOVABLE_CRON_SECRET` (tiene prioridad).
+
+> Ya hay uno configurado en la base (lo generé al probar el motor). Puedes
+> generar otro desde la app cuando quieras: el anterior deja de valer.
 
 ### El workflow de GitHub Actions ya está en el repo
 
@@ -203,16 +231,11 @@ secreto. Para activarlo:
 Si el workflow falla, te lo dice en el log de la ejecución (no se traga el
 error: responde con el código HTTP y el cuerpo).
 
-> Remember: tu PC no tiene internet, así que el motor tiene que correr en
-> algún sitio con internet. Si aún no has desplegado la app en un servidor
-> con URL pública, el `.exe` solo te sirve a ti en local (y entonces el motor
-> solo corre mientras la app esté abierta).
-
 **Lo que hay que tener listo** (sea cual sea la opción):
 
 - El secreto en el entorno del cron (nunca en el repo).
-- La URL pública de tu app (el `.exe` sirve en local, pero el cron necesita
-  una URL accesible desde internet: un despliegue en la nube o un túnel).
+- La URL pública de tu app (el `.exe` sirve en local, pero el cron en la nube
+  necesita una URL accesible desde internet).
 - Un aviso si el motor deja de hablar: el propio motor escribe logs
   estructurados (JSON) y, si configuras `TELEGRAM_BOT_TOKEN` y
   `TELEGRAM_CHAT_ID` en el entorno, te avisa por Telegram de los límites y
