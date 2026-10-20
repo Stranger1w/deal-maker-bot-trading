@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { useGuardianDeSesion } from "@/hooks/useGuardianDeSesion";
+
 import { KillSwitchButton } from "@/components/KillSwitchButton";
 import { Button } from "@/components/ui/button";
 import {
@@ -120,6 +122,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [paleta, setPaleta] = useState(false);
   const [movil, setMovil] = useState(false);
   const [colapsada, setColapsada] = useState(false);
+
+  // Si la sesion caduca, al login (en vez de una pagina de error).
+  useGuardianDeSesion();
 
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const alertas = useQuery(alertsQuery);
