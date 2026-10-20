@@ -2,10 +2,14 @@
 // si el motor tiene todo lo que necesita para operar.
 //
 // Es una lectura: no escribe nada en la base.
+//
+// Puede llamarla cualquier usuario con sesion: cada uno ve SU configuracion
+// (la fila de engine_config y la sesion de motor de su user_id) y el estado
+// del esquema, que no es información privada de nadie.
 
 import { createServerFn } from "@tanstack/react-start";
 
-import { requireAdmin } from "@/integrations/supabase/admin-middleware";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 async function admin() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -17,12 +21,11 @@ async function admin() {
  * motor necesita (indicadores, secreto del cron, sesion abierta).
  */
 export const estadoApp = createServerFn({ method: "POST" })
-  .middleware([requireAdmin])
+  .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const db = await admin();
     const { comprobarMigraciones } = await import("./estado.server");
     const { leerSecretoCron } = await import("./cron.server");
-    const { leerAjustesPlataforma } = await import("./propietario.server");
     const { obtenerSesionActiva } = await import("./engine-sessions.server");
 
     // El comprobador de esquema usa nombres dinamicos (columnas que puede que
@@ -31,15 +34,15 @@ export const estadoApp = createServerFn({ method: "POST" })
       db as unknown as Parameters<typeof comprobarMigraciones>[0],
     );
 
-    // La fila de configuracion es la del ADMINISTRADOR (una por usuario).
-    const plataforma = await leerAjustesPlataforma(db);
-    const adminId = plataforma?.adminId ?? context.userId;
+    // La fila de configuracion y la sesion son las DE ESTE USUARIO (una por
+    // usuario): nunca la de otro.
+    const userId = context.userId;
 
     // Indicadores configurados: sin ellos el motor no abre posiciones.
     const { data: cfg, error: errorCfg } = await db
       .from("engine_config")
       .select("indicator_ids, horizon_minutes, amount_per_trade")
-      .eq("user_id", adminId)
+      .eq("user_id", userId)
       .limit(1);
     const filaCfg = (cfg ?? []) as {
       indicator_ids?: string[] | null;
@@ -49,10 +52,10 @@ export const estadoApp = createServerFn({ method: "POST" })
     const indicadores = filaCfg[0]?.indicator_ids ?? [];
     const tieneConfig = !errorCfg && filaCfg.length > 0 && indicadores.length > 0;
 
-    // Sesion viva del motor (la del administrador).
+    // Sesion viva del motor (la de este usuario).
     let sesion: { id: string; status: string; session_ends_at: string | null } | null = null;
     try {
-      const viva = await obtenerSesionActiva(db, adminId);
+      const viva = await obtenerSesionActiva(db, userId);
       sesion = viva
         ? {
             id: viva.id,

@@ -29,6 +29,10 @@ const USUARIO = [
   "aceptarAvisoRiesgo",
   "guardarConfigBot",
   "leerConfigBot",
+  // Solo LECTURA y cada usuario ve SU fila (engine_config y engine_sessions
+  // se filtran por el user_id de la sesion) y el estado del esquema, que no
+  // es informacion privada de nadie.
+  "estadoApp",
 ].sort();
 
 /**

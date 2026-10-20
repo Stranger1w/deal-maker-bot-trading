@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, Bot, ChartNoAxesColumn, Gauge, KeyRound } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { ArrowUpRight, Bot, ChartNoAxesColumn, Gauge, KeyRound, Wrench } from "lucide-react";
 
 import { ActividadPanel } from "@/components/ActividadPanel";
 import type {
@@ -16,6 +17,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { SkeletonCifras } from "@/components/Skeleton";
 import { StatusPill, statusTone } from "@/components/StatusPill";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { estadoApp } from "@/lib/estado.functions";
 import { dateTime, money } from "@/lib/format";
 import {
   alertsQuery,
@@ -23,6 +25,7 @@ import {
   automationQuery,
   binanceQuery,
   botsQuery,
+  executionsQuery,
   fundsQuery,
   reportsQuery,
   workersQuery,
@@ -57,6 +60,20 @@ function Dashboard() {
   const engine = useQuery(automationQuery);
   const alerts = useQuery(alertsQuery);
   const reports = useQuery(reportsQuery);
+  const ejecuciones = useQuery(executionsQuery);
+
+  // Hay operaciones cerradas (ventas): hay algo que medir.
+  const hayOperaciones = (ejecuciones.data ?? []).some((e) => e.side === "sell");
+
+  // Estado real de la app: migraciones pendientes y si el motor tiene
+  // configuracion. Es una lectura; si el usuario no puede consultarla, el
+  // panel sigue funcionando sin esa fila.
+  const estadoFn = useServerFn(estadoApp);
+  const estado = useQuery({
+    queryKey: ["estado_app"],
+    queryFn: () => estadoFn({}),
+    refetchInterval: 120000,
+  });
 
   const botList = bots.data ?? [];
   // Mientras cargan los datos no se inventan ceros: un "0,00" parece real.
@@ -149,6 +166,20 @@ function Dashboard() {
     },
   ];
 
+  // La base de datos solo se enseña si el usuario puede consultarla.
+  if (estado.data) {
+    salud.push({
+      label: "Base de datos",
+      ok: estado.data.todoAplicado,
+      detail: estado.data.todoAplicado
+        ? "migraciones al día"
+        : `${estado.data.pendientes} migraciones sin aplicar`,
+      accion: estado.data.todoAplicado
+        ? undefined
+        : "Aplícalas en el SQL Editor de Supabase (Ajustes → Automatización te dice cuáles).",
+    });
+  }
+
   // Pasos siguientes: lo que de verdad falta para que la app rinda. Cada uno
   // mira el estado real, asi que la lista se acorta sola segun avanzas.
   // Se muestran en la ventana de arriba, que va avanzando sola.
@@ -181,13 +212,31 @@ function Dashboard() {
       icono: Gauge,
     },
     {
-      hecho: false,
-      titulo: "Prueba la estrategia con el backtest",
+      hecho: !!estado.data?.motor.tieneConfig,
+      titulo: "Configura los indicadores del motor",
       detalle:
-        "Antes de poner dinero real: mide si tu configuración supera al mercado y a las estrategias aleatorias. Con pocas operaciones, esas cifras son ruido.",
+        "Los indicadores son los que deciden comprar y vender. Sin ellos el motor se queda quieto a propósito: elige cuáles quieres y guárdalos.",
+      to: "/motor",
+      etiquetaAccion: "Configurar",
+      icono: Wrench,
+    },
+    {
+      hecho: hayOperaciones,
+      titulo: "Mide tu estrategia antes de arriesgar",
+      detalle:
+        "Mide si tu configuración supera al mercado y a las estrategias aleatorias. Con pocas operaciones, esas cifras son ruido: no las tomes como prueba de rentabilidad.",
       to: "/metricas",
       etiquetaAccion: "Ver métricas",
       icono: ChartNoAxesColumn,
+    },
+    {
+      hecho: !!estado.data?.todoAplicado,
+      titulo: "Aplica las migraciones pendientes",
+      detalle:
+        "Hay cambios de esquema que solo puedes aplicar tú en el SQL Editor de Supabase. Hasta entonces, la app funciona pero se pierde el desglose por indicador y el diario del motor.",
+      to: "/automatizacion",
+      etiquetaAccion: "Ver cuáles",
+      icono: Wrench,
     },
   ];
 
@@ -273,7 +322,7 @@ function Dashboard() {
           <CardTitle className="text-base">¿Está todo bien?</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {salud.map((h) => (
               <div key={h.label} className="row-subtle rounded-lg px-3 py-2.5">
                 <div className="flex items-center justify-between gap-2">
