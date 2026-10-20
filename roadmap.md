@@ -51,8 +51,7 @@
 - [x] Realismo de ejecución: tamaño por riesgo con ATR, filtro de régimen de mercado,
       límite de operaciones por par y enfriamiento tras rachas de pérdidas
       (migración `20261023000000`)
-- [x] Backtest que funciona **sin internet** (`--archivo` + `scripts/guardar-velas.ts`
-      + dataset de ejemplo en `datos/`)
+- [x] Backtest que funciona **sin internet** (`--archivo` + `scripts/guardar-velas.ts` + dataset de ejemplo en `datos/`)
 - [x] Referencia aleatoria (la misma estrategia con la señal al azar, mismo motor) y
       sensibilidad de parámetros: la estrategia por defecto solo gana al 3 % de las
       aleatorias, o sea, no se distingue del azar
@@ -71,7 +70,20 @@
 - [ ] Idempotencia y reintentos con backoff en el envío de órdenes (parcial: ya hay
       clave de idempotencia, manejo del 23505 y reconciliación de la posición; falta
       reconciliar órdenes pendientes)
-- [ ] Cron 24/7: falta elegir dónde corre (la nube, porque el PC no tiene internet)
-- [ ] Prueba de escenario con DOS usuarios de punta a punta (hace falta el usuario de
-      prueba de Supabase)
+- [ ] Cron 24/7: **resuelto en dos partes** — en el PC del dueño ya corre (tarea
+      programada de Windows, `scripts/cron-local.ps1`, instalada y probada) y para
+      24/7 de verdad queda el cron en la nube (`.github/workflows/tick.yml` +
+      URL pública del despliegue)
+- [x] Prueba de escenario con DOS usuarios: el segundo usuario ya existía en Supabase y
+      se comprobó con su sesión real — ve solo su bot, ni `app_settings` (ni el
+      secreto del cron) ni las credenciales de Binance (403)
+- [x] El motor aguanta que falten las migraciones: todo lo nuevo degrada sin romperse
+      (insert de `bot_executions` con reintentos, lectura de `engine_strategies` sin
+      columnas nuevas) y la app dice exactamente qué migración falta
+- [x] Secreto del cron generable desde la app (`app_settings.cron_secret`), con
+      comparación en tiempo constante y endpoints que responden 401 en vez de 500
+- [x] La app comprueba el esquema real y muestra qué migraciones faltan (tarjeta
+      "Estado de la base de datos") en vez de una lista fija
+- [x] Arreglado el bug que hacía pasar las credenciales de Binance por inexistentes
+      (la tabla está bloqueada por RLS y se leía desde el navegador)
 - [ ] Fase 7: re-cifrar credenciales reales con la clave nueva y apagar flags
