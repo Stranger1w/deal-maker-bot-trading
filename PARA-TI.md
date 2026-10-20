@@ -1,5 +1,9 @@
 # Lo que te toca a ti
 
+> **Antes de nada, mira [`PENDIENTE.md`](./PENDIENTE.md)**: es la lista corta
+> y actualizada de lo que falta (con el estado verificado de hoy). Este
+> documento es la guía paso a paso.
+
 Todo lo que sigue lo tienes que hacer **tú** (porque toca tu cuenta de
 Supabase, tu Binance, tu nube y tu máquina). Está en orden: cada paso
 depende del anterior.
