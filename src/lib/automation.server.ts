@@ -930,11 +930,26 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
     // (engine_strategies). Si no los tiene, usa los de la plataforma
     // (engine_config). La estrategia decide el TAMAÑO de la operacion y
     // lleva su estado (rachas, nivel de martingala).
-    const { data: filasEstrategia } = await db
-      .from("engine_strategies")
-      .select(
-        "bot_id, indicator_ids, strategy_id, params, consecutive_wins, consecutive_losses, martingale_level",
-      );
+    // Configuracion por bot. Las columnas indicator_ids y strategy_id son
+    // nuevas (migracion 20261021000000): si todavia no estan en la base, la
+    // lectura falla y se reintenta sin ellas, para que el motor siga
+    // funcionando con la configuracion de la plataforma.
+    let filasEstrategia: unknown[] = [];
+    {
+      const conNuevas = await db
+        .from("engine_strategies")
+        .select(
+          "bot_id, indicator_ids, strategy_id, params, consecutive_wins, consecutive_losses, martingale_level",
+        );
+      if (!conNuevas.error && conNuevas.data) {
+        filasEstrategia = conNuevas.data as unknown[];
+      } else {
+        const antiguas = await db
+          .from("engine_strategies")
+          .select("bot_id, params, consecutive_wins, consecutive_losses, martingale_level");
+        filasEstrategia = (antiguas.data ?? []) as unknown[];
+      }
+    }
     const configPorBot = new Map<string, FilaEstrategiaBot>();
     for (const fila of (filasEstrategia ?? []) as unknown as FilaEstrategiaBot[]) {
       if (fila.bot_id) configPorBot.set(fila.bot_id, fila);
@@ -1416,8 +1431,34 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
             `${insert.error.code ?? ""} ${insert.error.message}`,
           )
         ) {
-          const { exchange_order_id: _omit, ...legacyRow } = execRow;
-          insert = await db.from("bot_executions").insert(legacyRow as never);
+          // Faltan columnas nuevas en la base (aun no se ha aplicado la
+          // migracion). Se reintenta sin ellas para que el motor SIGA
+          // operando: perder una operacion por una migracion pendiente seria
+          // mucho peor que no registrar que indicadores la dispararon.
+          const {
+            signal_indicators: _si,
+            signal_reason: _sr,
+            signal_at: _sa,
+            ...sinSenal
+          } = execRow;
+          insert = await db.from("bot_executions").insert(sinSenal as never);
+          if (
+            insert.error &&
+            /42703|does not exist|could not find/i.test(
+              `${insert.error.code ?? ""} ${insert.error.message}`,
+            )
+          ) {
+            const { exchange_order_id: _omit, ...legacyRow } = sinSenal;
+            insert = await db.from("bot_executions").insert(legacyRow as never);
+            if (insert.error) {
+              await log(
+                db,
+                bot.id,
+                "warn",
+                `Faltan columnas en bot_executions: ${insert.error.message}. Aplica la migracion 20261022000000_bot_executions_senal.sql`,
+              );
+            }
+          }
         }
 
         if (insert.error) {

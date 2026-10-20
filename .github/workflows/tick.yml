@@ -1,0 +1,75 @@
+name: Motor Deal Maker
+
+# Llama al endpoint del motor para que avance un ciclo.
+#
+# QUE ES Y QUE NO ES
+# El motor de trading vive en el servidor de la app (POST
+# /api/public/automation-tick, con cabecera Authorization: Bearer <secreto>).
+# Este workflow NO es el motor: es un reloj que lo llama.
+#
+# AVISO IMPORTANTE (limites de GitHub, sin rodeos)
+# En el plan gratuito, los workflows programados se ejecutan como mucho
+# CADA HORA y con retraso (GitHub no garantiza la hora exacta). Asi que este
+# workflow sirve como:
+#   - respaldo y comprobacion de que el endpoint responde,
+#   - y motor de emergencia si el cron de verdad se cae.
+# Para un motor de 1 minuto, la opcion gratuita que SI daMinuto es un cron
+# en la nube (Cloudflare Workers + Cron Triggers, o un VPS). Configuralo en
+# el servidor y deja este workflow como red de seguridad.
+#
+# COMO SE USA
+# 1) En el repo: Settings -> Secrets and variables -> Actions -> New
+#    repository secret:
+#       DEAL_MAKER_URL       = https://tu-dominio/api/public/automation-tick
+#       DEAL_MAKER_CRON_KEY  = (el valor de LOVABLE_CRON_SECRET)
+# 2) Da al boton "Run workflow" para probarlo a mano.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Cada 5 minutos (GitHub retrasa los programados: en el plan gratuito
+    # pueden pasar minutos o, en el peor caso, una hora).
+    - cron: "*/5 * * * *"
+
+concurrency:
+  group: motor-deal-maker
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    name: Un ciclo del motor
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Comprobar configuracion
+        id: config
+        env:
+          DEAL_MAKER_URL: ${{ secrets.DEAL_MAKER_URL }}
+          DEAL_MAKER_CRON_KEY: ${{ secrets.DEAL_MAKER_CRON_KEY }}
+        run: |
+          if [ -z "$DEAL_MAKER_URL" ] || [ -z "$DEAL_MAKER_CRON_KEY" ]; then
+            echo "::error::Faltan los secretos DEAL_MAKER_URL y DEAL_MAKER_CRON_KEY"
+            exit 1
+          fi
+
+      - name: Llamar al motor
+        env:
+          DEAL_MAKER_URL: ${{ secrets.DEAL_MAKER_URL }}
+          DEAL_MAKER_CRON_KEY: ${{ secrets.DEAL_MAKER_CRON_KEY }}
+        run: |
+          respuesta=$(curl -sS -X POST \
+            -H "Authorization: Bearer $DEAL_MAKER_CRON_KEY" \
+            -H "Content-Type: application/json" \
+            -w "\n%{http_code}" \
+            "$DEAL_MAKER_URL" 2>&1) || {
+            echo "::error::No se pudo llamar al motor"
+            exit 1
+          }
+          codigo=$(printf "%s" "$respuesta" | tail -n1)
+          cuerpo=$(printf "%s" "$respuesta" | sed '$d')
+          echo "HTTP $codigo"
+          echo "$cuerpo"
+          if [ "$codigo" != "200" ]; then
+            echo "::error::El motor respondio $codigo"
+            exit 1
+          fi

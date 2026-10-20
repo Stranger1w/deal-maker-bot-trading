@@ -139,17 +139,35 @@ probado; solo falta quién lo llama cada minuto.
 y el motor necesita llegar a la API de Binance). Opciones, de menos a más
 curious:
 
-| Opción                                              | Coste                                                                  | Nota                                                                                                                                                                                                                                                |
-| --------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **GitHub Actions** (cron de un workflow en el repo) | Gratis para repos públicos; 2.000 min/mes en privados                  | Lo más rápido de montar: un `.github/workflows/tick.yml` con `schedule: - cron: "* * * * *"` y un `curl` al endpoint con el secreto. **Ojo**: el plan gratuito de GitHub aplasta los workflows programados a una ejecución por hora, no por minuto. |
-| **Cloudflare Workers + Cron Triggers**              | Gratis (10 ejecuciones/día en el plan gratuito, 1/min en Workers Paid) | Es lo natural para un endpoint HTTP y ya lo conocías por Lovable.                                                                                                                                                                                   |
-| **Un VPS barato** (Hetzner/Contabo)                 | ~4 €/mes                                                               | Control total, sin límites de frecuencia.                                                                                                                                                                                                           |
-| **Railway / Render / Fly.io**                       | Plan gratuito muy limitado o de pago                                   | Con un proceso Node siempre vivo.                                                                                                                                                                                                                   |
+| Opción                                 | Coste                                                                  | Nota                                                                                                                                                                                                                                              |
+| -------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **GitHub Actions** (workflow del repo) | Gratis para repos públicos; 2.000 min/mes en privados                  | **Ya montado**: `.github/workflows/tick.yml`. Cada 5 minutos llama al motor con el secreto. Ojo: en el plan gratuito GitHub **aplasta los workflows programados a una ejecución por hora**, asi que úsalo como respaldo, no como motor principal. |
+| **Cloudflare Workers + Cron Triggers** | Gratis (10 ejecuciones/día en el plan gratuito, 1/min en Workers Paid) | Es lo natural para un endpoint HTTP y ya lo conocías por Lovable. **Da minuto de verdad**, que es lo que necesita el motor.                                                                                                                       |
+| **Un VPS barato** (Hetzner/Contabo)    | ~4 €/mes                                                               | Control total, sin límites de frecuencia.                                                                                                                                                                                                         |
+| **Railway / Render / Fly.io**          | Plan gratuito muy limitado o de pago                                   | Con un proceso Node siempre vivo.                                                                                                                                                                                                                 |
 
 > **No he podido verificar los límites actuales de los planes gratuitos**: en
 > este entorno no hay acceso al buscador web, y no quiero darte cifras de
 > memoria. Cuando tengas internet, confirmamos el límite exacto del servicio
 > que elijas antes de montarlo.
+
+### El workflow de GitHub Actions ya está en el repo
+
+`.github/workflows/tick.yml` llama a `POST /api/public/automation-tick` con el
+secreto. Para activarlo:
+
+1. En GitHub: **Settings → Secrets and variables → Actions → New repository secret**
+   - `DEAL_MAKER_URL` = `https://tu-dominio/api/public/automation-tick`
+   - `DEAL_MAKER_CRON_KEY` = el valor de `LOVABLE_CRON_SECRET`
+2. Pestaña **Actions → Motor Deal Maker → Run workflow** para probarlo a mano.
+
+Si el workflow falla, te lo dice en el log de la ejecución (no se traga el
+error: responde con el código HTTP y el cuerpo).
+
+> Remember: tu PC no tiene internet, así que el motor tiene que correr en
+> algún sitio con internet. Si aún no has desplegado la app en un servidor
+> con URL pública, el `.exe` solo te sirve a ti en local (y entonces el motor
+> solo corre mientras la app esté abierta).
 
 **Lo que hay que tener listo** (sea cual sea la opción):
 

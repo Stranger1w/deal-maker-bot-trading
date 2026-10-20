@@ -89,7 +89,25 @@ export async function informeMetricas(
     };
   }
 
-  const { data: ejecuciones } = await db
+  // La columna signal_indicators es nueva (migracion 20261022000000). Si no
+  // esta todavia, el informe sale sin el desglose por indicador, pero el
+  // resto de las cifras (P&L, win rate, drawdown) siguen siendo correctas.
+  let haySenal = true;
+  let ejecuciones: {
+    bot_id: string;
+    bot_name: string;
+    symbol: string;
+    side: string;
+    pnl: number | string | null;
+    mode: string;
+    price: number | string | null;
+    quantity: number | string | null;
+    created_at: string;
+    signal_indicators?: string[] | null;
+    signal_reason?: string | null;
+  }[] = [];
+
+  const consultaSenal = await db
     .from("bot_executions")
     .select(
       "bot_id, bot_name, symbol, side, pnl, mode, price, quantity, created_at, signal_indicators, signal_reason",
@@ -97,21 +115,19 @@ export async function informeMetricas(
     .in("bot_id", ids)
     .order("created_at", { ascending: true });
 
-  const ops: OperacionMedida[] = (
-    (ejecuciones ?? []) as {
-      bot_id: string;
-      bot_name: string;
-      symbol: string;
-      side: string;
-      pnl: number | string | null;
-      mode: string;
-      price: number | string | null;
-      quantity: number | string | null;
-      created_at: string;
-      signal_indicators?: string[] | null;
-      signal_reason?: string | null;
-    }[]
-  ).map((e) => ({
+  if (!consultaSenal.error && consultaSenal.data) {
+    ejecuciones = consultaSenal.data as typeof ejecuciones;
+  } else {
+    haySenal = false;
+    const antiguas = await db
+      .from("bot_executions")
+      .select("bot_id, bot_name, symbol, side, pnl, mode, price, quantity, created_at")
+      .in("bot_id", ids)
+      .order("created_at", { ascending: true });
+    ejecuciones = (antiguas.data ?? []) as typeof ejecuciones;
+  }
+
+  const ops: OperacionMedida[] = ejecuciones.map((e) => ({
     botId: e.bot_id,
     botName: e.bot_name,
     simbolo: e.symbol,
@@ -162,6 +178,11 @@ export async function informeMetricas(
   if (cerradas.length > 0 && conSenal < cerradas.length) {
     avisos.push(
       `${cerradas.length - conSenal} operaciones no tienen la señal registrada (se hicieron antes del registro de indicadores): esos grupos no se pueden atribuir a un indicador.`,
+    );
+  }
+  if (!haySenal) {
+    avisos.push(
+      "Falta la migracion 20261022000000_bot_executions_senal.sql: hasta aplicarla, las operaciones no guardan qué señal las produjo y no se puede desglosar por indicador.",
     );
   }
   if (sinVentaja.length > 0) {

@@ -261,7 +261,14 @@ export const guardarConfigBot = createServerFn({ method: "POST" })
       },
       { onConflict: "bot_id" },
     );
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (/42703|does not exist|could not find/i.test(`${error.code ?? ""} ${error.message}`)) {
+        throw new Error(
+          "Faltan las columnas de configuración por bot en la base. Aplica la migracion 20261021000000_engine_strategies_por_bot.sql en el SQL Editor de Supabase.",
+        );
+      }
+      throw new Error(error.message);
+    }
 
     await audit(
       "engine.bot_config_updated",
@@ -279,15 +286,28 @@ export const leerConfigBot = createServerFn({ method: "POST" })
     const { exigirBotPropio } = await import("./ownership.server");
     await exigirBotPropio(context.supabase, data.botId);
     const db = await admin();
-    const { data: fila } = await db
+    const conNuevas = await db
       .from("engine_strategies")
       .select("indicator_ids, strategy_id")
       .eq("bot_id", data.botId)
       .maybeSingle();
-    const config = fila as { indicator_ids?: string[] | null; strategy_id?: string | null } | null;
+    if (conNuevas.error) {
+      // Todavia no esta aplicada la migracion 20261021000000: el bot usa la
+      // configuracion de la plataforma.
+      return {
+        indicatorIds: [] as string[],
+        strategyId: "fixed",
+        migracionPendente: true,
+      };
+    }
+    const config = conNuevas.data as {
+      indicator_ids?: string[] | null;
+      strategy_id?: string | null;
+    } | null;
     return {
       indicatorIds: config?.indicator_ids ?? [],
       strategyId: config?.strategy_id ?? "fixed",
+      migracionPendente: false,
     };
   });
 
