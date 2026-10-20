@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireAdmin } from "@/integrations/supabase/admin-middleware";
+import type { Json } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 async function admin() {
@@ -498,7 +499,7 @@ export const runSandbox = createServerFn({ method: "POST" })
     // Solo los bots del dueño del sandbox (antes entraban los de todos).
     const { data: bots } = await db
       .from("bots")
-      .select("id, name")
+      .select("id, name, pair, capital, stop_loss_pct, take_profit_pct")
       .in("status", ["training", "paused"])
       // types.ts aun no incluye bots.user_id: cast.
       .eq("user_id", duenoId);
@@ -518,28 +519,99 @@ export const runSandbox = createServerFn({ method: "POST" })
     });
     const usedSources = snapshot.sources.filter((s) => s.points > 0);
 
-    const rand = (min: number, max: number) =>
-      Number((Math.random() * (max - min) + min).toFixed(2));
-    const runs = candidates.map((bot, i) => {
-      const symbol = pairs[i % Math.max(1, pairs.length)] ?? pairs[0] ?? "BTCUSDT";
-      const params = suggestStrategyParams(snapshot, symbol, sandbox.dataset);
-      const bias = params.bias === "alcista" ? 6 : params.bias === "bajista" ? -4 : 0;
-      return {
+    // ── ANTES AQUI SE INVENTABAN LOS NUMEROS (Math.random) ──
+    // Ahora se mide de verdad: mismas velas, mismo motor y mismos costes que
+    // el backtest del CLI y que el motor en vivo (src/lib/sandbox.server.ts).
+    const { evaluarEstrategia } = await import("@/lib/sandbox.server");
+    const { buscarEstrategia } = await import("@/lib/strategies/index");
+    const { leerConfigSenales } = await import("@/lib/senal-motor.server");
+
+    // Indicadores: los del bot si tiene, si no los de la plataforma.
+    const { data: cfgBot } = await db
+      .from("engine_strategies")
+      .select("indicator_ids, strategy_id")
+      .eq("bot_id", candidates[0]?.id ?? "00000000-0000-0000-0000-000000000000")
+      .limit(1);
+    const cfgPlataforma = await leerConfigSenales(db, duenoId);
+    const indicadoresPlataforma = cfgPlataforma?.ids ?? ["close_price"];
+
+    // Cuantas velas cubre el rango del sandbox (1 h por vela), con topes.
+    const desde = Date.parse(sandbox.date_from);
+    const hasta = Date.parse(sandbox.date_to);
+    const horas =
+      Number.isFinite(desde) && Number.isFinite(hasta)
+        ? Math.round((hasta - desde) / 3_600_000)
+        : 1000;
+    const limiteVelas = Math.min(Math.max(horas > 0 ? horas : 1000, 200), 5000);
+
+    const runs: Array<{
+      sandbox_id: string;
+      bot_id: string;
+      bot_name: string;
+      return_pct: number;
+      drawdown_pct: number;
+      win_rate: number;
+      suggested_params: Json;
+    }> = [];
+    const sinEvaluar: string[] = [];
+    let evaluados = 0;
+    for (const [i, bot] of candidates.entries()) {
+      const simbolo = (bot.pair || pairs[i % Math.max(1, pairs.length)] || "BTCUSDT").toUpperCase();
+      const params = suggestStrategyParams(snapshot, simbolo, sandbox.dataset);
+      const estrategiaId = (cfgBot?.[0]?.strategy_id as string | undefined) ?? "fixed";
+      const evaluacion = await evaluarEstrategia({
+        simbolo,
+        intervalo: "1h",
+        limite: limiteVelas,
+        hasta: hasta || Date.now(),
+        capital: Number(bot.capital ?? 1000),
+        stopLossPct: Number(bot.stop_loss_pct ?? 2),
+        takeProfitPct: Number(bot.take_profit_pct ?? 4),
+        estrategiaId,
+        indicadores: indicadoresPlataforma,
+      });
+      if (evaluacion.sinDatos) {
+        // Las columnas de training_runs no admiten null: un bot sin datos NO
+        // se guarda (con un 0 pareceria un resultado real). Se explica en las
+        // notas del sandbox.
+        sinEvaluar.push(`${bot.name} (${evaluacion.motivo ?? "sin datos"})`);
+        continue;
+      }
+      evaluados++;
+      runs.push({
         sandbox_id: data.sandboxId,
         bot_id: bot.id,
         bot_name: bot.name,
-        return_pct: Number((rand(-8, 20) + bias).toFixed(2)),
-        drawdown_pct: rand(2, 14),
-        win_rate: rand(42, 71),
-        suggested_params: { ...params, symbol, layer: MARKET_DATA_LAYER_VERSION } as never,
-      };
-    });
+        return_pct: evaluacion.retornoPct,
+        drawdown_pct: evaluacion.drawdownPct,
+        win_rate: evaluacion.winRatePct,
+        suggested_params: {
+          ...params,
+          symbol: simbolo,
+          layer: MARKET_DATA_LAYER_VERSION,
+          backtestReal: {
+            velas: evaluacion.velas,
+            operaciones: evaluacion.operaciones,
+            profitFactor: evaluacion.profitFactor,
+            costePct: evaluacion.costePct,
+            benchmarkPct: evaluacion.benchmarkPct,
+            superaBenchmark: evaluacion.superaBenchmark,
+            estrategia: estrategiaId,
+            indicadores: indicadoresPlataforma,
+            intervalo: "1h",
+            avisos: evaluacion.avisos,
+          },
+        },
+      });
+    }
 
     await db.from("training_runs").delete().eq("sandbox_id", data.sandboxId);
     if (runs.length) await db.from("training_runs").insert(runs);
 
     const avg = (key: "return_pct" | "drawdown_pct" | "win_rate") =>
-      runs.length ? Number((runs.reduce((s, r) => s + r[key], 0) / runs.length).toFixed(2)) : 0;
+      runs.length
+        ? Number((runs.reduce((s, r) => s + Number(r[key] ?? 0), 0) / runs.length).toFixed(2))
+        : null;
 
     const { error } = await db
       .from("training_sandboxes")
@@ -558,17 +630,24 @@ export const runSandbox = createServerFn({ method: "POST" })
             }))
           : (sandbox.ai_sources as unknown as unknown[])) as never,
         ai_notes:
-          `Capa de IA ${MARKET_DATA_LAYER_VERSION}: se normalizaron ${snapshot.points.length} puntos de ` +
-          `${usedSources.length || 0} fuente(s) al esquema común ${snapshot.schema} y se ajustaron stops, ` +
-          `take-profit y tamaño de posición durante la simulación acelerada ${sandbox.speed}x. ` +
-          `Fuentes y rangos usados: ${
+          `Backtest REAL con el mismo motor que el motor en vivo: ${evaluados} bot(s) evaluados sobre ` +
+          `velas de Binance (1 h), con comisiones (0,1 %/lado), slippage (0,05 %/lado), stop, take-profit ` +
+          `y tamaño de la estrategia. ` +
+          (sinEvaluar.length
+            ? `Sin datos (no se inventa ningun resultado): ${sinEvaluar.join("; ")}. `
+            : "") +
+          `Capa de IA ${MARKET_DATA_LAYER_VERSION}: ${snapshot.points.length} puntos de ` +
+          `${usedSources.length || 0} fuente(s) normalizados al esquema ${snapshot.schema}. ` +
+          `Fuentes: ${
             usedSources.map((s) => `${s.source} (${s.range})`).join("; ") || "sin datos nuevos"
-          }.`,
+          }. ` +
+          `Ojo: un resultado en un periodo pasado NO demuestra que vaya a funcionar, y con pocas ` +
+          `operaciones es ruido. Mide con walk-forward y contra la referencia aleatoria antes de creerte nada.`,
         updated_at: new Date().toISOString(),
       })
       .eq("id", data.sandboxId);
     if (error) throw new Error(error.message);
-    return { ok: true, runs: runs.length };
+    return { ok: true, runs: runs.length, evaluados, sinDatos: sinEvaluar.length };
   });
 
 export const promoteRun = createServerFn({ method: "POST" })

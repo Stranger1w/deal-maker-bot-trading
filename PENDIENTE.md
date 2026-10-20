@@ -89,10 +89,33 @@ trading y minería).
   sale "sin datos de la red". Si me pegas los números de tu pool (hash rate
   de la red, recompensa por bloque y tiempo de bloque) los meto en el worker
   y ya calcula.
-- **Campo de entrenamiento de minería**: la tabla `mining_sandboxes` sigue
-  con los números de ejemplo antiguos (120 TH/s, que es una máquina
-  dedicada, no tu PC). O lo conecto a tus cifras reales o lo quito, para que
-  no engañe a nadie.
+- **Campo de entrenamiento**: ya no inventa cifras (ver más abajo). Falta
+  decidir si lo dejamos solo para Trading o lo ampliamos a comparar monedas
+  con tus números reales de minado.
+
+---
+
+## 5-bis. Lo que he cambiado y conviene que sepas
+
+**El "Campo de entrenamiento" fabricaba los resultados.** Generaba el retorno,
+el drawdown y el win rate con `Math.random()` (y lo vestía de "simulación
+acelerada ×25"). Los números que había en la base (8,29 %, 16,62 %, 23,41 %…)
+**no venían de ninguna simulación**: eran azar con apariencia de resultado.
+
+Ahora:
+
+- Descarga las **velas reales de Binance** y corre el **mismo motor de
+  backtest** que el CLI (`bun run backtest`) y que el motor en vivo, con sus
+  costes (0,1 % + 0,05 % de slippage por lado) y el tamaño de la estrategia.
+- Si no hay datos, **no se inventa**: el bot queda sin evaluar y se explica por
+  qué.
+- Añade el aviso que faltaba: en un mercado a la baja, "perder menos que
+  comprar y mantener" **no es tener ventaja** (los dos pierden).
+- He borrado los 8 runs inventados y reiniciado las cifras de los 3
+  sandboxes (ahora están a `null` y dicen que hay que lanzarlos).
+
+Medido de verdad en tu sandbox (2025-01-01 → 2025-03-31, BTC cayó un 13 %):
+los bots pierden entre **−0,85 % y −4,16 %**.
 
 ---
 

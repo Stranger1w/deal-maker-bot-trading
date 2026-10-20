@@ -1255,8 +1255,8 @@ function TrainingTab() {
                     <CardTitle className="text-base">{sandbox.name}</CardTitle>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {sandbox.dataset} · {sandbox.date_from} → {sandbox.date_to} ·{" "}
-                      {sandbox.pairs.join(", ")} · {sandbox.speed}x ·{" "}
-                      {money(Number(sandbox.simulated_capital))} simulados
+                      {sandbox.pairs.join(", ")} · {money(Number(sandbox.simulated_capital))}{" "}
+                      simulados
                     </p>
                   </div>
                   <StatusPill tone={statusTone(sandbox.status)}>{sandbox.status}</StatusPill>
@@ -1280,8 +1280,15 @@ function TrainingTab() {
 
                 <div className="rounded-md border border-border bg-secondary/40 p-3 text-xs">
                   <p className="mb-1.5 font-medium uppercase tracking-wide text-primary">
-                    Capa de IA multi-plataforma
+                    Backtest real y capa de IA
                   </p>
+                  {sandbox.return_pct === null && (
+                    <p className="mb-1.5 text-muted-foreground">
+                      Este campo de entrenamiento no tiene cifras: las anteriores estaban generadas
+                      al azar. Pulsa «Ejecutar» para medirlo de verdad (velas de Binance, mismo
+                      motor y mismos costes que el motor en vivo).
+                    </p>
+                  )}
                   <ul className="space-y-1 text-muted-foreground">
                     {(sandbox.ai_sources ?? []).map((src) => (
                       <li key={src.source}>
@@ -1300,37 +1307,75 @@ function TrainingTab() {
 
                 {sandboxRuns.length > 0 && (
                   <div className="space-y-2">
-                    {sandboxRuns.map((r) => (
-                      <div
-                        key={r.id}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-xs"
-                      >
-                        <span className="font-medium">{r.bot_name}</span>
-                        <span className="tabular text-muted-foreground">
-                          ret {pct(r.return_pct)} · dd {pct(r.drawdown_pct)} · wr{" "}
-                          {Number(r.win_rate).toFixed(1)}%
-                        </span>
-                        <span className="tabular text-[11px] text-muted-foreground">
-                          {JSON.stringify(r.suggested_params)}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant={r.promoted ? "ghost" : "secondary"}
-                          disabled={r.promoted}
-                          onClick={async () => {
-                            try {
-                              await promote({ data: { runId: r.id } });
-                              toast.success(`${r.bot_name} promovido a Demo`);
-                              refresh();
-                            } catch (e) {
-                              toast.error(e instanceof Error ? e.message : "Error al promover");
-                            }
-                          }}
+                    {sandboxRuns.map((r) => {
+                      const real = (r.suggested_params as Record<string, unknown> | null)?.[
+                        "backtestReal"
+                      ] as
+                        | {
+                            velas?: number;
+                            operaciones?: number;
+                            profitFactor?: number;
+                            costePct?: number;
+                            benchmarkPct?: number;
+                            superaBenchmark?: boolean;
+                            avisos?: string[];
+                          }
+                        | undefined;
+                      return (
+                        <div
+                          key={r.id}
+                          className="space-y-1.5 rounded-md border border-border px-3 py-2 text-xs"
                         >
-                          {r.promoted ? "Promovido" : "Promover a Demo"}
-                        </Button>
-                      </div>
-                    ))}
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-medium">{r.bot_name}</span>
+                            <span className="tabular text-muted-foreground">
+                              ret {pct(r.return_pct)} · dd {pct(r.drawdown_pct)} · wr{" "}
+                              {Number(r.win_rate).toFixed(1)}%
+                            </span>
+                          </div>
+                          {real && (
+                            <>
+                              <p className="tabular text-[11px] text-muted-foreground">
+                                {real.velas} velas · {real.operaciones} operaciones · PF{" "}
+                                {real.profitFactor} · costes {real.costePct} % · comprar y mantener{" "}
+                                {real.benchmarkPct} %{" "}
+                                {real.superaBenchmark
+                                  ? "(lo supera)"
+                                  : "(NO lo supera: sin ventaja sobre el mercado)"}
+                              </p>
+                              {real.avisos && real.avisos.length > 0 && (
+                                <ul className="space-y-0.5 text-[11px] text-warning">
+                                  {real.avisos.map((a) => (
+                                    <li key={a}>· {a}</li>
+                                  ))}
+                                </ul>
+                              )}
+                            </>
+                          )}
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="tabular text-[11px] text-muted-foreground">
+                              {JSON.stringify(r.suggested_params)}
+                            </span>
+                            <Button
+                              size="sm"
+                              variant={r.promoted ? "ghost" : "secondary"}
+                              disabled={r.promoted}
+                              onClick={async () => {
+                                try {
+                                  await promote({ data: { runId: r.id } });
+                                  toast.success(`${r.bot_name} promovido a Demo`);
+                                  refresh();
+                                } catch (e) {
+                                  toast.error(e instanceof Error ? e.message : "Error al promover");
+                                }
+                              }}
+                            >
+                              {r.promoted ? "Promovido" : "Promover a Demo"}
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
