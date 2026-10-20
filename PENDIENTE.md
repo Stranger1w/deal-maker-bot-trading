@@ -117,6 +117,33 @@ Ahora:
 Medido de verdad en tu sandbox (2025-01-01 → 2025-03-31, BTC cayó un 13 %):
 los bots pierden entre **−0,85 % y −4,16 %**.
 
+### El histórico también era de ejemplo (arreglado)
+
+`market_prices` (272 filas "demo-seed": BTC a 70.954 cuando el mercado estaba
+a 82.700) y `bot_performance_history` (272 curvas inventadas) estaban
+sembradas con datos de ejemplo. Y no era solo decoración: **los precios de
+ejemplo se usaban para el benchmark de comprar-y-mantener del gate de
+promoción**, o sea, para decidir si un bot se merecía dinero real con números
+falsos.
+
+Ahora:
+
+- Los precios se descargan de **Binance** (400 días reales por par) y la
+  fuente queda escrita en cada fila.
+- Las curvas de los bots se rehacen con sus **ejecuciones reales**. Un bot que
+  no ha operado no tiene curva (antes se le dibujaba una línea plana).
+- El mantenimiento diario (el cron) lo refresca solo, y hay un botón
+  **"Refrescar histórico real"** en _Métricas_.
+
+**Auditoría final: 0 tablas con datos de ejemplo** (las que tienen `is_demo`
+están todas a `false` y con datos reales).
+
+> Aviso: `bot_executions` **no tiene columna `user_id`** en tu base (esa
+> migración de multiusuario no está aplicada ahí). No es un problema: el
+> aislamiento se hace por bot, que sí tiene dueño. Pero si quieres que el
+> filtro por dueño sea también en las ejecuciones, hay que aplicar
+> `20261009000000_multiusuario_fase1.sql`.
+
 ### Copy trading de traders REALES (nuevo)
 
 Dos indicadores que no salen del precio sino de **traders reales** de Binance
