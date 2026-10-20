@@ -61,6 +61,9 @@ export type ResultadoCopyTrading = {
   hasta: string;
   /** Lecturas de traders usadas. */
   lecturasTraders: number;
+  /** De donde han salido los datos: cache local o plataforma. */
+  origenDatos: string;
+  plataformas: string[];
   /** Copy trading: los grandes. */
   topTraders: CopiaTrader | null;
   /** Copy trading: el flujo. */
@@ -102,15 +105,40 @@ function contraAleatoria(
 export async function medirCopyTrading(
   simbolo: string,
   limite = 700,
+  opciones: { refrescar?: boolean } = {},
 ): Promise<ResultadoCopyTrading> {
   const simboloFinal = simbolo.toUpperCase();
-  const velas = await velasDeBinance({
-    simbolo: simboloFinal,
-    intervalo: "1h",
-    limite,
+
+  // Velas: de la cache local si estan; si no, se descargan de las plataformas.
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const db = supabaseAdmin;
+  const { velasConCache, guardarTradersCache } = await import("./cache-mercado.server");
+  const cache = await velasConCache(db, simboloFinal, "1h", limite, {
     mercado: "futuros",
+    ...(opciones.refrescar ? { refrescar: true } : {}),
   });
+  const velas = cache.velas;
+
+  // Datos de traders: de Binance Futures (la unica plataforma que publica el
+  // posicionamiento de las cuentas grandes) y se guardan en la cache.
+  const { obtenerSeriesTraders, alinearTradersConVelas } = await import("./traders.server");
   const series = await obtenerSeriesTraders(simboloFinal, "1h", 1000);
+  await guardarTradersCache(
+    db,
+    simboloFinal,
+    "top_long_short",
+    "1h",
+    series.top,
+    "Binance Futures",
+  );
+  await guardarTradersCache(
+    db,
+    simboloFinal,
+    "taker_buy_sell",
+    "1h",
+    series.taker,
+    "Binance Futures",
+  );
   const aux = alinearTradersConVelas(velas, series);
   const lecturasTraders = (aux["traders_top_long_short"] ?? []).filter((v) =>
     Number.isFinite(v),
@@ -184,6 +212,13 @@ export async function medirCopyTrading(
     desde: velas.length ? new Date(velas[0]!.time).toISOString().slice(0, 10) : "",
     hasta: velas.length ? new Date(velas[velas.length - 1]!.time).toISOString().slice(0, 10) : "",
     lecturasTraders,
+    origenDatos:
+      cache.origen === "cache"
+        ? "cache local"
+        : cache.origen === "cache+descarga"
+          ? `cache local + ${cache.plataformas.join(", ")}`
+          : cache.plataformas.join(", ") || "sin datos",
+    plataformas: cache.plataformas,
     topTraders,
     takerFlow,
     combinado,

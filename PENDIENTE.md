@@ -117,6 +117,30 @@ Ahora:
 Medido de verdad en tu sandbox (2025-01-01 → 2025-03-31, BTC cayó un 13 %):
 los bots pierden entre **−0,85 % y −4,16 %**.
 
+### Los datos ya no se miden cada vez (nuevo)
+
+El sandbox y el backtest leen de una **cache local** (`market_candles` y
+`trader_metrics`): solo se descarga lo que falta. Y los datos vienen de
+**varias plataformas**, no solo de Binance:
+
+| Plataforma      | Mercado | ¿Datos de traders?                             |
+| --------------- | ------- | ---------------------------------------------- |
+| Binance Futures | futuros | Sí (posiciones de las cuentas grandes y flujo) |
+| Binance         | spot    | No                                             |
+| Bybit           | futuros | No                                             |
+| OKX             | futuros | No                                             |
+| Hyperliquid     | futuros | No                                             |
+| Kraken          | spot    | No                                             |
+| Coinbase        | spot    | No                                             |
+
+En _Mis bots → Campo de entrenamiento → "Datos y plataformas"_ ves el mismo
+par en los 7 exchanges y cuánto se diferencian entre sí (ahora mismo: ±0,07 %,
+o sea que ninguno se está desviando del resto). Con el botón **"Actualizar
+datos"** se llena la cache.
+
+> Los datos de traders (posicionamiento de las cuentas grandes) **solo los
+> publica Binance Futures**: las demas plataformas se usan para precios.
+
 ### El histórico también era de ejemplo (arreglado)
 
 `market_prices` (272 filas "demo-seed": BTC a 70.954 cuando el mercado estaba

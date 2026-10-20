@@ -31,6 +31,7 @@ idempotentes: si te equivocas y las repites, no se rompe nada.
 | 5   | `20261024000000_auto_symbol_spread.sql`            | Filtro de spread en el selector automático                       | Opcional                                                    |
 | 6   | `20261025000000_engine_cycles.sql`                 | Tabla del diario del motor                                       | Opcional (sin ella el motor va igual, pero no hay diario)   |
 | 7   | `20261026000000_mineria_real.sql`                  | Hash rate real, ganancia neta y precio de la luz por equipo      | Sí (para la minería; sin ella va con las cifras básicas)    |
+| 8   | `20261027000000_cache_mercado.sql`                 | Cache local de velas y de datos de traders (no medir cada vez)   | Sí (sin ella se descarga cada vez, pero funciona)           |
 
 Estas tres las tenías ya aplicadas a mano el 14-oct, pero ahora también están
 en el repo (para que no se pierdan y para que el código y la base encajen):

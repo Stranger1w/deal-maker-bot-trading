@@ -965,6 +965,54 @@ export type Database = {
           },
         ]
       }
+      market_candles: {
+        Row: {
+          close: number
+          created_at: string
+          high: number
+          id: string
+          interval: string
+          is_demo: boolean
+          low: number
+          market: string
+          open: number
+          source: string
+          symbol: string
+          time: number
+          volume: number
+        }
+        Insert: {
+          close: number
+          created_at?: string
+          high: number
+          id?: string
+          interval: string
+          is_demo?: boolean
+          low: number
+          market?: string
+          open: number
+          source: string
+          symbol: string
+          time: number
+          volume?: number
+        }
+        Update: {
+          close?: number
+          created_at?: string
+          high?: number
+          id?: string
+          interval?: string
+          is_demo?: boolean
+          low?: number
+          market?: string
+          open?: number
+          source?: string
+          symbol?: string
+          time?: number
+          volume?: number
+        }
+        Relationships: []
+      }
       market_data_sources: {
         Row: {
           created_at: string
@@ -1498,6 +1546,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      trader_metrics: {
+        Row: {
+          created_at: string
+          id: string
+          is_demo: boolean
+          metric: string
+          period: string
+          source: string
+          symbol: string
+          time: number
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_demo?: boolean
+          metric: string
+          period: string
+          source: string
+          symbol: string
+          time: number
+          value: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_demo?: boolean
+          metric?: string
+          period?: string
+          source?: string
+          symbol?: string
+          time?: number
+          value?: number
+        }
+        Relationships: []
       }
       training_runs: {
         Row: {

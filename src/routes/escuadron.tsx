@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Bot,
   Brain,
+  Database,
   Pause,
   Play,
   ScrollText,
@@ -53,6 +54,7 @@ import {
   updateBotStrategy,
 } from "@/lib/dealmaker.functions";
 import { medirCopyTrading } from "@/lib/copytrading.functions";
+import { actualizarDatosMercado, estadoDatosMercado } from "@/lib/datos.functions";
 import { useSecuritySession } from "@/hooks/useSecuritySession";
 import {
   aceptarAvisoRiesgo,
@@ -1145,6 +1147,48 @@ function TrainingTab() {
   const run = useServerFn(runSandbox);
   const promote = useServerFn(promoteRun);
   const copyTradingFn = useServerFn(medirCopyTrading);
+  const estadoDatosFn = useServerFn(estadoDatosMercado);
+  const actualizarDatosFn = useServerFn(actualizarDatosMercado);
+
+  const [estadoDatos, setEstadoDatos] = useState<{
+    cache: { disponible: boolean; velas: number; traders: number; simbolos: string[] };
+    comparativa: Array<{
+      plataforma: string;
+      mercado: string;
+      velas: number;
+      ultimoClose: number | null;
+      diferenciaPct: number | null;
+      error: string | null;
+    }>;
+  } | null>(null);
+  const [actualizandoDatos, setActualizandoDatos] = useState(false);
+
+  const actualizarDatos = async () => {
+    setActualizandoDatos(true);
+    try {
+      const r = await actualizarDatosFn({});
+      toast.success(r.mensaje);
+      const e = await estadoDatosFn({ data: { simbolo: copySimbolo } });
+      setEstadoDatos(e);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudieron actualizar los datos");
+    } finally {
+      setActualizandoDatos(false);
+    }
+  };
+
+  // El estado de los datos se mira una vez al abrir la pestaña.
+  useEffect(() => {
+    let vivo = true;
+    void estadoDatosFn({ data: { simbolo: "BTCUSDT" } })
+      .then((e) => {
+        if (vivo) setEstadoDatos(e);
+      })
+      .catch(() => undefined);
+    return () => {
+      vivo = false;
+    };
+  }, [estadoDatosFn]);
 
   const [copySimbolo, setCopySimbolo] = useState("BTCUSDT");
   const [midiendoCopy, setMidiendoCopy] = useState(false);
@@ -1154,6 +1198,8 @@ function TrainingTab() {
     desde: string;
     hasta: string;
     lecturasTraders: number;
+    origenDatos: string;
+    plataformas: string[];
     topTraders: {
       nombre: string;
       retornoPct: number;
@@ -1324,7 +1370,7 @@ function TrainingTab() {
               </div>
               <p className="text-[11px] text-muted-foreground">
                 {copy.velas} velas de futuros ({copy.desde} → {copy.hasta}) · {copy.lecturasTraders}{" "}
-                lecturas reales de traders
+                lecturas reales de traders · datos: {copy.origenDatos}
               </p>
               <p
                 className={`rounded-md border px-3 py-2 text-sm ${
@@ -1336,6 +1382,76 @@ function TrainingTab() {
                 {copy.veredicto}
               </p>
             </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex flex-wrap items-center justify-between gap-2">
+            <span className="flex items-center gap-2">
+              <Database className="size-4 text-primary" /> Datos y plataformas
+            </span>
+            <Button
+              variant="secondary"
+              onClick={() => void actualizarDatos()}
+              disabled={actualizandoDatos}
+            >
+              {actualizandoDatos ? "Descargando…" : "Actualizar datos"}
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Los datos se guardan en una cache local: el sandbox mide con lo que ya hay y solo
+            descarga lo que falta. La tabla de plataformas compara el MISMO par en distintos
+            exchanges: si un precio se sale de los demas, algo raro esta pasando.
+          </p>
+          {estadoDatos && (
+            <p className="text-xs text-muted-foreground">
+              Cache local: {estadoDatos.cache.velas} velas y {estadoDatos.cache.traders} lecturas de
+              traders
+              {estadoDatos.cache.simbolos.length
+                ? ` (${estadoDatos.cache.simbolos.join(", ")})`
+                : ""}
+              {!estadoDatos.cache.disponible && " · la cache no esta disponible todavia"}
+            </p>
+          )}
+          {estadoDatos && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="py-1.5 pr-3 font-medium">Plataforma</th>
+                    <th className="py-1.5 pr-3 font-medium">Mercado</th>
+                    <th className="py-1.5 pr-3 font-medium">Velas</th>
+                    <th className="py-1.5 pr-3 font-medium">Último precio</th>
+                    <th className="py-1.5 font-medium">vs mediana</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {estadoDatos.comparativa.map((c) => (
+                    <tr key={c.plataforma + c.mercado} className="border-b border-border/50">
+                      <td className="py-1.5 pr-3 font-medium">{c.plataforma}</td>
+                      <td className="py-1.5 pr-3 text-muted-foreground">{c.mercado}</td>
+                      <td className="py-1.5 pr-3 tabular">{c.velas || "—"}</td>
+                      <td className="py-1.5 pr-3 tabular">
+                        {c.ultimoClose !== null ? c.ultimoClose.toFixed(2) : (c.error ?? "—")}
+                      </td>
+                      <td
+                        className={`py-1.5 tabular ${
+                          c.diferenciaPct !== null && Math.abs(c.diferenciaPct) > 1
+                            ? "text-warning"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {c.diferenciaPct !== null ? `${c.diferenciaPct.toFixed(3)} %` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>

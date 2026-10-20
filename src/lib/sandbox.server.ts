@@ -83,6 +83,8 @@ type Args = {
   takeProfitPct: number;
   estrategiaId: string;
   indicadores: string[];
+  /** Ignora la cache local y vuelve a descargar (boton "actualizar"). */
+  refrescar?: boolean;
 };
 
 /**
@@ -109,15 +111,22 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
   let motivo: string | null = null;
   const conTraders = args.indicadores.some((id) => id === "top_traders" || id === "taker_flow");
   try {
-    velas = await velasDeBinance({
-      simbolo,
-      intervalo: args.intervalo,
-      limite: args.limite,
-      hasta: args.hasta,
+    // Las velas salen de la cache local si estan; si no, de las plataformas.
+    // Asi no hay que volver a descargarlo todo en cada medicion.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { velasConCache } = await import("./cache-mercado.server");
+    const cache = await velasConCache(supabaseAdmin, simbolo, args.intervalo, args.limite, {
       // Con datos de traders, el precio es de FUTUROS: si no, se mezclarian
       // precios de spot con flujo de futuros.
       mercado: conTraders ? "futuros" : "spot",
+      ...(args.refrescar ? { refrescar: true } : {}),
     });
+    velas = cache.velas;
+    if (!velas.length) {
+      motivo =
+        cache.aviso ??
+        `No hay velas de ${simbolo} en ${args.intervalo}. Sin datos no hay resultado: no se inventa ninguno.`;
+    }
   } catch (e) {
     motivo = e instanceof Error ? e.message : "No se pudieron descargar las velas.";
   }
