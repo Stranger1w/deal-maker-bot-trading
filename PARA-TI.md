@@ -39,6 +39,11 @@ en el repo (para que no se pierdan y para que el código y la base encajen):
 Cada fichero lleva su propia **consulta de verificación** al final: pégala
 después de aplicarlo y comprueba que sale lo que dice.
 
+> **La app te dice qué falta**: en **Ajustes → Automatización → "Estado de la
+> base de datos"** hay una comprobación real del esquema (no una lista fija):
+> te marca cada migración como "aplicada" o "falta". Cuando las apliques,
+> vuelve a mirarla y se pondrán todas en verde.
+
 > **Ojo con la `20261014100000`**: cambia el índice de "una sesión viva" de
 > global a **por usuario**. Si tienes el motor corriendo, para el cron antes
 > de aplicarla.

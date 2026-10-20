@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { runEngineNow, updateAutomationSettings } from "@/lib/dealmaker.functions";
 import { estadoSecretoCron, generarSecretoCron } from "@/lib/engine.functions";
+import { estadoApp } from "@/lib/estado.functions";
 import { dateTime, money } from "@/lib/format";
 import {
   automationQuery,
@@ -68,6 +69,13 @@ function AutomationPage() {
   const tickFn = useServerFn(runEngineNow);
   const estadoCronFn = useServerFn(estadoSecretoCron);
   const generarCronFn = useServerFn(generarSecretoCron);
+  const estadoAppFn = useServerFn(estadoApp);
+
+  const estado = useQuery({
+    queryKey: ["estado_app"],
+    queryFn: () => estadoAppFn({}),
+    refetchInterval: 60000,
+  });
 
   const estadoCron = useQuery({
     queryKey: ["cron_secreto"],
@@ -363,6 +371,64 @@ function AutomationPage() {
             Binance con permisos mínimos y sin retiro, despliegue Cloud activo y revisión humana de
             riesgos. Deal Maker no promete rentabilidad.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Estado de la base de datos</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Comprobación real del esquema (no una lista): estas son las migraciones que te faltan
+            por aplicar en el SQL Editor de Supabase. El motor funciona igual sin ellas, pero sin
+            estas piezas se pierde lo que dice cada una.
+          </p>
+          {estado.isLoading && <p className="text-sm text-muted-foreground">Comprobando…</p>}
+          {estado.data && (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusPill tone={estado.data.todoAplicado ? "success" : "warning"}>
+                  {estado.data.todoAplicado
+                    ? "todo aplicado"
+                    : `${estado.data.pendientes} sin aplicar`}
+                </StatusPill>
+                <Button variant="ghost" onClick={() => void qc.invalidateQueries()}>
+                  Comprobar de nuevo
+                </Button>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {estado.data.migraciones.map((m) => (
+                  <div
+                    key={m.fichero}
+                    className={`rounded-lg border px-3 py-2 ${
+                      m.aplicada
+                        ? "border-border bg-secondary/20"
+                        : "border-warning/40 bg-warning/10"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs font-medium">{m.titulo}</p>
+                      <StatusPill tone={m.aplicada ? "success" : "warning"}>
+                        {m.aplicada ? "aplicada" : "falta"}
+                      </StatusPill>
+                    </div>
+                    <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                      {m.paraQueSirve}
+                    </p>
+                    <p className="mt-1 font-mono text-[10px] text-muted-foreground/80">
+                      {m.fichero}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {estado.data.motor.indicadoresAviso ? (
+                <p className="rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
+                  {estado.data.motor.indicadoresAviso}
+                </p>
+              ) : null}
+            </>
+          )}
         </CardContent>
       </Card>
 
