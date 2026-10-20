@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Bot, ChartNoAxesColumn, Gauge, KeyRound } from "lucide-react";
 
 import { ActividadPanel } from "@/components/ActividadPanel";
 import type {
@@ -8,6 +8,7 @@ import type {
   MovimientoResumen as ActividadMovimiento,
   WorkerResumen as ActividadWorker,
 } from "@/components/ActividadPanel";
+import { PasosIniciales } from "@/components/PasosIniciales";
 import { AlertsPanel } from "@/components/AlertsPanel";
 import { ComparisonCharts } from "@/components/ComparisonCharts";
 import { KillSwitchButton, KillSwitchStatus } from "@/components/KillSwitchButton";
@@ -150,33 +151,45 @@ function Dashboard() {
 
   // Pasos siguientes: lo que de verdad falta para que la app rinda. Cada uno
   // mira el estado real, asi que la lista se acorta sola segun avanzas.
+  // Se muestran en la ventana de arriba, que va avanzando sola.
   const pasos = [
     {
       hecho: botList.length > 0,
       titulo: "Crea tu primer bot",
-      detalle: "Un bot con capital, par y estrategia. Sin bots no hay motor que opere.",
+      detalle:
+        "Un bot es una estrategia con dinero: un par, un capital y los indicadores que decidirán comprar y vender. Sin bots, el motor no tiene nada que operar.",
       to: "/escuadron",
+      etiquetaAccion: "Crear bot",
+      icono: Bot,
     },
     {
       hecho: binance.data?.connection_status === "ok",
       titulo: "Conecta y verifica tu cuenta de Binance",
-      detalle: "Sin claves verificadas no se puede operar (ni en testnet).",
+      detalle:
+        "Pega una API key con permiso de operar (y SIN retiros) y pulsa «Probar». Sin claves verificadas los bots no pueden operar ni en testnet.",
       to: "/binance",
+      etiquetaAccion: "Conectar Binance",
+      icono: KeyRound,
     },
     {
       hecho: engineOn,
       titulo: "Enciende el motor",
-      detalle: "El motor es el que abre y cierra posiciones. Sin el, los bots no operan.",
+      detalle:
+        "El motor es el que abre y cierra posiciones, y lo hace con la sesión que tú abres. Sin motor, los bots se quedan quietos.",
       to: "/motor",
+      etiquetaAccion: "Abrir el motor",
+      icono: Gauge,
     },
     {
       hecho: false,
       titulo: "Prueba la estrategia con el backtest",
-      detalle: "Antes de poner dinero real: mide si tu configuración supera al mercado y al azar.",
+      detalle:
+        "Antes de poner dinero real: mide si tu configuración supera al mercado y a las estrategias aleatorias. Con pocas operaciones, esas cifras son ruido.",
       to: "/metricas",
+      etiquetaAccion: "Ver métricas",
+      icono: ChartNoAxesColumn,
     },
   ];
-  const pendientes = pasos.filter((p) => !p.hecho).length;
 
   return (
     <div className="space-y-8">
@@ -186,6 +199,9 @@ function Dashboard() {
         subtitle="Lo que hay money en juego, qué está haciendo el motor y lo que te falta por mirar. Sin adornos: las cifras son reales y las alertas no se esconden."
         action={<KillSwitchButton />}
       />
+
+      {/* Pasos iniciales: ventanita arriba que va avanzando sola. */}
+      <PasosIniciales pasos={pasos} />
 
       {/* Cabecera de cifras: el dinero y el estado, en una sola mirada. */}
       {cargandoDatos ? (
@@ -279,43 +295,7 @@ function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Pasos siguientes: lo que de verdad falta. */}
-      {pendientes > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
-              Siguientes pasos
-              <span className="text-xs font-normal text-muted-foreground">
-                {pendientes} pendiente{pendientes === 1 ? "" : "s"}
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-2 md:grid-cols-2">
-            {pasos
-              .filter((p) => !p.hecho)
-              .map((p, i) => (
-                <Link
-                  key={p.titulo}
-                  to={p.to}
-                  className="row-subtle group flex items-start gap-3 rounded-lg px-3 py-2.5 transition-colors hover:border-primary/40"
-                >
-                  <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
-                    {i + 1}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5 text-sm font-medium">
-                      {p.titulo}
-                      <ArrowUpRight className="size-3.5 opacity-0 transition-opacity group-hover:opacity-70" />
-                    </span>
-                    <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
-                      {p.detalle}
-                    </span>
-                  </span>
-                </Link>
-              ))}
-          </CardContent>
-        </Card>
-      )}
+      {/* Pasos siguientes: ahora viven en la ventanita de arriba. */}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <AlertsPanel title="Avisos importantes" limit={6} />

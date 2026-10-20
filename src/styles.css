@@ -229,3 +229,21 @@
   font-variant-numeric: tabular-nums;
   font-family: var(--font-mono);
 }
+
+/*
+ * Barra de progreso de los pasos iniciales: se vacia de izquierda a derecha
+ * mientras dura el paso (y al cambiar de paso, la animacion se reinicia).
+ */
+@keyframes paso-progreso {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.anim-progreso > span {
+  transform-origin: left center;
+  animation: paso-progreso var(--dur, 9s) linear forwards;
+}
