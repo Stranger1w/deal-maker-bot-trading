@@ -44,13 +44,21 @@ const METRICAS = [
 
 type Metrica = (typeof METRICAS)[number]["id"];
 
+/**
+ * Colores de las series de datos.
+ *
+ * No se usan los verdes y rojos de la app: en una linea de datos, un verde
+ * significa "gana" y un rojo "pierde", y aqui solo son "esta serie". La
+ * paleta de datos (tokens --data-1..6) tiene los tonos separados entre si
+ * para que se distingan de un vistazo.
+ */
 const COLORES = [
-  "hsl(var(--primary))",
-  "hsl(var(--success))",
-  "hsl(var(--chart-4))",
-  "hsl(var(--warning))",
-  "hsl(var(--chart-5))",
-  "hsl(var(--destructive))",
+  "hsl(var(--data-1))",
+  "hsl(var(--data-2))",
+  "hsl(var(--data-3))",
+  "hsl(var(--data-4))",
+  "hsl(var(--data-5))",
+  "hsl(var(--data-6))",
 ];
 
 type Row = { recorded_on: string; [k: string]: string | number };
@@ -288,11 +296,12 @@ export function ComparisonCharts() {
                   </linearGradient>
                 ))}
               </defs>
+              {/* Todo el armazon de la grafica es neutro: el unico color son los datos. */}
               <CartesianGrid
                 stroke="hsl(var(--border))"
                 strokeDasharray="2 6"
                 vertical={false}
-                strokeOpacity={0.7}
+                strokeOpacity={0.5}
               />
               <XAxis
                 dataKey="recorded_on"
