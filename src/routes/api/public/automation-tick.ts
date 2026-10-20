@@ -1,16 +1,25 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
-
 // Worker durable: este endpoint lo invoca el cron de la nube cada N segundos/minutos.
 // No depende de la PC del usuario ni de la app Electron.
-// Requiere cabecera `Authorization: Bearer <LOVABLE_CRON_SECRET>`.
+// Requiere cabecera `Authorization: Bearer <secreto>`.
+//
+// El secreto se busca primero en el entorno (LOVABLE_CRON_SECRET) y, si no
+// esta, en app_settings: asi el dueno puede generarlo desde la propia app
+// sin editar el fichero de secretos (ver src/lib/cron.server.ts).
 export const Route = createFileRoute("/api/public/automation-tick")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const unauthorized = await authenticateCronRequest(request);
-        if (unauthorized) return unauthorized;
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const { verificarCron } = await import("@/lib/cron.server");
+        const error = await verificarCron(supabaseAdmin, request);
+        if (error) {
+          return Response.json(
+            { status: "failed", error },
+            { status: 401, headers: { "Cache-Control": "no-store" } },
+          );
+        }
 
         const { runEngineTick } = await import("@/lib/automation.server");
         try {

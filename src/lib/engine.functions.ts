@@ -481,3 +481,54 @@ export const guardarConfigMotor = createServerFn({ method: "POST" })
     );
     return { ok: true };
   });
+
+/**
+ * Estado del secreto del cron (para la tarjeta de "motor 24/7").
+ *
+ * NUNCA devuelve el secreto: solo dice si existe y de donde sale. El
+ * dueno lo genera una vez y lo copia al cron de la nube.
+ */
+export const estadoSecretoCron = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
+  .handler(async () => {
+    const db = await admin();
+    const { leerSecretoCron, CLAVE_SECRETO_CRON } = await import("./cron.server");
+    const secreto = await leerSecretoCron(db);
+    const enEntorno = !!process.env["LOVABLE_CRON_SECRET"]?.trim();
+    return {
+      configurado: !!secreto,
+      enEntorno,
+      clave: CLAVE_SECRETO_CRON,
+    };
+  });
+
+/**
+ * Genera un secreto de cron nuevo y lo guarda en app_settings.
+ *
+ * El secreto se devuelve UNA SOLA VEZ (despues solo se puede volver a
+ * generar). Se audita el cambio, pero en el registro no se guarda el valor.
+ */
+export const generarSecretoCron = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
+  .handler(async ({ context }) => {
+    const db = await admin();
+    const { generarSecreto, CLAVE_SECRETO_CRON } = await import("./cron.server");
+    const secreto = generarSecreto();
+    const { error } = await db.from("app_settings").upsert(
+      {
+        key: CLAVE_SECRETO_CRON,
+        value: secreto,
+        notes: "Secreto del endpoint del motor (POST /api/public/automation-tick)",
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" },
+    );
+    if (error) throw new Error(error.message);
+    await audit(
+      "engine.cron_secret_regenerated",
+      { source: "app_settings", key: CLAVE_SECRETO_CRON },
+      context.userId,
+    );
+    // Se devuelve una vez para que el dueno lo copie al cron.
+    return { ok: true, secreto };
+  });

@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { runEngineNow, updateAutomationSettings } from "@/lib/dealmaker.functions";
+import { estadoSecretoCron, generarSecretoCron } from "@/lib/engine.functions";
 import { dateTime, money } from "@/lib/format";
 import {
   automationQuery,
@@ -65,6 +66,23 @@ function AutomationPage() {
 
   const updateFn = useServerFn(updateAutomationSettings);
   const tickFn = useServerFn(runEngineNow);
+  const estadoCronFn = useServerFn(estadoSecretoCron);
+  const generarCronFn = useServerFn(generarSecretoCron);
+
+  const estadoCron = useQuery({
+    queryKey: ["cron_secreto"],
+    queryFn: () => estadoCronFn({}),
+    refetchInterval: 60000,
+  });
+
+  const generarCron = useMutation({
+    mutationFn: () => generarCronFn({}),
+    onSuccess: (r) => {
+      setSecretoNuevo(r.secreto);
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const invalidate = () => {
     void qc.invalidateQueries();
@@ -97,6 +115,7 @@ function AutomationPage() {
   const s = settings.data;
   const [globalLoss, setGlobalLoss] = useState<string>("");
   const [interval, setIntervalValue] = useState<string>("");
+  const [secretoNuevo, setSecretoNuevo] = useState<string | null>(null);
 
   const heartbeatAge = s?.last_heartbeat_at
     ? Math.round((Date.now() - new Date(s.last_heartbeat_at).getTime()) / 1000)
@@ -344,6 +363,79 @@ function AutomationPage() {
             Binance con permisos mínimos y sin retiro, despliegue Cloud activo y revisión humana de
             riesgos. Deal Maker no promete rentabilidad.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Motor 24/7 (cron en la nube)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-border bg-secondary/30 px-3 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">Secreto del endpoint del motor</p>
+              <p className="text-xs text-muted-foreground">
+                {estadoCron.data?.configurado
+                  ? estadoCron.data.enEntorno
+                    ? "Configurado en el entorno del servidor (LOVABLE_CRON_SECRET)."
+                    : `Configurado en la base (app_settings · clave "${estadoCron.data.clave}").`
+                  : "Sin configurar: el endpoint del motor rechaza las llamadas y el motor no puede correr 24/7."}
+              </p>
+            </div>
+            <StatusPill tone={estadoCron.data?.configurado ? "success" : "warning"}>
+              {estadoCron.data?.configurado ? "listo" : "falta"}
+            </StatusPill>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => generarCron.mutate()}
+              disabled={generarCron.isPending}
+            >
+              {estadoCron.data?.configurado ? "Generar otro" : "Generar secreto"}
+            </Button>
+            <Button variant="ghost" onClick={() => void qc.invalidateQueries()}>
+              Comprobar de nuevo
+            </Button>
+          </div>
+
+          {secretoNuevo && (
+            <div className="space-y-2 rounded-md border border-warning/50 bg-warning/10 px-3 py-3">
+              <p className="text-sm font-medium text-warning">
+                Copia este valor ahora: solo se muestra una vez.
+              </p>
+              <code className="block break-all rounded bg-black/40 px-3 py-2 font-mono text-xs">
+                {secretoNuevo}
+              </code>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(secretoNuevo);
+                    toast.success("Secreto copiado");
+                  }}
+                >
+                  Copiar
+                </Button>
+                <Button variant="ghost" onClick={() => setSecretoNuevo(null)}>
+                  Ocultar
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Pégalo como <code>LOVABLE_CRON_SECRET</code> en el servidor (o como secreto
+                <code> DEAL_MAKER_CRON_KEY</code> en GitHub Actions).
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">El cron llama una vez por ciclo:</p>
+            <code className="block overflow-x-auto rounded bg-black/40 px-3 py-2 font-mono text-xs">
+              curl -X POST https://TU-DOMINIO/api/public/automation-tick -H &quot;Authorization:
+              Bearer &lt;secreto&gt;&quot;
+            </code>
+          </div>
         </CardContent>
       </Card>
 

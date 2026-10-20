@@ -132,8 +132,22 @@ Remove-Item ".\.env"
 ## 5. Poner el motor a correr 24/7 (el cron)
 
 El motor es un endpoint HTTP: `POST /api/public/automation-tick` con la
-cabecera `Authorization: Bearer <LOVABLE_CRON_SECRET>`. Ya está hecho y
-probado; solo falta quién lo llama cada minuto.
+cabecera `Authorization: Bearer <secreto>`. Ya está hecho y **probado de
+extremo a extremo** (llamada real → 200; llamada con secreto equivocado →
+401). Solo falta quién lo llama cada minuto.
+
+### Paso 1: el secreto (ya lo puedes hacer desde la app)
+
+**Ajustes → Automatización → "Motor 24/7 (cron en la nube)" → "Generar
+secreto"**. Sale un valor que **solo se muestra una vez**: cópialo y pégalo en
+el cron.
+
+El secreto se guarda en `app_settings` (clave `cron_secret`), que solo lee el
+administrador. Si prefieres el entorno del servidor, también vale
+`LOVABLE_CRON_SECRET` (tiene prioridad).
+
+> Ya hay uno configurado en la base (lo generé al probar el motor). Puedes
+> generar otro desde la app cuando quieras: el anterior deja de valer.
 
 **Dónde tiene que vivir**: en un entorno **con internet** (tu PC no lo tiene,
 y el motor necesita llegar a la API de Binance). Opciones, de menos a más
@@ -158,7 +172,7 @@ secreto. Para activarlo:
 
 1. En GitHub: **Settings → Secrets and variables → Actions → New repository secret**
    - `DEAL_MAKER_URL` = `https://tu-dominio/api/public/automation-tick`
-   - `DEAL_MAKER_CRON_KEY` = el valor de `LOVABLE_CRON_SECRET`
+   - `DEAL_MAKER_CRON_KEY` = el secreto que copiaste en el paso 1
 2. Pestaña **Actions → Motor Deal Maker → Run workflow** para probarlo a mano.
 
 Si el workflow falla, te lo dice en el log de la ejecución (no se traga el
@@ -171,13 +185,22 @@ error: responde con el código HTTP y el cuerpo).
 
 **Lo que hay que tener listo** (sea cual sea la opción):
 
-- El `LOVABLE_CRON_SECRET` en el entorno del cron (nunca en el repo).
+- El secreto en el entorno del cron (nunca en el repo).
 - La URL pública de tu app (el `.exe` sirve en local, pero el cron necesita
   una URL accesible desde internet: un despliegue en la nube o un túnel).
 - Un aviso si el motor deja de hablar: el propio motor escribe logs
   estructurados (JSON) y, si configuras `TELEGRAM_BOT_TOKEN` y
   `TELEGRAM_CHAT_ID` en el entorno, te avisa por Telegram de los límites y
   errores críticos.
+
+### Antes de esperar 24/7: el motor necesita indicadores
+
+Ahora mismo **`engine_config` está vacío**: sin indicadores configurados el
+motor **no abre posiciones** (a propósito). Configúralos en **Motor →
+Configuración** y comprueba que el bot genera señales. El backtest
+(`BACKTEST.md`) dice si esa estrategia tiene ventaja: con la configuración
+por defecto **no la tiene**, así que úsala para investigar, no para arriesgar
+dinero real.
 
 ---
 
