@@ -45,20 +45,18 @@ const METRICAS = [
 type Metrica = (typeof METRICAS)[number]["id"];
 
 /**
- * Colores de las series de datos.
+ * Colores de las series de datos: NARANJA y MENTA.
  *
  * No se usan los verdes y rojos de la app: en una linea de datos, un verde
- * significa "gana" y un rojo "pierde", y aqui solo son "esta serie". La
- * paleta de datos (tokens --data-1..6) tiene los tonos separados entre si
- * para que se distingan de un vistazo.
+ * significa "gana" y un rojo "pierde", y aqui solo son "esta serie". Con
+ * dos series (la comparativa) el contraste es naranja contra menta: uno
+ * calido, otro frio, y los dos se leen sobre el fondo oscuro.
  */
 const COLORES = [
   "hsl(var(--data-1))",
   "hsl(var(--data-2))",
   "hsl(var(--data-3))",
   "hsl(var(--data-4))",
-  "hsl(var(--data-5))",
-  "hsl(var(--data-6))",
 ];
 
 type Row = { recorded_on: string; [k: string]: string | number };
@@ -291,7 +289,22 @@ export function ComparisonCharts() {
               <defs>
                 {series.map((s, i) => (
                   <linearGradient key={s} id={`grad-${vista}-${s}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={COLORES[i % COLORES.length]} stopOpacity={0.28} />
+                    {/* La estela: el MISMO color de la linea, difuminandose hacia abajo. */}
+                    <stop offset="0%" stopColor={COLORES[i % COLORES.length]} stopOpacity={0.5} />
+                    <stop offset="55%" stopColor={COLORES[i % COLORES.length]} stopOpacity={0.14} />
+                    <stop offset="100%" stopColor={COLORES[i % COLORES.length]} stopOpacity={0} />
+                  </linearGradient>
+                ))}
+                {series.map((s, i) => (
+                  <linearGradient
+                    key={`halo-${s}`}
+                    id={`halo-${vista}-${s}`}
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop offset="0%" stopColor={COLORES[i % COLORES.length]} stopOpacity={0.22} />
                     <stop offset="100%" stopColor={COLORES[i % COLORES.length]} stopOpacity={0} />
                   </linearGradient>
                 ))}
@@ -327,6 +340,21 @@ export function ComparisonCharts() {
                   <TooltipCard sufijo={metrica === "return_pct" && vista === "bots" ? "%" : ""} />
                 }
               />
+              {series.map((s, i) => (
+                <Area
+                  key={`halo-${s}`}
+                  type="monotone"
+                  dataKey={s}
+                  stroke="none"
+                  strokeWidth={0}
+                  fill={`url(#halo-${vista}-${s})`}
+                  fillOpacity={1}
+                  dot={false}
+                  activeDot={false}
+                  connectNulls
+                  isAnimationActive={false}
+                />
+              ))}
               {series.map((s, i) => (
                 <Area
                   key={s}

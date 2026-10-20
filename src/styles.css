@@ -55,8 +55,6 @@
   --color-data-2: var(--data-2);
   --color-data-3: var(--data-3);
   --color-data-4: var(--data-4);
-  --color-data-5: var(--data-5);
-  --color-data-6: var(--data-6);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -110,17 +108,18 @@
   /*
    * Paleta de DATOS (solo para las series de las graficas).
    *
-   * Aparte de los colores semanticos (verde = ganancia, rojo = perdida), que
-   * no se usan aqui: en una linea de datos, un verde o un rojo mienten.
-   * Estos seis tonos estan separados entre si (matices ~75, 215, 320, 160, 25
-   * y 265) y todos tienen luz alta para que se lean sobre el fondo oscuro.
+   * Dos colores y punto: NARANJA y MENTA. Los dos contrastan con el fondo
+   * oscuro y se distinguen entre si de un vistazo (uno calido, otro frio),
+   * que es justo lo que hace falta para comparar dos series.
+   *
+   * No se usan los verdes y rojos de la app (verde = ganancia, rojo =
+   * perdida): en una linea de datos, esos colores mienten.
+   * Las variantes 3 y 4 solo se usan cuando hay mas de dos series.
    */
-  --data-1: oklch(0.84 0.155 75);
-  --data-2: oklch(0.78 0.135 215);
-  --data-3: oklch(0.76 0.16 320);
-  --data-4: oklch(0.8 0.13 160);
-  --data-5: oklch(0.74 0.17 25);
-  --data-6: oklch(0.73 0.15 265);
+  --data-1: oklch(0.82 0.165 62);
+  --data-2: oklch(0.86 0.125 168);
+  --data-3: oklch(0.9 0.13 92);
+  --data-4: oklch(0.72 0.115 196);
 
   --sidebar: oklch(0.185 0.014 255);
   --sidebar-foreground: oklch(0.95 0.004 80);
