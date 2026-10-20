@@ -261,11 +261,17 @@ export async function obtenerSnapshotMercados(): Promise<MercadosSnapshot> {
     cache.set(env, { at: Date.now(), snapshot });
     return snapshot;
   } catch (e) {
+    const mensaje = e instanceof Error ? e.message : "No se pudieron leer los mercados de Binance.";
+    // Sin internet (el caso normal en un PC de casa) el error tecnico ("fetch
+    // failed") no dice nada: se explica en palabras claras que falta conexion.
+    const sinRed = /fetch failed|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|ECONNREFUSED|network/i.test(mensaje);
     return {
       env,
       fetchedAt,
       rows: [],
-      aviso: e instanceof Error ? e.message : "No se pudieron leer los mercados de Binance.",
+      aviso: sinRed
+        ? "No se pudo contactar con Binance: esta maquina no tiene internet (o Binance no responde). Sin conexion no hay precios, ni selector de pares, ni motor: en la nube si funciona."
+        : mensaje,
     };
   }
 }
