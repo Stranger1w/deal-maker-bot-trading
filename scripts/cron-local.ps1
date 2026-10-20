@@ -61,19 +61,53 @@ function Leer-Entorno([string]$ruta) {
 $raiz = Split-Path $PSScriptRoot -Parent
 $envVars = Leer-Entorno $Secretos
 
+# ── 0) Si el codigo en disco es mas nuevo que el servidor que corre, se
+#      reinicia. Sin esto, despues de un build nuevo el navegador carga el JS
+#      nuevo y el servidor sigue con el viejo -> "Server function info not
+#      found" y la pagina de error.
+function Servidor-Desactualizado {
+  $salida = Join-Path $raiz ".output\server\index.mjs"
+  if (-not (Test-Path $salida)) { return $false }
+  $build = (Get-Item $salida).LastWriteTime
+  $procesos = Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object {
+    $_.CommandLine -like "*index.mjs*"
+  }
+  foreach ($proc in $procesos) {
+    try {
+      $inicio = (Get-Process -Id $proc.ProcessId -ErrorAction Stop).StartTime
+      if ($build -gt $inicio) {
+        Escribir "cron-local: hay build nuevo (el servidor lleva el viejo); lo reinicio."
+        Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+        return $true
+      }
+    } catch {
+      # El proceso ya no existe: nada que hacer.
+    }
+  }
+  return $false
+}
+
+$hayBuildNuevo = Servidor-Desactualizado
+
 # ── 1) ¿Esta el motor escuchando? Si no, se levanta ──────────────────────
+# Comprobamos el PUERTO (no una URL): el endpoint del motor solo acepta POST,
+# y ademas el puerto abierto es lo que de verdad importa.
 function Motor-Vivo {
+  $puerto = 3127
+  if ($Url -match ":(\d+)/") { $puerto = [int]$Matches[1] }
+  $cliente = New-Object System.Net.Sockets.TcpClient
   try {
-    $null = Invoke-WebRequest -Uri $Url -Method Get -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+    $cliente.Connect("127.0.0.1", $puerto)
     return $true
   } catch {
-    # Un 404 tambien significa "el servidor esta vivo" (solo hay POST).
-    if ($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -ne 0) { return $true }
     return $false
+  } finally {
+    $cliente.Close()
   }
 }
 
-if (-not (Motor-Vivo)) {
+if ($hayBuildNuevo -or -not (Motor-Vivo)) {
   if ($NoArrancar) {
     Escribir "cron-local: el motor no esta vivo y -NoArrancar esta activo."
     exit 3
@@ -94,8 +128,18 @@ if (-not (Motor-Vivo)) {
   $env:HOST = "127.0.0.1"
   $env:DESKTOP = "1"
 
-  Escribir "cron-local: el motor no estaba vivo; lo arranco."
-  Start-Process -FilePath "node" -ArgumentList "`"$salida`"" -WorkingDirectory $raiz -WindowStyle Hidden | Out-Null
+  if ($hayBuildNuevo) {
+    Escribir "cron-local: habia build nuevo; he reiniciado el servidor con el codigo de ahora."
+  } else {
+    Escribir "cron-local: el motor no estaba vivo; lo arranco con el codigo de ahora."
+  }  # La salida del servidor va a su propio fichero: si el servidor heredase la
+  # salida de esta tarea, el pipeline de quien la lanzo se quedaria colgado
+  # esperando al servidor (y asi pasaba).
+  $dirLog = Join-Path $raiz "logs"
+  if (-not (Test-Path $dirLog)) { New-Item -ItemType Directory -Path $dirLog -Force | Out-Null }
+  Start-Process -FilePath "node" -ArgumentList "`"$salida`"" -WorkingDirectory $raiz -WindowStyle Hidden `
+    -RedirectStandardOutput (Join-Path $dirLog "servidor.log") `
+    -RedirectStandardError (Join-Path $dirLog "servidor-error.log") | Out-Null
 
   $esperado = 0
   for ($i = 0; $i -lt 30; $i++) {
