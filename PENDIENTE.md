@@ -6,6 +6,109 @@ la 3 son extras.
 
 ---
 
+## 0. CÓMO RESOLVER CADA PENDIENTE (paso a paso)
+
+### A. Las 8 migraciones (10 minutos, un solo pegote)
+
+**He juntado las 8 en un único fichero**: `supabase/migrations/APLICAR-LAS-8-EN-UNO.sql`
+
+1. Abre ese fichero en un editor de texto y **copia TODO** (Ctrl+A, Ctrl+C).
+2. Supabase → **SQL Editor** → **New query** → pega (Ctrl+V) → **Run**.
+3. Debe salir algo como _Success. No rows affected_ (es DDL, no toca filas).
+4. Vuelve a la app → _Ajustes → Automatización → "Estado de la base de datos"_:
+   las 8 deben salir en **verde**.
+5. Si falla: la transacción se deshace **entera** (no se aplica nada a medias).
+   Mándame el error tal cual y lo miramos.
+
+Es una sola transacción y además es idempotente: si lo repites, no rompe nada.
+
+### B. Los indicadores del motor (5 minutos)
+
+1. _Motor → Configuración del motor_.
+2. Empieza por **un solo indicador** (Precio de cierre) y la estrategia
+   _Fija_, horizonte 15 min, importe 20 USDT → **Guardar configuración**.
+3. Mídelo antes de dejarlo correr:
+   ```powershell
+   cd C:\Users\Usuario\.copilot\repos\deal-maker-bot-trading
+   $env:PATH = "C:\Users\Usuario\.bun\bin;" + $env:PATH
+   bun run backtest -- --simbolo BTCUSDT --intervalo 1h --velas 3000 --indicadores close_price --capital 1000 --stop 2 --take 4 --walk-forward 4 --aleatorio 30
+   ```
+4. Si el resultado no aguanta (walk-forward con bloques negativos, o no
+   gana a las aleatorias), **no añadas más indicadores**: casi nunca mejora.
+5. Cuando te convence → _Motor → Iniciar 24/7_ (abre la sesión del motor).
+
+> Los bots se tienen que poner en marcha uno a uno: _Mis bots → botón del
+> bot → Iniciar_. El motor solo opera los que estén `running` y con
+> automatización activada.
+
+### C. El motor 24/7 (3 opciones, todas montadas)
+
+| Opción                        | Qué haces                                                                                                               | Cuándo                                         |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| **A. Tu PC**                  | Nada. Ya corre (tarea de Windows, cada minuto, con watchdog).                                                           | Si el PC está siempre encendido                |
+| **B. Tu PC sin sesión**       | Ejecuta **como administrador**: `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\instalar-cron-local.ps1` | Si quieres que arranque solo al encender el PC |
+| **C. En la nube (24/7 real)** | Ver abajo                                                                                                               | Si quieres que no dependa de tu PC             |
+
+**Opción C, paso a paso** (la que de verdad no depende de tu PC):
+
+1. Publica la app. Ya está preparado: `wrangler.toml` está en el repo.
+   ```powershell
+   cd C:\Users\Usuario\.copilot\repos\deal-maker-bot-trading
+   $env:PATH = "C:\Users\Usuario\.bun\bin;" + $env:PATH
+   bunx wrangler login          # abres el navegador y entras en tu cuenta
+   bun run deploy:cloud         # compila y publica
+   ```
+   Te dará una URL tipo `https://deal-maker.<tu-usuario>.workers.dev`.
+2. Mete las variables de entorno **como secretos** (nunca en el repo):
+   ```powershell
+   bunx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+   bunx wrangler secret put CREDENTIALS_ENCRYPTION_KEY
+   bunx wrangler secret put SUPABASE_PUBLISHABLE_KEY
+   bunx wrangler secret put LOVABLE_CRON_SECRET
+   ```
+   (y las que falten: `SUPABASE_URL`, `SUPABASE_PROJECT_ID`,
+   `VITE_SUPABASE_URL`, `VITE_SUPABASE_PROJECT_ID`,
+   `VITE_SUPABASE_PUBLISHABLE_KEY`).
+3. El cron que llama al motor cada minuto: en el VPS/Railway, un cron del
+   sistema; en Cloudflare, hace falta un handler `scheduled` (esta app no lo
+   exporta todavía: lo digo en `wrangler.toml`).
+4. Copia el secreto en _Ajustes → Automatización → Motor 24/7_ (botón
+   **Generar secreto**) y pégalo en el cron.
+
+**Límites verificados** (docs oficiales, oct-2026):
+
+- **Cloudflare Workers gratis**: 100.000 peticiones/día, **10 ms de CPU por
+  cron trigger**, 5 cron triggers por cuenta. El motor de trading cabe
+  (es casi todo llamadas de red, que no cuentan como CPU); el **benchmark de
+  minería no** (es CPU pura). Plan de pago (5 $/mes): 30 s de CPU por cron →
+  ya cabe todo.
+- **GitHub Actions**: el intervalo mínimo es **5 minutos**, y el workflow
+  "can be delayed... some queued jobs may be dropped". Es un **respaldo**,
+  no un motor de minuto. En repos públicos se desactiva solo si hay 60 días
+  sin actividad.
+
+### D. El dinero (solo cuando lo tengas claro)
+
+- **Real trading**: `allow_real_trading` y `allow_live_orders` están
+  apagados y el entorno es testnet. Dime "ya está" y te los enciendo; hazlo
+  solo con la compuerta de promoción satisfied (P&L real positivo, drawdown
+  dentro del límite, mínimo de operaciones y superar al mercado).
+- **Fase 7**: re-cifrar las credenciales y apagar flags definitivos. Dime
+  cuándo y lo hacemos.
+- **¿Minamos?** El enjambre está encendido y dice la verdad: **−0,70 USD/día**.
+  Si no lo quieres: _Minería → Detener enjambre_.
+
+### E. Los extras (pásame esto y los hago)
+
+| Extra                  | Qué necesito                                                                                    |
+| ---------------------- | ----------------------------------------------------------------------------------------------- |
+| Avisos por Telegram    | `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID` (en el entorno del servidor)                          |
+| Correo de los reportes | Un dominio con el remitente verificado (o te dejo el aviso de "pendiente de dominio")           |
+| Red de KAS para minar  | Hash rate de la red, recompensa por bloque y tiempo de bloque (los tienes en la web de tu pool) |
+| Cron propio en la nube | Tu VPS/Railway/Cloudflare (o dime cuál y te doy los ficheros)                                   |
+
+---
+
 ## 1. Lo único que bloquea: 8 migraciones SQL
 
 Las aplicas tú en **Supabase → SQL Editor → New query → pegar → Run**. Son
