@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Bot, Pickaxe, ScrollText } from "lucide-react";
+import { Bot, Gauge, Pickaxe, RefreshCw, ScrollText, ShieldAlert, Wallet } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 
 import { EmptyState } from "@/components/EmptyState";
 import { StatusPill, statusTone } from "@/components/StatusPill";
+import { TabsPestanas } from "@/components/TabsPestanas";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { dateTime, money } from "@/lib/format";
@@ -53,6 +54,18 @@ const PESTANAS = [
 
 type Pestana = (typeof PESTANAS)[number]["id"];
 
+/** Icono segun el tipo de movimiento, para escanear la lista de un vistazo. */
+function IconoMovimiento({ accion }: { accion: string }) {
+  const clase = "size-3.5";
+  if (accion.startsWith("bot.")) return <Bot className={clase} />;
+  if (accion.startsWith("engine.")) return <Gauge className={clase} />;
+  if (accion.startsWith("security.")) return <ShieldAlert className={clase} />;
+  if (accion.startsWith("capital.") || accion.startsWith("funds."))
+    return <Wallet className={clase} />;
+  if (accion.startsWith("asset.")) return <RefreshCw className={clase} />;
+  return <ScrollText className={clase} />;
+}
+
 export function ActividadPanel({
   bots,
   workers,
@@ -71,24 +84,12 @@ export function ActividadPanel({
       <CardHeader className="gap-3 pb-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="text-base">Actividad</CardTitle>
-          <div className="inline-flex rounded-lg border border-border/80 bg-secondary/40 p-0.5">
-            {PESTANAS.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setPestana(p.id)}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                  pestana === p.id
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <p.icono className="size-3.5 opacity-80" />
-                {p.etiqueta}
-              </button>
-            ))}
-          </div>
+          <TabsPestanas
+            items={PESTANAS.map((p) => ({ id: p.id, etiqueta: p.etiqueta, icono: p.icono }))}
+            valor={pestana}
+            onChange={(v) => setPestana(v as Pestana)}
+            compacta
+          />
         </div>
       </CardHeader>
 
@@ -103,12 +104,23 @@ export function ActividadPanel({
           ) : (
             <ul className="divide-y divide-border/40">
               {bots.slice(0, limite).map((bot) => (
-                <li key={bot.id} className="flex items-center justify-between gap-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{bot.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {bot.pair} · {bot.mode.toUpperCase()}
-                    </p>
+                <li
+                  key={bot.id}
+                  className="flex items-center justify-between gap-3 py-2.5 transition-colors hover:bg-secondary/25"
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span
+                      className={cn(
+                        "size-1.5 shrink-0 rounded-full",
+                        bot.status === "running" ? "bg-success" : "bg-muted-foreground/40",
+                      )}
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{bot.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {bot.pair} · {bot.mode.toUpperCase()}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
                     <span
@@ -136,12 +148,23 @@ export function ActividadPanel({
           ) : (
             <ul className="divide-y divide-border/40">
               {workers.slice(0, limite).map((w) => (
-                <li key={w.id} className="flex items-center justify-between gap-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{w.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {w.coin} · {w.pool}
-                    </p>
+                <li
+                  key={w.id}
+                  className="flex items-center justify-between gap-3 py-2.5 transition-colors hover:bg-secondary/25"
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span
+                      className={cn(
+                        "size-1.5 shrink-0 rounded-full",
+                        w.status === "mining" ? "bg-success" : "bg-muted-foreground/40",
+                      )}
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{w.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {w.coin} · {w.pool}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
                     <span className="metric text-sm">
@@ -164,12 +187,18 @@ export function ActividadPanel({
           ) : (
             <ul className="divide-y divide-border/40">
               {movimientos.slice(0, limite).map((m) => (
-                <li key={m.id} className="flex items-center justify-between gap-3 py-2.5">
-                  <span className="tabular text-xs text-muted-foreground">
+                <li
+                  key={m.id}
+                  className="flex items-center gap-3 py-2.5 transition-colors hover:bg-secondary/25"
+                >
+                  <span className="grid size-6 shrink-0 place-items-center rounded-md bg-secondary/60 text-muted-foreground">
+                    <IconoMovimiento accion={m.action} />
+                  </span>
+                  <span className="tabular w-28 shrink-0 text-[11px] text-muted-foreground">
                     {dateTime(m.created_at)}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">{m.action}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
+                  <span className="shrink-0 text-[11px] text-muted-foreground">
                     {m.entity_id ?? m.entity}
                   </span>
                 </li>

@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { TabsPestanas } from "@/components/TabsPestanas";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { botPerformanceQuery, hashrateHistoryQuery, marketPricesQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -81,37 +82,6 @@ function pivot(
     map.set(p.recorded_on, row);
   }
   return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([, v]) => v);
-}
-
-/** Boton de pestana (para cambiar de vista o de metrica). */
-function Segmento({
-  opciones,
-  valor,
-  onChange,
-}: {
-  opciones: readonly { id: string; etiqueta: string }[];
-  valor: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="inline-flex rounded-lg border border-border/80 bg-secondary/40 p-0.5">
-      {opciones.map((o) => (
-        <button
-          key={o.id}
-          type="button"
-          onClick={() => onChange(o.id)}
-          className={cn(
-            "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-            valor === o.id
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          {o.etiqueta}
-        </button>
-      ))}
-    </div>
-  );
 }
 
 /** Tooltip con forma de tarjeta. */
@@ -213,8 +183,8 @@ export function ComparisonCharts() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Segmento
-              opciones={VISTAS.map((v) => ({ id: v.id, etiqueta: v.etiqueta }))}
+            <TabsPestanas
+              items={VISTAS.map((v) => ({ id: v.id, etiqueta: v.etiqueta }))}
               valor={vista}
               onChange={(v) => {
                 setVista(v as Vista);
@@ -222,29 +192,19 @@ export function ComparisonCharts() {
               }}
             />
             {vista === "bots" && (
-              <Segmento
-                opciones={METRICAS.map((m) => ({ id: m.id, etiqueta: m.etiqueta }))}
+              <TabsPestanas
+                items={METRICAS.map((m) => ({ id: m.id, etiqueta: m.etiqueta }))}
                 valor={metrica}
                 onChange={(v) => setMetrica(v as Metrica)}
+                compacta
               />
             )}
-            <div className="inline-flex rounded-lg border border-border/80 bg-secondary/40 p-0.5">
-              {RANGES.map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setDias(r)}
-                  className={cn(
-                    "rounded-md px-2 py-1 text-xs font-medium transition-colors",
-                    dias === r
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {r}d
-                </button>
-              ))}
-            </div>
+            <TabsPestanas
+              items={RANGES.map((r) => ({ id: String(r), etiqueta: `${r}d` }))}
+              valor={String(dias)}
+              onChange={(v) => setDias(Number(v))}
+              compacta
+            />
           </div>
         </div>
 
