@@ -121,4 +121,13 @@ export type PriceSeries = {
   volumes?: number[];
   /** Marca de tiempo de cada vela (ISO), para el AI Indicator (hora del dia). */
   times?: string[];
+  /**
+   * Series EXTRA alineadas con los cierres (mismo indice): datos que no
+   * vienen del precio, como el posicionamiento de los traders grandes o el
+   * flujo de ordenes. Un valor `NaN` significa "aun no habia dato".
+   *
+   * Los indicadores que no las usan las ignoran; los que las necesitan
+   * devuelven null si no estan (no inventan).
+   */
+  aux?: Record<string, number[]>;
 };

@@ -99,21 +99,33 @@ const cacheVelas = new Map<
 >();
 const TTL_MS = 60_000;
 
-/** Velas CERRADAS del par (la ultima, la que esta en curso, se descarta). */
+/**
+ * Velas CERRADAS del par (la ultima, la que esta en curso, se descarta).
+ *
+ * @param conTraders true si el bot usa indicadores de copy trading: entonces
+ *   las velas son de FUTUROS (el mismo mercado del que salen el
+ *   posicionamiento y el flujo) y se anexan esas series a la serie.
+ */
 export async function velasCerradas(
   simbolo: string,
   intervalo: string,
   limite = 300,
+  conTraders = false,
 ): Promise<PriceSeries> {
-  const clave = `${simbolo.toUpperCase()}:${intervalo}:${limite}`;
+  const clave = `${simbolo.toUpperCase()}:${intervalo}:${limite}:${conTraders ? "fut" : "spot"}`;
   const hit = cacheVelas.get(clave);
   const velas =
     hit && Date.now() - hit.at < TTL_MS
       ? hit.velas
-      : await velasDeBinance({ simbolo, intervalo, limite });
+      : await velasDeBinance({
+          simbolo,
+          intervalo,
+          limite,
+          mercado: conTraders ? "futuros" : "spot",
+        });
   if (!hit || Date.now() - hit.at >= TTL_MS) cacheVelas.set(clave, { at: Date.now(), velas });
 
-  return {
+  const serie: PriceSeries = {
     open: velas.map((v) => v.open),
     closes: velas.map((v) => v.close),
     highs: velas.map((v) => v.high),
@@ -121,6 +133,27 @@ export async function velasCerradas(
     volumes: velas.map((v) => v.volume),
     times: velas.map((v) => new Date(v.time).toISOString()),
   };
+
+  if (conTraders) {
+    try {
+      const { obtenerSeriesTraders, alinearTradersConVelas } = await import("./traders.server");
+      // La API de traders tiene estos periodos; el mas cercano al del bot.
+      const periodo =
+        intervalo === "1m"
+          ? "5m"
+          : intervalo === "5m" || intervalo === "15m" || intervalo === "30m"
+            ? intervalo
+            : "1h";
+      const datos = await obtenerSeriesTraders(simbolo, periodo);
+      serie.aux = alinearTradersConVelas(velas, datos);
+    } catch {
+      // Sin datos de traders: los indicadores de copy trading no dan señal
+      // (nunca se rellenan con datos inventados).
+      serie.aux = {};
+    }
+  }
+
+  return serie;
 }
 
 /**
@@ -168,7 +201,10 @@ export async function analizarBot(
     sinDatos: true,
   };
   try {
-    const serie = await velasCerradas(bot.pair, cfg.intervalo);
+    // Si el bot usa indicadores de copy trading, hace falta el dato real de
+    // traders (posicionamiento y flujo) y el precio de futuros.
+    const conTraders = cfg.ids.some((id) => id === "top_traders" || id === "taker_flow");
+    const serie = await velasCerradas(bot.pair, cfg.intervalo, 300, conTraders);
     const cerradasSerie = cerradas(serie);
     if (cerradasSerie.closes.length < 5) return vacio;
 

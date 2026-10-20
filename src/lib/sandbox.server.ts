@@ -107,12 +107,16 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
 
   let velas: Awaited<ReturnType<typeof velasDeBinance>> = [];
   let motivo: string | null = null;
+  const conTraders = args.indicadores.some((id) => id === "top_traders" || id === "taker_flow");
   try {
     velas = await velasDeBinance({
       simbolo,
       intervalo: args.intervalo,
       limite: args.limite,
       hasta: args.hasta,
+      // Con datos de traders, el precio es de FUTUROS: si no, se mezclarian
+      // precios de spot con flujo de futuros.
+      mercado: conTraders ? "futuros" : "spot",
     });
   } catch (e) {
     motivo = e instanceof Error ? e.message : "No se pudieron descargar las velas.";
@@ -164,7 +168,24 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
     config.reglas = { stepSize: 0.00001, minQty: 0, minNotional: 5 };
   }
 
-  const resultado = ejecutarBacktest(velas, config);
+  // Datos de traders reales (posicionamiento de las cuentas grandes y flujo
+  // de ordenes), alineados con las velas.
+  let aux: Record<string, number[]> | undefined;
+  if (conTraders) {
+    try {
+      const { obtenerSeriesTraders, alinearTradersConVelas } = await import("./traders.server");
+      const series = await obtenerSeriesTraders(simbolo, "1h", 1000);
+      aux = alinearTradersConVelas(velas, series);
+    } catch {
+      // Sin datos de traders no hay señal de esos indicadores: no se inventa.
+      aux = undefined;
+    }
+  }
+
+  const resultado = ejecutarBacktest(velas, config, {
+    simbolo,
+    ...(aux ? { aux } : {}),
+  });
   const m = resultado.metricas;
 
   if (m.operaciones === 0) {

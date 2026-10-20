@@ -19,6 +19,17 @@ const HOSTS_DATOS = [
   "https://api.binance.us",
 ];
 
+/**
+ * Hosts de FUTUROS (USDT-M). Necesarios para los datos de traders: el
+ * posicionamiento de las cuentas grandes y el flujo de ordenes son de
+ * futuros, asi que las velas tienen que ser del mismo mercado.
+ */
+const HOSTS_FUTUROS = [
+  "https://fapi.binance.com",
+  "https://fapi.binance.com",
+  "https://data-api.binance.vision",
+];
+
 /** Duracion de cada intervalo en milisegundos. */
 export const INTERVALOS_MS: Record<string, number> = {
   "1m": 60_000,
@@ -43,6 +54,12 @@ export type OpcionesVelas = {
   intervalo?: string;
   /** Cuantas velas se quieren (maximo 1000 por peticion; se pagina). */
   limite?: number;
+  /**
+   * Mercado del que salen las velas. "futuros" (por defecto) para los datos
+   * de traders: el posicionamiento y el flujo son de futuros, asi que el
+   * precio tiene que ser del mismo mercado o la medicion no cuadra.
+   */
+  mercado?: "spot" | "futuros";
   /** Milisegundos epoch: hasta donde llegar (por defecto, ahora). */
   hasta?: number;
 };
@@ -75,12 +92,14 @@ export async function velasDeBinance(opciones: OpcionesVelas): Promise<Vela[]> {
 
   const velas: Vela[] = [];
   let cursor = hasta - limite * paso;
+  const hosts = opciones.mercado === "spot" ? HOSTS_DATOS : HOSTS_FUTUROS;
+  const ruta = opciones.mercado === "spot" ? "/api/v3/klines" : "/fapi/v1/klines";
 
   for (let pagina = 0; pagina < 20 && velas.length < limite; pagina++) {
     let cuerpo: unknown = null;
     let ok = false;
-    for (const host of HOSTS_DATOS) {
-      const urlHost = new URL(`${host}/api/v3/klines`);
+    for (const host of hosts) {
+      const urlHost = new URL(`${host}${ruta}`);
       urlHost.searchParams.set("symbol", simbolo);
       urlHost.searchParams.set("interval", intervalo);
       urlHost.searchParams.set("limit", String(Math.min(1000, limite - velas.length)));

@@ -58,6 +58,12 @@ const parametrosBrutos = arg("parametros");
 const parametros = parametrosBrutos
   ? (JSON.parse(parametrosBrutos) as Record<string, Record<string, number>>)
   : undefined;
+
+/** ¿Este conjunto de indicadores necesita los datos de traders? */
+function necesitaTradersIndicadores(ids: readonly string[]): boolean {
+  return ids.some((id) => id === "top_traders" || id === "taker_flow");
+}
+
 const estrategiaId = arg("estrategia", "fixed") ?? "fixed";
 const folds = num("walk-forward", 0);
 
@@ -102,7 +108,14 @@ if (archivo) {
     `velas del fichero ${archivo} (${datos.simbolo ?? simbolo} ${datos.intervalo ?? ""})`,
   );
 } else {
-  velas = await velasDeBinance({ simbolo, intervalo, limite });
+  velas = await velasDeBinance({
+    simbolo,
+    intervalo,
+    limite,
+    // Los indicadores de traders usan datos de FUTUROS: el precio tiene que
+    // ser del mismo mercado que el flujo y el posicionamiento.
+    mercado: necesitaTradersIndicadores(indicadores) ? "futuros" : "spot",
+  });
   if (velas.length === 0) {
     console.error(
       "No se han descargado velas. Sin internet: descarga las velas antes con 'bun scripts/guardar-velas.ts' y despues usa --archivo.",
@@ -133,7 +146,27 @@ console.log(
   `velas: ${velas.length} (${new Date(velas[0]!.time).toISOString().slice(0, 10)} → ${new Date(velas[velas.length - 1]!.time).toISOString().slice(0, 10)}) | stepSize ${config.reglas?.stepSize} | minNotional ${config.reglas?.minNotional}`,
 );
 
-const r = ejecutarBacktest(velas, config, { simbolo: simboloFinal, operacionesMinimas: 100 });
+// ── Datos de traders reales (solo si el indicador los necesita) ────────────
+const necesitaTraders = indicadores.some((id) => id === "top_traders" || id === "taker_flow");
+let aux: Record<string, number[]> | undefined;
+if (necesitaTraders) {
+  const { obtenerSeriesTraders, alinearTradersConVelas } =
+    await import("../src/lib/traders.server");
+  console.log("descargando datos reales de traders (posicionamiento y flujo)...");
+  const series = await obtenerSeriesTraders(simboloFinal, "1h", 1000);
+  aux = alinearTradersConVelas(velas, series);
+  const conDato = (aux["traders_top_long_short"] ?? []).filter((v) => Number.isFinite(v)).length;
+  console.log(
+    `datos de traders: ${series.top.length} lecturas (cuentas grandes) | ${series.taker.length} (flujo) | ${conDato} velas con dato`,
+  );
+  if (conDato === 0) {
+    console.error(
+      "No hay datos de traders para este par/periodo: los indicadores de copy trading NO pueden dar señal (no se inventa).",
+    );
+  }
+}
+
+const r = ejecutarBacktest(velas, config, { simbolo: simboloFinal, operacionesMinimas: 100, aux });
 const m = r.metricas;
 
 console.log("\n--- RESULTADO ---");

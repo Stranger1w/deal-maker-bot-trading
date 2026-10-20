@@ -143,6 +143,13 @@ export function avisosHonestos(args: {
     avisos.push(
       `No supera a comprar y mantener (${benchmark.retornoPct.toFixed(2)} %): no hay evidencia de ventaja sobre el mercado.`,
     );
+  } else if (benchmark.retornoPct < 0) {
+    // "Superar" al benchmark cuando el benchmark tambien pierde NO es ventaja:
+    // en un mercado a la baja, perder menos no es tener ventaja.
+    avisos.push(
+      `Perdio menos que comprar y mantener (que cayo ${Math.abs(benchmark.retornoPct).toFixed(2)} %), ` +
+        `pero los dos pierden: en un mercado a la baja, perder menos NO es tener ventaja.`,
+    );
   }
   if (metricas.profitFactor > 0 && metricas.profitFactor < 1) {
     avisos.push(

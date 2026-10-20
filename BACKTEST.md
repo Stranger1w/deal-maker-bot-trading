@@ -27,6 +27,46 @@ Opciones: `--simbolo --intervalo --velas --indicadores --parametros --capital
 --fraccion --stop --take --comision --slippage --descuento-bnb --estrategia
 --walk-forward --archivo`.
 
+## Copy trading de traders REALES
+
+Hay dos indicadores que no salen del precio: usan **datos públicos de
+traders reales** de Binance Futures.
+
+| Indicador     | Qué mide                                                             | Dato de Binance               |
+| ------------- | -------------------------------------------------------------------- | ----------------------------- |
+| `top_traders` | El posicionamiento de las cuentas con las posiciones **más grandes** | "top trader long/short ratio" |
+| `taker_flow`  | El volumen **agresivo** de compra frente al de venta (dinero real)   | "taker buy/sell volume ratio" |
+
+```powershell
+# Copiar a los traders grandes
+bun run backtest -- --simbolo BTCUSDT --intervalo 1h --velas 700 --indicadores top_traders --capital 1000 --stop 2 --take 4 --aleatorio 20
+
+# Seguir el flujo de ordenes
+bun run backtest -- --simbolo BTCUSDT --intervalo 1h --velas 700 --indicadores taker_flow --capital 1000 --stop 2 --take 4 --aleatorio 20
+
+# Los dos a la vez
+bun run backtest -- --simbolo BTCUSDT --intervalo 1h --velas 700 --indicadores top_traders,taker_flow --capital 1000 --stop 2 --take 4 --aleatorio 20
+```
+
+Notas importantes:
+
+- Con estos indicadores las velas se piden de **futuros** (`fapi`), no de
+  spot: el posicionamiento y el flujo son de futuros y mezclar mercados
+  falsearía la medición.
+- La API pública da unos **30 días** de histórico, así que el backtest de
+  copy trading es corto (unas 700 velas de 1 h). Con pocas operaciones, el
+  resultado es ruido: por eso la app enseña el percentil dentro de la
+  referencia aleatoria.
+- También está en la app: _Mis bots → Campo de entrenamiento → "Copy trading
+  de traders REALES" → Medir ahora_.
+
+**Lo que dicen los datos de hoy** (20-oct-2026, BTCUSDT, 700 velas de
+futuros): copiar a los traders grandes da **−0,22 %** (percentil 10 % de la
+referencia aleatoria) y seguir el flujo **−0,31 %** (percentil 0 %). O sea:
+**no se distinguen de entrar al azar**. Copiar a los grandes no ha funcionado
+(y ojo: en ese periodo BTC caía un 3,9 %, así que "perder menos que comprar y
+mantener" tampoco es ventaja).
+
 ### Sin internet (en tu PC o en el servidor)
 
 Si no hay conexión, el backtest sigue funcionando con las velas ya
@@ -70,16 +110,16 @@ bun run backtest -- --archivo datos/btcusdt-1h.json --indicadores close_price --
 
 ## Qué mirar (y qué NO mirar)
 
-| Métrica | Qué significa |
-|---|---|
-| Retorno neto | Después de comisiones y slippage. Esta es la cifra que cuenta. |
-| Operaciones | Con menos de 100 operaciones el azar manda: el resultado no vale. |
-| Win rate | Menos del 50 % es normal si el profit factor es > 1. |
-| Profit factor | Ganancia total ÷ pérdida total. Por debajo de 1 se pierde dinero de media. |
-| Max drawdown | Lo peor que se habría livingido el capital. |
-| Coste total | Lo que se comen comisiones y slippage. Si es grande, la estrategia no tiene espacio. |
-| Sharpe / Sortino | Solo para comparar estrategias entre sí, no son retornos annualizados. |
-| Comprar y mantener | El rival mínimo. Si no lo superas, no hay ventaja. |
+| Métrica            | Qué significa                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| Retorno neto       | Después de comisiones y slippage. Esta es la cifra que cuenta.                       |
+| Operaciones        | Con menos de 100 operaciones el azar manda: el resultado no vale.                    |
+| Win rate           | Menos del 50 % es normal si el profit factor es > 1.                                 |
+| Profit factor      | Ganancia total ÷ pérdida total. Por debajo de 1 se pierde dinero de media.           |
+| Max drawdown       | Lo peor que se habría livingido el capital.                                          |
+| Coste total        | Lo que se comen comisiones y slippage. Si es grande, la estrategia no tiene espacio. |
+| Sharpe / Sortino   | Solo para comparar estrategias entre sí, no son retornos annualizados.               |
+| Comprar y mantener | El rival mínimo. Si no lo superas, no hay ventaja.                                   |
 
 El informe incluye además los **avisos**: lo que el resultado NO demuestra.
 

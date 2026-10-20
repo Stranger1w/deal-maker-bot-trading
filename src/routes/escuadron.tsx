@@ -3,7 +3,17 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Bot, Brain, Pause, Play, ScrollText, Settings2, ShieldAlert, Square } from "lucide-react";
+import {
+  Bot,
+  Brain,
+  Pause,
+  Play,
+  ScrollText,
+  Settings2,
+  ShieldAlert,
+  Square,
+  Users,
+} from "lucide-react";
 
 import { AlertsPanel } from "@/components/AlertsPanel";
 import { EmptyState } from "@/components/EmptyState";
@@ -42,6 +52,7 @@ import {
   setBotStatus,
   updateBotStrategy,
 } from "@/lib/dealmaker.functions";
+import { medirCopyTrading } from "@/lib/copytrading.functions";
 import { useSecuritySession } from "@/hooks/useSecuritySession";
 import {
   aceptarAvisoRiesgo,
@@ -1133,6 +1144,64 @@ function TrainingTab() {
   const create = useServerFn(createSandbox);
   const run = useServerFn(runSandbox);
   const promote = useServerFn(promoteRun);
+  const copyTradingFn = useServerFn(medirCopyTrading);
+
+  const [copySimbolo, setCopySimbolo] = useState("BTCUSDT");
+  const [midiendoCopy, setMidiendoCopy] = useState(false);
+  const [copy, setCopy] = useState<{
+    simbolo: string;
+    velas: number;
+    desde: string;
+    hasta: string;
+    lecturasTraders: number;
+    topTraders: {
+      nombre: string;
+      retornoPct: number;
+      drawdownPct: number;
+      winRatePct: number;
+      operaciones: number;
+      benchmarkPct: number;
+      superaBenchmark: boolean;
+      benchmarkTambienPerdio: boolean;
+      percentilAleatorio: number;
+    } | null;
+    takerFlow: {
+      nombre: string;
+      retornoPct: number;
+      drawdownPct: number;
+      winRatePct: number;
+      operaciones: number;
+      benchmarkPct: number;
+      superaBenchmark: boolean;
+      benchmarkTambienPerdio: boolean;
+      percentilAleatorio: number;
+    } | null;
+    combinado: {
+      nombre: string;
+      retornoPct: number;
+      drawdownPct: number;
+      winRatePct: number;
+      operaciones: number;
+      benchmarkPct: number;
+      superaBenchmark: boolean;
+      benchmarkTambienPerdio: boolean;
+      percentilAleatorio: number;
+    } | null;
+    veredicto: string;
+    ningunaCopiaFunciona: boolean;
+  } | null>(null);
+
+  const medirCopy = async () => {
+    setMidiendoCopy(true);
+    try {
+      const r = await copyTradingFn({ data: { simbolo: copySimbolo } });
+      setCopy(r);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo medir el copy trading");
+    } finally {
+      setMidiendoCopy(false);
+    }
+  };
 
   const [form, setForm] = useState({
     name: "",
@@ -1180,6 +1249,97 @@ function TrainingTab() {
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex flex-wrap items-center justify-between gap-2">
+            <span className="flex items-center gap-2">
+              <Users className="size-4 text-primary" /> Copy trading de traders REALES
+            </span>
+            <Button variant="secondary" onClick={() => void medirCopy()} disabled={midiendoCopy}>
+              {midiendoCopy ? "Midiendo…" : "Medir ahora"}
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Mide con datos reales de Binance: las velas de futuros, el posicionamiento de las
+            cuentas con las posiciones más grandes (los "traders grandes") y el volumen agresivo de
+            compra frente a venta. Cada estrategia se compara con la referencia aleatoria (entrar al
+            azar con los mismos costes) y con comprar y mantener. Si no gana a las aleatorias, no se
+            puede distinguir del azar.
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <Field label="Par">
+              <Input
+                value={copySimbolo}
+                onChange={(e) => setCopySimbolo(e.target.value.toUpperCase())}
+                className="w-32"
+              />
+            </Field>
+          </div>
+          {copy && (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-border text-left text-muted-foreground">
+                      <th className="py-1.5 pr-3 font-medium">Estrategia</th>
+                      <th className="py-1.5 pr-3 font-medium">Retorno</th>
+                      <th className="py-1.5 pr-3 font-medium">Drawdown</th>
+                      <th className="py-1.5 pr-3 font-medium">Win rate</th>
+                      <th className="py-1.5 pr-3 font-medium">Operaciones</th>
+                      <th className="py-1.5 pr-3 font-medium">vs comprar y mantener</th>
+                      <th className="py-1.5 font-medium">vs aleatorias</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[copy.topTraders, copy.takerFlow, copy.combinado]
+                      .filter((c): c is NonNullable<typeof c> => c !== null)
+                      .map((c) => (
+                        <tr key={c.nombre} className="border-b border-border/50">
+                          <td className="py-1.5 pr-3 font-medium">{c.nombre}</td>
+                          <td
+                            className={`py-1.5 pr-3 tabular ${
+                              c.retornoPct > 0 ? "text-success" : "text-destructive"
+                            }`}
+                          >
+                            {c.retornoPct.toFixed(2)} %
+                          </td>
+                          <td className="py-1.5 pr-3 tabular">{c.drawdownPct.toFixed(2)} %</td>
+                          <td className="py-1.5 pr-3 tabular">{c.winRatePct.toFixed(1)} %</td>
+                          <td className="py-1.5 pr-3 tabular">{c.operaciones}</td>
+                          <td className="py-1.5 pr-3 tabular">
+                            {c.benchmarkPct.toFixed(2)} %{" "}
+                            {c.benchmarkTambienPerdio
+                              ? "(también pierden)"
+                              : c.superaBenchmark
+                                ? "(lo supera)"
+                                : "(no lo supera)"}
+                          </td>
+                          <td className="py-1.5 tabular">percentil {c.percentilAleatorio} %</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {copy.velas} velas de futuros ({copy.desde} → {copy.hasta}) · {copy.lecturasTraders}{" "}
+                lecturas reales de traders
+              </p>
+              <p
+                className={`rounded-md border px-3 py-2 text-sm ${
+                  copy.ningunaCopiaFunciona
+                    ? "border-destructive/40 bg-destructive/10"
+                    : "border-warning/40 bg-warning/10"
+                }`}
+              >
+                {copy.veredicto}
+              </p>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

@@ -117,6 +117,32 @@ Ahora:
 Medido de verdad en tu sandbox (2025-01-01 → 2025-03-31, BTC cayó un 13 %):
 los bots pierden entre **−0,85 % y −4,16 %**.
 
+### Copy trading de traders REALES (nuevo)
+
+Dos indicadores que no salen del precio sino de **traders reales** de Binance
+Futures (datos públicos):
+
+- **`top_traders`**: el posicionamiento de las cuentas con las posiciones más
+  grandes.
+- **`taker_flow`**: el volumen agresivo de compra frente a venta (dinero real).
+
+Se miden en _Mis bots → Campo de entrenamiento → "Copy trading de traders
+REALES" → Medir ahora_, y también por CLI:
+
+```powershell
+bun run backtest -- --simbolo BTCUSDT --intervalo 1h --velas 700 --indicadores top_traders --capital 1000 --stop 2 --take 4 --aleatorio 20
+```
+
+**El resultado de hoy**: copiar a los traders grandes da −0,22 % (percentil 10
+% de la referencia aleatoria) y seguir el flujo −0,31 % (percentil 0 %). O
+sea, **no se distinguen de entrar al azar**. No hay ventaja demostrada, y la
+app lo dice tal cual.
+
+> Ojo con el límite de datos: la API pública de traders da unos **30 días**,
+> así que el backtest de copy trading es corto (unas 700 velas de 1 h). Con
+> pocas operaciones el resultado es ruido: por eso la app enseña el
+> percentil dentro de la referencia aleatoria.
+
 ---
 
 ## 6. Lo que YA está hecho y comprobado (no hace falta repetirlo)

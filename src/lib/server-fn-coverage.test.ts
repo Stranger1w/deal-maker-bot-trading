@@ -37,6 +37,10 @@ const USUARIO = [
   // bloqueada por RLS (el navegador recibe 403) y solo se devuelven campos
   // seguros: los ultimos 4 caracteres y el estado. Nunca el secreto.
   "leerCredencialesBinance",
+  // Mide el copy trading con datos PUBLICOS de Binance (velas de futuros,
+  // posicionamiento de traders, flujo de ordenes). No toca la base de datos
+  // ni devuelve nada del usuario: cualquiera con sesion puede pedirlo.
+  "medirCopyTrading",
 ].sort();
 
 /**

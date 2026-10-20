@@ -25,6 +25,13 @@ export function cerradas(series: PriceSeries): PriceSeries {
     lows: series.lows.slice(0, corte),
     ...(series.volumes ? { volumes: series.volumes.slice(0, corte) } : {}),
     ...(series.times ? { times: series.times.slice(0, corte) } : {}),
+    ...(series.aux
+      ? {
+          aux: Object.fromEntries(
+            Object.entries(series.aux).map(([clave, valores]) => [clave, valores.slice(0, corte)]),
+          ),
+        }
+      : {}),
   };
 }
 

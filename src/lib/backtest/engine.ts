@@ -35,10 +35,14 @@ type Posicion = {
 };
 
 /** Serie de precios para los indicadores, con las velas ya cerradas. */
-export function serieDesde(velas: readonly Vela[], hasta: number): PriceSeries {
+export function serieDesde(
+  velas: readonly Vela[],
+  hasta: number,
+  aux?: Record<string, number[]>,
+): PriceSeries {
   const desde = Math.max(0, hasta - VENTANA_SERIE + 1);
   const trozo = velas.slice(desde, hasta + 1);
-  return {
+  const base = {
     open: trozo.map((v) => v.open),
     closes: trozo.map((v) => v.close),
     highs: trozo.map((v) => v.high),
@@ -46,6 +50,13 @@ export function serieDesde(velas: readonly Vela[], hasta: number): PriceSeries {
     volumes: trozo.map((v) => v.volume),
     times: trozo.map((v) => new Date(v.time).toISOString()),
   };
+  if (!aux) return base;
+  // Las series auxiliares se recortan con la MISMA ventana que los precios.
+  const auxRecortado: Record<string, number[]> = {};
+  for (const [clave, valores] of Object.entries(aux)) {
+    auxRecortado[clave] = valores.slice(desde, hasta + 1);
+  }
+  return { ...base, aux: auxRecortado };
 }
 
 /** Cantidad que se puede comprar con un importe, respetando stepSize y minNotional. */
@@ -78,7 +89,17 @@ function diaUtc(time: number): string {
 export function ejecutarBacktest(
   velas: readonly Vela[],
   config: ConfigBacktest,
-  opciones: { simbolo?: string; fueraDeMuestra?: boolean; operacionesMinimas?: number } = {},
+  opciones: {
+    simbolo?: string;
+    fueraDeMuestra?: boolean;
+    operacionesMinimas?: number;
+    /**
+     * Series EXTRA alineadas con las velas (posicionamiento de traders
+     * grandes, flujo de ordenes...). Sin ellas, los indicadores que las
+     * necesitan no dan senal (no se inventa).
+     */
+    aux?: Record<string, number[]>;
+  } = {},
 ): ResultadoBacktest {
   const simbolo = opciones.simbolo ?? "SIMBOLO";
   const comisionEfectiva = config.costes.comision * (1 - config.costes.descuentoBnb);
@@ -92,7 +113,7 @@ export function ejecutarBacktest(
   const curva: number[] = [];
   const operacionesPorDia = new Map<string, number>();
 
-  const serie = serieDesde(velas, 0);
+  const serie = serieDesde(velas, 0, opciones.aux);
   const minSamples = Math.max(
     1,
     ...config.indicadores.map((id) => buscarIndicador(id)?.minSamples ?? 2),
@@ -105,7 +126,7 @@ export function ejecutarBacktest(
     // ── 1) Senal con las velas CERRADAS anteriores (sin mirar la vela actual).
     let senal: "buy" | "sell" | null = null;
     if (i > 0) {
-      const previa = serieDesde(velas, i - 1);
+      const previa = serieDesde(velas, i - 1, opciones.aux);
       if (previa.closes.length >= minSamples) {
         senal = config.senal
           ? config.senal(previa)
