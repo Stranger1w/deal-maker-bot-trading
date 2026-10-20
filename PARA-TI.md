@@ -181,12 +181,26 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\instalar-cron-loca
 ```
 
 **Ya la he instalado y probado en tu PC**: la tarea "DealMaker Motor" corre
-cada minuto y el motor avanza (`estado=completed`, 0 errores).
+cada minuto (`LastTaskResult 0`) y el motor avanza.
 
-> **Límite honesto de esta opción**: no es 24/7 de verdad. Si apagas el PC o
-> cierras la app, el motor deja de hablar (la app detecta que pasan más de
-> 2 intervalos sin tick y te lo avisa en el panel). Para 24/7 de verdad, mira
-> la opción B.
+Además **es un watchdog**: si la app se cae (la cierras, se cuelga), el ciclo
+siguiente la vuelve a levantar sola. Lo probé matando el servidor: la tarea
+lo detectó ("el motor no estaba vivo; lo arranco"), lo levantó y Following cycle ✔
+
+Todo queda anotado en un diario, porque la tarea corre en segundo plano:
+
+```
+C:\Users\Usuario\secrets\deal-maker-cron.log
+```
+
+> **Límite honesto de esta opción**: el motor depende de **tu PC encendido**.
+> Con la sesión iniciada funciona también con la pantalla bloqueada; si
+> reinicias el PC y no entras con tu usuario, la tarea no corre hasta que
+> entres. Para que corra con el PC encendido y sin sesión iniciada, ejecuta
+> el instalador **como administrador** (PowerShell → "Ejecutar como
+> administrador"): la tarea queda como SYSTEM y no depende de la sesión.
+>
+> Y para 24/7 de verdad, sin depender de tu PC, mira la **opción B**.
 
 ### Opción B: en la nube (lo único que es 24/7 de verdad)
 

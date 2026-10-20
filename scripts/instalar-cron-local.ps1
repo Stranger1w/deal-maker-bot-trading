@@ -45,9 +45,22 @@ $accion = New-ScheduledTaskAction -Execute "powershell.exe" -Argument (
 $disparador = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1)
 $ajustes = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
 
-Register-ScheduledTask -TaskName $NombreTarea -Action $accion -Trigger $disparador -Settings $ajustes -Description "Deal Maker: llama al motor de trading cada minuto (la app debe estar abierta)" -Force | Out-Null
-
-Write-Output "Tarea '$NombreTarea' creada: cada minuto llama al motor."
+# Como SYSTEM: asi la tarea corre con el PC encendido aunque nadie haya
+# iniciado sesion (por la noche, o despues de un reinicio). Registrar una
+# tarea como SYSTEM exige administrador; si no lo hay, se deja con el usuario
+# actual (funciona igual con la sesion iniciada, aunque el PC este bloqueado).
+$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+try {
+  Register-ScheduledTask -TaskName $NombreTarea -Action $accion -Trigger $disparador -Settings $ajustes -Principal $principal -Description "Deal Maker: llama al motor de trading cada minuto (y lo levanta si esta caido)" -Force | Out-Null
+  Write-Output "Tarea '$NombreTarea' creada: cada minuto llama al motor."
+  Write-Output "Corre como SYSTEM: funciona con el PC encendido aunque no haya sesion iniciada."
+} catch {
+  Write-Output "No se pudo registrar como SYSTEM (hace falta ejecutar como administrador)."
+  Write-Output "Se instala con tu usuario: funciona mientras haya sesion iniciada (tambien con la pantalla bloqueada)."
+  Register-ScheduledTask -TaskName $NombreTarea -Action $accion -Trigger $disparador -Settings $ajustes -Description "Deal Maker: llama al motor de trading cada minuto (y lo levanta si esta caido)" -Force | Out-Null
+  Write-Output "Tarea '$NombreTarea' creada: cada minuto llama al motor."
+}
+Write-Output "Diario: C:\Users\Usuario\secrets\deal-maker-cron.log"
 Write-Output ""
 Write-Output "Para probarla ahora mismo:"
 Write-Output "  powershell -NoProfile -ExecutionPolicy Bypass -File `"$Script`""
@@ -55,4 +68,5 @@ Write-Output ""
 Write-Output "Para quitarla:"
 Write-Output "  powershell -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Desinstalar"
 Write-Output ""
-Write-Output "RECUERDA: la app de escritorio tiene que estar ABIERTA (y el PC encendido)."
+Write-Output "RECUERDA: necesita el PC ENCENDIDO. Para 24/7 de verdad (sin tu PC)
+despliega la app en la nube: ver PARA-TI.md, seccion 5."
