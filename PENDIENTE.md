@@ -141,6 +141,23 @@ datos"** se llena la cache.
 > Los datos de traders (posicionamiento de las cuentas grandes) **solo los
 > publica Binance Futures**: las demas plataformas se usan para precios.
 
+### Las monedas y los pools ya no se escriben a mano
+
+En _Minería → Agregar worker_, la **moneda** y el **pool** son listas con datos
+reales, leídos en el momento:
+
+- **Monedas minables con CPU (23)**: sacadas del sitemap de 2miners y de la
+  configuración de nanopool (son las listas reales de esos pools), con su
+  nombre de verdad ("Bitcoin", "Zcash", "Ravencoin"…) y en qué pool se minan.
+- **Monedas del mercado (512)**: el `exchangeInfo` de Binance.
+- **Pools (12)**: 2miners, Nanopool, ViaBTC, HeroMine, WoolyPooly, Zpool,
+  F2Pool, MiningPool.io, ProHashing, Flexpool, Foundry USA y LuckyMining, cada
+  uno con su web. De 2miners y nanopool se ven las monedas que ofrecen en
+  vivo; de los demás, la app no se inventa qué monedas tienen y te enlaza a
+  su web.
+
+Si usas un pool privado, eliges "Otro pool (escribirlo)" y lo escribes.
+
 ### El histórico también era de ejemplo (arreglado)
 
 `market_prices` (272 filas "demo-seed": BTC a 70.954 cuando el mercado estaba

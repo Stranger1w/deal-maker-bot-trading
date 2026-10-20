@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Pickaxe, Play, RotateCcw, Square } from "lucide-react";
 
@@ -12,6 +12,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AlertsPanel } from "@/components/AlertsPanel";
 import { SortableTable, type Column } from "@/components/SortableTable";
 import { createWorker, setWorkerStatus } from "@/lib/dealmaker.functions";
@@ -23,6 +30,7 @@ import {
   medirHashrateMineria,
 } from "@/lib/mineria.functions";
 import { CAPACIDAD_ENJAMBRE } from "@/lib/mineria/modelo";
+import { listarOpcionesMineria } from "@/lib/pools.functions";
 import { dateTime, money, uptime } from "@/lib/format";
 import { payoutsQuery, workersQuery, type Payout, type Worker } from "@/lib/queries";
 
@@ -109,6 +117,33 @@ function MiningPage() {
   });
 
   const [midiendo, setMidiendo] = useState(false);
+
+  // Las listas REALES de monedas y pools (leidas de los pools y de Binance).
+  const opcionesFn = useServerFn(listarOpcionesMineria);
+  const [opciones, setOpciones] = useState<{
+    minables: Array<{ simbolo: string; nombre: string; pools: string[] }>;
+    mercado: Array<{ simbolo: string; nombre: string; minable: boolean; pools: string[] }>;
+    pools: Array<{
+      id: string;
+      nombre: string;
+      url: string;
+      monedas: string[];
+      fuente: string;
+      enVivo: boolean;
+    }>;
+  } | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    void opcionesFn({})
+      .then((o) => {
+        if (vivo) setOpciones(o);
+      })
+      .catch(() => undefined);
+    return () => {
+      vivo = false;
+    };
+  }, [opcionesFn]);
   const [precioKwh, setPrecioKwh] = useState<string>("");
 
   const medir = async () => {
@@ -155,6 +190,7 @@ function MiningPage() {
   };
 
   const [form, setForm] = useState({ name: "", coin: "BTC", pool: "", rigId: "" });
+  const [poolLibre, setPoolLibre] = useState(false);
   const [search, setSearch] = useState("");
 
   const refresh = () => void qc.invalidateQueries({ queryKey: ["mining_workers"] });
@@ -577,16 +613,80 @@ function MiningPage() {
             <div className="space-y-1.5">
               <Label>Moneda objetivo</Label>
               <Input
+                list="monedas-mineria"
                 value={form.coin}
-                onChange={(e) => setForm({ ...form, coin: e.target.value })}
+                placeholder="Elige de la lista"
+                onChange={(e) => setForm({ ...form, coin: e.target.value.toUpperCase() })}
               />
+              <datalist id="monedas-mineria">
+                {(opciones?.minables ?? []).map((m) => (
+                  <option key={m.simbolo} value={m.simbolo}>
+                    {m.nombre}
+                    {m.pools.length ? ` · en ${m.pools.join(", ")}` : ""}
+                  </option>
+                ))}
+                {(opciones?.mercado ?? [])
+                  .filter((m) => !m.minable)
+                  .map((m) => (
+                    <option key={m.simbolo} value={m.simbolo}>
+                      {m.nombre} · del mercado, no minable con CPU
+                    </option>
+                  ))}
+              </datalist>
+              <p className="text-[10px] text-muted-foreground">
+                {opciones
+                  ? `${opciones.minables.length} minables con CPU (leidas de los pools en vivo) y ${opciones.mercado.length} del mercado`
+                  : "Cargando la lista de monedas..."}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>Pool</Label>
-              <Input
-                value={form.pool}
-                onChange={(e) => setForm({ ...form, pool: e.target.value })}
-              />
+              {poolLibre ? (
+                <Input
+                  value={form.pool}
+                  placeholder="Nombre del pool"
+                  onChange={(e) => setForm({ ...form, pool: e.target.value })}
+                />
+              ) : (
+                <Select
+                  value={form.pool}
+                  onValueChange={(v) => {
+                    if (v === "__otro") {
+                      setPoolLibre(true);
+                      setForm({ ...form, pool: "" });
+                      return;
+                    }
+                    setPoolLibre(false);
+                    setForm({ ...form, pool: v });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Elige de la lista" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(opciones?.pools ?? []).map((pl) => (
+                      <SelectItem key={pl.id} value={pl.nombre}>
+                        {pl.nombre}
+                        {pl.monedas.length ? ` (${pl.monedas.length} monedas)` : ""}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="__otro">Otro pool (escribirlo)</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+              <p className="text-[10px] text-muted-foreground">
+                {opciones?.pools.find((pl) => pl.nombre === form.pool)?.fuente ?? ""}
+                {opciones?.pools.find((pl) => pl.nombre === form.pool)?.url ? (
+                  <a
+                    className="ml-1 underline underline-offset-2"
+                    href={opciones.pools.find((pl) => pl.nombre === form.pool)?.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    abrir web
+                  </a>
+                ) : null}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>ID hardware / rig</Label>
