@@ -48,6 +48,9 @@ create index if not exists market_candles_symbol_interval_idx
   on public.market_candles (symbol, interval, time desc);
 
 alter table public.market_candles enable row level security;
+revoke all on public.market_candles from anon;
+revoke all on public.market_candles from authenticated;
+grant all on public.market_candles to service_role;
 
 -- 2) Datos de traders cacheados (posicionamiento y flujo).
 create table if not exists public.trader_metrics (
@@ -68,6 +71,9 @@ create unique index if not exists trader_metrics_symbol_metric_period_time_uidx
   on public.trader_metrics (symbol, metric, period, time);
 
 alter table public.trader_metrics enable row level security;
+revoke all on public.trader_metrics from anon;
+revoke all on public.trader_metrics from authenticated;
+grant all on public.trader_metrics to service_role;
 
 commit;
 

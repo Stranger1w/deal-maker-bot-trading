@@ -69,6 +69,14 @@ alter table public.mining_workers
 create index if not exists mining_entrenamientos_worker_fecha_idx
   on public.mining_entrenamientos (worker_id, created_at desc);
 
+-- 1d) RLS de la tabla nueva: sin esto, cualquier persona con la clave
+-- publica (la del navegador) podria leer y escribir los entrenamientos.
+-- El patron es el de app_settings: solo service_role (el servidor) entra.
+alter table public.mining_entrenamientos enable row level security;
+revoke all on public.mining_entrenamientos from anon;
+revoke all on public.mining_entrenamientos from authenticated;
+grant all on public.mining_entrenamientos to service_role;
+
 -- 2) El precio del kWh (por dueno, como el resto de automation_settings).
 alter table public.automation_settings
   add column if not exists mineria_kwh_usd numeric not null default 0.15;

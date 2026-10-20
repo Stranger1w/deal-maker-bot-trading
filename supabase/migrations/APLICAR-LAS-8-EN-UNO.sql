@@ -454,6 +454,14 @@ alter table public.mining_workers
 create index if not exists mining_entrenamientos_worker_fecha_idx
   on public.mining_entrenamientos (worker_id, created_at desc);
 
+-- 1d) RLS de la tabla nueva: sin esto, cualquier persona con la clave
+-- publica (la del navegador) podria leer y escribir los entrenamientos.
+-- El patron es el de app_settings: solo service_role (el servidor) entra.
+alter table public.mining_entrenamientos enable row level security;
+revoke all on public.mining_entrenamientos from anon;
+revoke all on public.mining_entrenamientos from authenticated;
+grant all on public.mining_entrenamientos to service_role;
+
 -- 2) El precio del kWh (por dueno, como el resto de automation_settings).
 alter table public.automation_settings
   add column if not exists mineria_kwh_usd numeric not null default 0.15;
@@ -545,6 +553,9 @@ create index if not exists market_candles_symbol_interval_idx
   on public.market_candles (symbol, interval, time desc);
 
 alter table public.market_candles enable row level security;
+revoke all on public.market_candles from anon;
+revoke all on public.market_candles from authenticated;
+grant all on public.market_candles to service_role;
 
 -- 2) Datos de traders cacheados (posicionamiento y flujo).
 create table if not exists public.trader_metrics (
@@ -565,6 +576,9 @@ create unique index if not exists trader_metrics_symbol_metric_period_time_uidx
   on public.trader_metrics (symbol, metric, period, time);
 
 alter table public.trader_metrics enable row level security;
+revoke all on public.trader_metrics from anon;
+revoke all on public.trader_metrics from authenticated;
+grant all on public.trader_metrics to service_role;
 
 -- ============================================================
 -- COMPROBACION (pegar despues de aplicar y ejecutar)
