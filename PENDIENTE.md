@@ -191,7 +191,7 @@ llame a `POST /api/public/automation-tick` con `Authorization: Bearer
 | Extra                  | Qué necesito                                                                                    |
 | ---------------------- | ----------------------------------------------------------------------------------------------- |
 | Avisos por Telegram    | **Descartado** (21-oct): el aviso va por correo, que es lo que pide el dueno                        |
-| Avisos por correo      | **Hecho**: el interruptor esta en _Seguridad > Notificaciones por correo_ y va al correo de la cuenta |
+| Avisos por correo      | **Hecho**: el interruptor esta en _Cuentas de trading > Notificaciones por correo_ y va al correo de la cuenta |
 | Correo de los reportes | Un dominio con el remitente verificado (o te dejo el aviso de "pendiente de dominio")           |
 | Red de KAS para minar  | Hash rate de la red, recompensa por bloque y tiempo de bloque (los tienes en la web de tu pool) |
 | Cron propio en la nube | Tu VPS/Railway/Cloudflare (o dime cuál y te doy los ficheros)                                   |
@@ -264,7 +264,7 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
 > programada "DealMaker Motor" vuelve a estar instalada; el 24/7 en la nube sigue
 > descartado).
 >
-> - El **entorno** se cambia desde _Binance > Entorno de trading_: pide 2FA, el aviso
+> - El **entorno** se cambia desde _Cuentas de trading > Entorno de trading_: pide 2FA, el aviso
 >   de riesgo aceptado, escribir PRODUCION y que la clave guardada funcione en
 >   destino. Ahora sigue en **testnet**.
 > - Para operar de verdad hacen falta **dos cosas tuyas**: guardar una **API key de
@@ -300,7 +300,7 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
 - **Telegram**: **descartado** (21-oct). El módulo se ha borrado del código: los
   avisos críticos van **por correo**, que es lo que pidió el dueno.
 - **Correo (Gmail)**: **hecho y funcionando** (21-oct). El interruptor está en
-  _Seguridad > Notificaciones por correo_: activa y desactiva los avisos, y van al
+  _Cuentas de trading > Notificaciones por correo_: activa y desactiva los avisos, y van al
   correo con el que se creó la cuenta (`andrew.paulino.reyes@gmail.com`), que
   ya está activado. El proveedor (Resend) tiene la clave puesta: se probó un
   correo real y un aviso de prueba. Los reportes diario y semanal también

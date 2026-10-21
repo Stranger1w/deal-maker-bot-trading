@@ -78,9 +78,9 @@ export const NAV_GRUPOS: GrupoNav[] = [
       { to: "/fondos", label: "Fondos", icon: Wallet, detalle: "Saldo, movimientos y retiradas" },
       {
         to: "/binance",
-        label: "Binance",
+        label: "Cuentas de trading",
         icon: KeyRound,
-        detalle: "Tus API keys y la verificación de la cuenta",
+        detalle: "Claves de API, entorno y permisos",
       },
     ],
   },

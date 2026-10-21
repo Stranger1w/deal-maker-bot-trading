@@ -38,9 +38,13 @@ export const Route = createFileRoute("/binance")({
       {
         name: "description",
         content:
-          "Guarda tus claves de Binance con cifrado en reposo, prueba la conexión de solo lectura y elige Spot, Futures o ambos.",
+          "Tus claves de API de Binance, el entorno donde se opera (testnet o producción) y los permisos de la cuenta.",
       },
-      { property: "og:title", content: "API Keys de Binance — Deal Maker" },
+      {
+        property: "og:title",
+        content:
+          "Tus claves de API de Binance, el entorno donde se opera (testnet o produccion) y los permisos de la cuenta.",
+      },
       {
         property: "og:description",
         content:
@@ -139,8 +143,8 @@ function BinancePage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Mi cuenta"
-        title="Configuración · API Keys de Binance"
+        eyebrow="Dinero"
+        title="Cuentas de trading"
         subtitle="Todo el trading real se ejecuta vía Binance. El secreto se cifra en reposo, nunca se expone al navegador ni se escribe en logs; solo el backend lo descifra para firmar solicitudes."
       />
 

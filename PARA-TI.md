@@ -293,7 +293,7 @@ La has autorizado y ya esta hecha. Lo que se hizo:
 
 Ya esta todo:
 
-- El interruptor esta en _Seguridad > Notificaciones por correo_: activas y
+- El interruptor esta en _Cuentas de trading > Notificaciones por correo_: activas y
   desactivas los avisos cuando quieras.
 - Van al **correo con el que creaste la cuenta**
   (`andrew.paulino.reyes@gmail.com`). Ya esta activado.
@@ -328,7 +328,7 @@ permissions").
    <https://www.binance.com/en/my/settings/api-management>
 2. Edita tu API key y activa el permiso **«Enable Futures»**.
 3. Guarda (Binance puede pedirte 2FA).
-4. En la app: _Binance > Permiso de futuros > «Comprobar el permiso de
+4. En la app: _Cuentas de trading > Permiso de futuros > «Comprobar el permiso de
    futuros»_. Tiene que salir **«listo»**.
 
 > **Ojo**: en **demo** (testnet) la cobertura se simula en papel con los precios
