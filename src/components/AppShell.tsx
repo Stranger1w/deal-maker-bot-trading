@@ -22,6 +22,7 @@ import {
 import { useEffect, useState } from "react";
 
 import { useGuardianDeSesion } from "@/hooks/useGuardianDeSesion";
+import { useSesionActiva } from "@/hooks/useSecuritySession";
 
 import { KillSwitchButton } from "@/components/KillSwitchButton";
 import { SwitchModoCuenta } from "@/components/SwitchModoCuenta";
@@ -138,13 +139,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useGuardianDeSesion();
 
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const alertas = useQuery(alertsQuery);
+  // Sin sesion el menu lateral no sirve de nada (todo devuelve al login):
+  // se oculta para que la app no parezca trabada.
+  const sesionActiva = useSesionActiva();
+  const sinSesion = sesionActiva === false;
+  const alertas = useQuery({ ...alertsQuery, enabled: sesionActiva === true });
   const sinRevisar = (alertas.data ?? []).filter(
     (a) => a.severity === "critical" && !a.acknowledged,
   ).length;
 
-  // Atajo de teclado: Cmd/Ctrl + K abre la paleta.
+  // Atajo de teclado: Cmd/Ctrl + K abre la paleta (solo con sesion iniciada).
   useEffect(() => {
+    if (sinSesion) return;
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
@@ -153,7 +159,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [sinSesion]);
 
   const navegacion = (
     <nav className="flex flex-col gap-5">
@@ -220,10 +226,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-2 pb-4">{navegacion}</div>
+        <div className="flex-1 overflow-y-auto px-2 pb-4">
+          {sinSesion ? (
+            <p className="px-3 py-2 text-xs leading-relaxed text-sidebar-foreground/60">
+              Inicia sesión para entrar a la app.
+            </p>
+          ) : (
+            navegacion
+          )}
+        </div>
 
         <div className="flex items-center gap-2 border-t border-sidebar-border p-3">
-          <KillSwitchButton className="flex-1" />
+          {!sinSesion && <KillSwitchButton className="flex-1" />}
           <Button
             variant="ghost"
             size="icon"
@@ -250,7 +264,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               Deal Maker
             </SheetTitle>
           </SheetHeader>
-          <div className="overflow-y-auto p-3">{navegacion}</div>
+          <div className="overflow-y-auto p-3">
+            {sinSesion ? (
+              <p className="px-3 py-2 text-xs leading-relaxed text-sidebar-foreground/60">
+                Inicia sesión para entrar a la app.
+              </p>
+            ) : (
+              navegacion
+            )}
+          </div>
         </SheetContent>
       </Sheet>
 
@@ -273,34 +295,38 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Menu className="size-5" />
             </Button>
             <div className="ml-auto flex items-center gap-2">
-              <SwitchModoCuenta />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPaleta(true)}
-                className="hidden h-8 gap-2 border-border/70 bg-secondary/30 text-muted-foreground sm:flex"
-              >
-                <Search className="size-3.5" />
-                Buscar
-                <kbd className="ml-2 rounded border border-border/70 bg-background/60 px-1.5 py-0.5 font-mono text-[10px]">
-                  ⌘K
-                </kbd>
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="relative text-muted-foreground"
-                aria-label="Avisos"
-                onClick={() => setAvisos(true)}
-              >
-                <Bell className="size-4" />
-                {sinRevisar > 0 && (
-                  <span className="absolute right-1 top-1 grid size-3.5 place-items-center rounded-full bg-destructive text-[9px] font-semibold text-destructive-foreground">
-                    {sinRevisar}
-                  </span>
-                )}
-              </Button>
-              <KillSwitchButton className="md:hidden" />
+              {!sinSesion && (
+                <>
+                  <SwitchModoCuenta />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPaleta(true)}
+                    className="hidden h-8 gap-2 border-border/70 bg-secondary/30 text-muted-foreground sm:flex"
+                  >
+                    <Search className="size-3.5" />
+                    Buscar
+                    <kbd className="ml-2 rounded border border-border/70 bg-background/60 px-1.5 py-0.5 font-mono text-[10px]">
+                      ⌘K
+                    </kbd>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="relative text-muted-foreground"
+                    aria-label="Avisos"
+                    onClick={() => setAvisos(true)}
+                  >
+                    <Bell className="size-4" />
+                    {sinRevisar > 0 && (
+                      <span className="absolute right-1 top-1 grid size-3.5 place-items-center rounded-full bg-destructive text-[9px] font-semibold text-destructive-foreground">
+                        {sinRevisar}
+                      </span>
+                    )}
+                  </Button>
+                  <KillSwitchButton className="md:hidden" />
+                </>
+              )}
             </div>
           </div>
         </header>

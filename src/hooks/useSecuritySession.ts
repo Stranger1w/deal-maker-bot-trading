@@ -60,3 +60,41 @@ export function useSecuritySession(): SecuritySession {
 
   return state;
 }
+
+/**
+ * ¿Hay sesion iniciada?
+ *
+ * `null` = todavia no se sabe (se comprueba al abrir: si se empezara en
+ * `false` la app parpadearia del login al menu en cada carga).
+ * `false` = no hay sesion: la app se queda en el login y sin menus muertos.
+ */
+export function useSesionActiva(): boolean | null {
+  const [estado, setEstado] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+
+    const leer = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (vivo) setEstado(Boolean(data.session));
+    };
+
+    void leer();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((evento) => {
+      if (!["SIGNED_IN", "SIGNED_OUT", "TOKEN_REFRESHED", "USER_UPDATED"].includes(evento)) return;
+      // Fuera del callback: Supabase no admite llamadas al servidor dentro de
+      // onAuthStateChange (se bloquean esperando al propio evento).
+      setTimeout(() => void leer(), 0);
+    });
+
+    return () => {
+      vivo = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  return estado;
+}

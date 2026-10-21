@@ -338,6 +338,7 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
 | Las monedas y los pools    | Listas reales leídas en vivo (2miners, nanopool, Binance)                       |
 | Los datos simulados        | **Cero tablas con datos de ejemplo** (auditoría de `is_demo` completa)          |
 | La app                     | `tsc` 0, **375 tests** en verde, eslint sin errores, `.exe` compilado           |
+| La sesion caducada         | La app la renueva sola si puede; si no, el login avisa y te devuelve a donde ibas |
 
 ### Lo que Changed y hay que saber
 
@@ -356,10 +357,13 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
   mientras decía medir el rango pedido: era un fallo real, ya corregido). Además
   compara con **20 estrategias con la señal al azar** y te dice el percentil:
   «¿gana al 60 % de las aleatorias o no se distingue del azar?».
-- **El sandbox mide el periodo que eliges** (antes medía los últimos minutos
-  mientras decía medir el rango pedido: era un fallo real, ya corregido). Además
-  compara con **20 estrategias con la señal al azar** y te dice el percentil:
-  «¿gana al 60 % de las aleatorias o no se distingue del azar?».
+- **La sesion de Supabase dura una hora** y su refresco automatico solo corre
+  con la pestana activa: si el PC estaba en reposo, el token caducaba y la app
+  te echaba al login sin avisar (y el menu lateral, al pulsar cualquier cosa,
+  te devolvia al login: parecia una app trabada). Ahora, al detectar el fallo,
+  la app **intenta renovar la sesion** antes de echarte; si de verdad no puede,
+  te lo dice ("Tu sesion ha caducado...") y te devuelve a la pagina de la que
+  venias. Sin sesion, el menu se oculta (no hay enlaces muertos).
 - **El hash rate que ves es el real de tu máquina** (SHA-256 de verdad con
   workers reales), medido en dos rondas y quedándose con la mejor: si el PC
   está ocupado (una compilación, el antivirus) la medición baja y ya no
