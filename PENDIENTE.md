@@ -43,62 +43,60 @@ Comprobado después de aplicarlas:
 
 ### B. Los indicadores del motor — HECHO y AJUSTADO (21-oct)
 
-**Indicador**: `rsi` (periodo 14, 30/70), estrategia `fixed`, horizonte 5 min,
-importe 20 USDT.
+**Configuracion aplicada**: `close_price` + `rsi` (periodo 14, 30/70),
+estrategia `fixed`, horizonte 5 min, importe 20 USDT, stop 1,5 % y take 3 %
+en los 4 bots.
 
-**Barrido de 8 configuraciones** (BTCUSDT, 1 h, 3.000 velas, walk-forward de
-4 bloques y 30 estrategias aleatorias de referencia):
+**Como se eligio** (todo medido con el backtest real: walk-forward de 4
+bloques y 30 estrategias aleatorias de referencia, en 5 ventanas de 3.000 a
+9.000 velas):
 
-| Configuración | Retorno | Ops | Walk-forward | Percentil vs azar |
-| --- | --- | --- | --- | --- |
-| close_price (el de antes) | −0,44 % | 131 | 2/4 | 40 % |
-| rsi 14 30/70, stop 2/take 4 | +0,19 % | 24 | 2/4 | 73 % |
-| rsi 7 30/70, stop 2/take 4 | −0,27 % | 61 | 0/4 | 50 % |
-| rsi 21 30/70, stop 2/take 4 | +0,14 % | 6 | 4/4 | 53 % |
-| rsi 14 25/75, stop 2/take 4 | +0,19 % | 9 | 4/4 | 47 % |
-| **rsi 14 35/65, stop 2/take 4** | +0,22 % | 39 | 2/4 | **77 %** |
-| rsi 14 30/70, stop 3/take 6 | +0,26 % | 19 | 4/4 | 73 % |
-| **rsi 14 30/70, stop 1,5/take 3** | +0,20 % | 34 | **3/4** | **100 %** |
-| rsi 14 30/70, stop 2/take 8 | +0,23 % | 23 | 2/4 | 73 % |
+| Ventana | rsi solo | **close_price + rsi** | Comprar y mantener |
+| --- | --- | --- | --- |
+| 3.000 velas | +0,20 % (34 ops) | +0,16 % (3 ops) | +34,29 % |
+| 4.000 velas | −0,28 % (61 ops) | **+0,11 %** (7 ops) | +5,90 % |
+| 5.000 velas | −0,22 % (66 ops) | **+0,11 %** (7 ops) | +26,56 % |
+| 6.000 velas | −0,65 % (89 ops) | **−0,06 %** (12 ops) | +22,14 % |
+| 9.000 velas | −2,02 % (176 ops) | **−0,23 %** (22 ops) | −24,81 % |
 
-**La ganadora validada en OTRAS ventanas** (para no autoengañarme con el
-mejor de 8):
+Gana en 4 de 5 ventanas y **nunca pierde mas de 0,23 %** (la otra perdió hasta
+un 2 %). El percentil contra las aleatorias se mantiene alto (87-100 %).
 
-| Ventana | stop 1,5/take 3 | stop 2/take 4 |
-| --- | --- | --- |
-| 3.000 velas (4 meses) | +0,20 % · percentil **100 %** | +0,19 % · 73 % |
-| 6.000 velas (8 meses) | −0,65 % · percentil **93 %** | −0,66 % · 53 % |
-| 9.000 velas (12 meses) | −2,02 % · percentil **87 %** | −1,86 % · 73 % |
+#### Lo que se proboó y NO ayudo (21-oct)
 
-Gana en las tres ventanas: no es sobreajuste de un periodo. **Aplicado**:
-`stop_loss_pct = 1,5`, `take_profit_pct = 3` en los 4 bots, y los parámetros
-del RSI (14, 30/70) en la configuración del motor.
+Se añADIERON al backtest (y al CLI: `--stop-atr`, `--trailing`,
+`--break-even`) tres piezas que el motor en vivo ya tenía partially:
 
-> **OJO: el percentil NO es la tasa de acierto.** El 87-100 % es "esta
-> configuracion gana a 26-30 de las 30 estrategias ALEATORIAS de referencia"
-> (entradas y salidas al azar, con los mismos costes). La tasa de acierto real
-> es del **26-33 %**: en la ventana de 9.000 velas, 176 operaciones con 47
-> ganadoras y 129 perdedoras. Se puede ganar al azar y perder dinero a la vez: el
-> azar pierde todavia mas.
->
-> | Ventana | Operaciones (ganadoras/perdedoras) | Tasa de acierto | Bot | Comprar y mantener |
-> | --- | --- | --- | --- | --- |
-> | 6.000 velas | 89 (29/60) | 32,6 % | −0,65 % | **+22,22 %** (el bot se queda fuera de la subida) |
-> | 9.000 velas | 176 (47/129) | 26,7 % | −2,02 % | −24,70 % (el bot pierde mucho menos) |
->
-> Es una estrategia **defensiva**: en el mercado que bajo perdio mucho menos que
-> comprar y mantener (por eso el percentil es alto), pero en el que subio no se
-> entero de la subida. Con stop del 1,5 % y take del 3 % hacen falta mas del 33 %
-> de aciertos para no perder, y con comisiones mas todavia.
->
-> **La verdad uncomfortable**: el RSI gana a las estrategias aleatorias (87-100 %
-> de percentil) pero **pierde dinero en las ventanas largas** (−0,65 % y
-> −2,02 %): en el mercado que subio, entrar y salir no.compensa. Es la
-> mejor configuracion medida, no una mina de oro. Para que de dinero falta
-> otra cosa: que el motor no entre en operaciones que pierden (filtro de
-> regimen, stop por ATR) — la app ya tiene esas piezas, pero estan en
-> `auto` y sin medir.
+| Mejora | Resultado en 6.000 velas |
+| --- | --- |
+| base (stop fijo 1,5 / take 3) | **−0,65 %** (89 ops) |
+| stop por ATR x1,0 | −1,39 % (149 ops) |
+| stop por ATR x1,5 | −1,15 % (117 ops) |
+| stop por ATR x2,0 | −0,77 % (100 ops) |
+| stop trazado 2 % | −1,06 % (95 ops) |
+| break-even 1 % | −0,92 % (95 ops) |
 
+**Ninguna mejora**: todas hacen mas operaciones, mas costes y peor resultado
+absoluto (aunque ganen a mas estrategias aleatorias: el percentil sube, el
+dinero baja). Por eso se queda el stop fijo.
+
+#### La verdad (importante)
+
+- El **percentil NO es la tasa de acierto**: es "gana a 26-30 de las 30
+  estrategias aleatorias". La tasa de acierto real es del **26-33 %**.
+- **Ninguna configuracion de este motor supera a comprar y mantener** en una
+  ventana al alza: el bot hace +0,11 % mientras el mercado hace +26,56 %.
+  Los indicadores de tendencia medidos (close_price, macd) son aun peores en
+  absoluto (−1,38 % a −5,37 %).
+- Lo que mejor funciona es **operar menos**: la combinacion de dos
+  indicadores (que exigen que coincidan) hace 3-22 operaciones en 8-12 meses
+  en vez de 89-176, y con eso se pierde muchisimo menos. Es una estrategia
+  **defensiva**, no una mina de oro.
+- **El margen de verdad vendra de una senal que capture las tendencias**, no
+  de afinar las salidas. Con los indicadores que hay, el mejor margen medido es
+  dejar de perder. Medir una estrategia de tendencia de verdad (un MACD con
+  filtro de regimen, por ejemplo) es el siguiente paso, y se mide con el
+  mismo protocolo.
 ### B2. Los 13 mercados y el precio justo (21-oct)
 
 Se añADIERON seis mercados con sus velas (probados uno a uno, cada uno con su

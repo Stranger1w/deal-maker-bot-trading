@@ -72,6 +72,9 @@ const config: ConfigBacktest = {
   fraccionPorOperacion: num("fraccion", 0.02),
   stopLossPct: num("stop", 2),
   takeProfitPct: num("take", 4),
+  ...(num("stop-atr", 0) > 0 ? { stopAtrMult: num("stop-atr", 0) } : {}),
+  ...(num("trailing", 0) > 0 ? { trailingStopPct: num("trailing", 0) } : {}),
+  ...(num("break-even", 0) > 0 ? { breakEvenPct: num("break-even", 0) } : {}),
   costes: {
     comision: num("comision", 0.001),
     slippage: num("slippage", 0.0005),
@@ -89,7 +92,10 @@ console.log(
   `indicadores: ${indicadores.join(", ")} | estrategia: ${estrategiaId} | capital: ${config.capitalInicial}`,
 );
 console.log(
-  `costes: comision ${(config.costes.comision * 100).toFixed(3)} %/lado, slippage ${(config.costes.slippage * 100).toFixed(3)} %/lado, stop ${config.stopLossPct} %, take ${config.takeProfitPct} %`,
+  `costes: comision ${(config.costes.comision * 100).toFixed(3)} %/lado, slippage ${(config.costes.slippage * 100).toFixed(3)} %/lado, stop ${config.stopLossPct} %, take ${config.takeProfitPct} %` +
+    `${config.stopAtrMult ? `, stop por ATR x${config.stopAtrMult}` : ""}` +
+    `${config.trailingStopPct ? `, stop trazado ${config.trailingStopPct} %` : ""}` +
+    `${config.breakEvenPct ? `, break-even ${config.breakEvenPct} %` : ""}`,
 );
 
 // Velas: del fichero (offline) o de Binance.

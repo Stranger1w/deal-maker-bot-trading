@@ -52,6 +52,24 @@ export type ConfigBacktest = {
   stopLossPct: number;
   /** Take profit en porcentaje. */
   takeProfitPct: number;
+  /**
+   * Stop por ATR: el stop se calcula como este numero de ATRs en % (la
+   * volatilidad real del par) en vez de un porcentaje fijo.
+   *
+   * Por que importa: con un stop fijo del 1,5 % y un BTC que se mueve un
+   * 3-5 % al dia, el stop cae dentro del ruido y te saca de cada movimiento.
+   */
+  stopAtrMult?: number;
+  /**
+   * Stop trazado: si se activa, el stop se mueve con el maximo de la
+   * operacion (nunca baja). 0 = apagado.
+   */
+  trailingStopPct?: number;
+  /**
+   * Break-even: cuando la operacion gana este %, el stop se mueve al precio
+   * de entrada (la perdida maxima pasa a ser 0). 0 = apagado.
+   */
+  breakEvenPct?: number;
   /** Maximo de operaciones por dia (0 = sin limite). */
   maxOperacionesDia?: number;
   /**

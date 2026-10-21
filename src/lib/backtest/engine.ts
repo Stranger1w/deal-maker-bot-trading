@@ -19,6 +19,7 @@
  */
 
 import { buscarIndicador, senalDe } from "../indicators";
+import { atrPct } from "../riesgo-tamano";
 import type { PriceSeries } from "../indicators/types";
 import { decidir, estadoInicial, type StrategyDef, type StrategyState } from "../strategies/types";
 import { ensamblarResultado } from "./metrics";
@@ -32,6 +33,8 @@ type Posicion = {
   precioEntrada: number;
   entrada: number;
   costeEntrada: number;
+  /** El precio mas alto desde la entrada (para el stop trazado). */
+  maximoAlcanzado: number;
 };
 
 /** Serie de precios para los indicadores, con las velas ya cerradas. */
@@ -137,9 +140,45 @@ export function ejecutarBacktest(
 
     // ── 2) Gestion de la posicion abierta.
     if (posicion) {
-      const stop = posicion.precioEntrada * (1 - config.stopLossPct / 100);
+      // El maximo alcanzado (para el stop trazado).
+      posicion.maximoAlcanzado = Math.max(posicion.maximoAlcanzado, vela.high);
+
+      // El stop: fijo, por ATR, o trazado. Si hay varias cosas, manda la mas
+      // ajustada (la que esta mas cerca del precio).
+      const multAtr = Number(config.stopAtrMult ?? 0);
+      const atrRelativo = multAtr > 0 ? atrPct(velas.slice(Math.max(0, i - 60), i + 1), 14) : null;
+      const stopFijo =
+        config.stopLossPct > 0
+          ? posicion.precioEntrada * (1 - config.stopLossPct / 100)
+          : Number.NEGATIVE_INFINITY;
+      const stopAtr =
+        atrRelativo !== null && atrRelativo > 0
+          ? posicion.precioEntrada * (1 - (multAtr * atrRelativo) / 100)
+          : Number.NEGATIVE_INFINITY;
+      const stopTrazado =
+        config.trailingStopPct && config.trailingStopPct > 0
+          ? posicion.maximoAlcanzado * (1 - config.trailingStopPct / 100)
+          : Number.NEGATIVE_INFINITY;
+      // Break-even: si la operacion ya gana, el stop sube al precio de entrada.
+      const breakEven =
+        config.breakEvenPct &&
+        config.breakEvenPct > 0 &&
+        posicion.maximoAlcanzado >= posicion.precioEntrada * (1 + config.breakEvenPct / 100)
+          ? posicion.precioEntrada
+          : Number.NEGATIVE_INFINITY;
+      // El mas ajustado de todos: el que este mas cerca del precio actual.
+      const stop = Math.max(stopFijo, stopAtr, stopTrazado, breakEven);
       const take = posicion.precioEntrada * (1 + config.takeProfitPct / 100);
-      const tocaStop = config.stopLossPct > 0 && vela.low <= stop;
+      const tocaStop = Number.isFinite(stop) && vela.low <= stop;
+      // De donde sale el stop que se ha tocado (para las estadisticas).
+      const motivoStop =
+        stop === stopTrazado && stopTrazado > stopAtr && stopTrazado > stopFijo
+          ? "stop_trazado"
+          : stop === breakEven && breakEven > stopAtr && breakEven > stopFijo
+            ? "stop_break_even"
+            : stop === stopAtr && stopAtr > stopFijo
+              ? "stop_atr"
+              : "stop_loss";
       const tocaTake = config.takeProfitPct > 0 && vela.high >= take;
 
       if (tocaStop || tocaTake) {
@@ -236,6 +275,7 @@ export function ejecutarBacktest(
               precioEntrada,
               entrada: vela.time,
               costeEntrada,
+              maximoAlcanzado: vela.high,
             };
             // Una operacion cuenta para el limite diario cuando se ABRE.
             operacionesPorDia.set(dia, operacionesDia + 1);
