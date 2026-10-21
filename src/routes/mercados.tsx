@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { SkeletonTabla } from "@/components/Skeleton";
 import { SortableTable, type Column } from "@/components/SortableTable";
+import { StatusPill } from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -29,6 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { updateBotStrategy } from "@/lib/dealmaker.functions";
+import { informeCarry } from "@/lib/carry.functions";
 import { reevaluarParBot } from "@/lib/engine.functions";
 import { dateTime, pct } from "@/lib/format";
 import {
@@ -130,6 +132,15 @@ function MercadosPage() {
 
   const bots = useQuery(botsQuery);
   const validar = useServerFn(validarParMercado);
+
+  // El carry: cuanto da cubrir el spot con el perpetuo (datos reales).
+  const carryFn = useServerFn(informeCarry);
+  const carry = useQuery({
+    queryKey: ["carry"],
+    queryFn: () => carryFn({ data: { simbolo: "BTCUSDT" } }),
+    staleTime: 30 * 60 * 1000,
+    refetchInterval: 60 * 60 * 1000,
+  });
   const editar = useServerFn(updateBotStrategy);
 
   const [search, setSearch] = useState("");
@@ -251,6 +262,97 @@ function MercadosPage() {
         title="Mercados"
         subtitle="Precios de Binance 24 h (lector público, sin API key). Solo pares que existen en el entorno activo; la cotización por defecto es USDT."
       />
+
+      {/* COBERTURA (carry): comprar el spot y vender el perpetuo. Es la unica
+          estrategia medida que NO depende de la direccion del precio. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+            Cobertura (carry): comprar spot y vender perpetuo
+            {carry.data && (
+              <StatusPill tone={carry.data.pnlAnualizado > 0 ? "success" : "warning"}>
+                {carry.data.pnlAnualizado > 0 ? "rentable" : "en rojo"}
+              </StatusPill>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {carry.isLoading && (
+            <p className="text-sm text-muted-foreground">
+              Midiendo con los datos reales de Binance…
+            </p>
+          )}
+          {carry.data && (
+            <>
+              <p className="text-xs text-muted-foreground">
+                El perpetuo cotiza por encima del spot: el que compra el spot y vende el perpetuo
+                cobra esa diferencia (la cuota de financiación, cada 8 h). No depende de que el
+                precio suba o baje: es cobertura, no adivinar. Medido con las cuotas reales de
+                Binance, no con un cálculo.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="row-subtle rounded-lg px-3 py-2">
+                  <p className="kicker">Carry completo</p>
+                  <p className="metric-glow mt-1 text-2xl font-semibold text-success">
+                    {carry.data.pnlAnualizado.toFixed(2)} %
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    anualizado, en {carry.data.dias} días reales
+                  </p>
+                </div>
+                <div className="row-subtle rounded-lg px-3 py-2">
+                  <p className="kicker">Cuotas cobradas</p>
+                  <p className="mt-1 text-2xl font-semibold">
+                    {(carry.data.total * 100).toFixed(2)} %
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    solo financiación (sin precios)
+                  </p>
+                </div>
+                <div className="row-subtle rounded-lg px-3 py-2">
+                  <p className="kicker">Comprar y mantener</p>
+                  <p className="mt-1 text-2xl font-semibold">
+                    {(carry.data.pnlSoloSpot * 100).toFixed(2)} %
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    el spot solo, en el mismo periodo
+                  </p>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-border text-left text-muted-foreground">
+                      <th className="py-1.5 pr-3 font-medium">Año</th>
+                      <th className="py-1.5 pr-3 font-medium">Cuotas cobradas</th>
+                      <th className="py-1.5 pr-3 font-medium">Anualizado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {carry.data.porAnyo.map((a) => (
+                      <tr key={a.anio} className="border-b border-border/50">
+                        <td className="py-1.5 pr-3 font-medium">{a.anio}</td>
+                        <td className="py-1.5 pr-3 tabular">{(a.suma * 100).toFixed(2)} %</td>
+                        <td
+                          className={`py-1.5 pr-3 tabular ${a.anualizado > 0 ? "text-success" : "text-destructive"}`}
+                        >
+                          {a.anualizado.toFixed(1)} %
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Fuente: {carry.data.fuente} · hasta el {carry.data.hasta}. El carry es la única
+                estrategia medida que no depende de la dirección del precio: es la unica que ha dado
+                positivo todos los años. Aún no es un bot (hace falta una cuenta de futuros y el
+                motor de dos patas), así que la app la muestra medida, no prometida.
+              </p>
+            </>
+          )}
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader className="flex-row items-center justify-between gap-4">
           <CardTitle>Pares con ticker 24 h</CardTitle>

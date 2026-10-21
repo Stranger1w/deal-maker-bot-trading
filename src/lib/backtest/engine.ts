@@ -20,6 +20,7 @@
 
 import { buscarIndicador, senalDe } from "../indicators";
 import { atrPct } from "../riesgo-tamano";
+import { detectarRegimen, operarEnRegimen, tipoDeIndicadores } from "../regimen";
 import type { PriceSeries } from "../indicators/types";
 import { decidir, estadoInicial, type StrategyDef, type StrategyState } from "../strategies/types";
 import { ensamblarResultado } from "./metrics";
@@ -115,6 +116,7 @@ export function ejecutarBacktest(
   const operaciones: Operacion[] = [];
   const curva: number[] = [];
   const operacionesPorDia = new Map<string, number>();
+  let omitidasPorRegimen = 0;
 
   const serie = serieDesde(velas, 0, opciones.aux);
   const minSamples = Math.max(
@@ -237,6 +239,37 @@ export function ejecutarBacktest(
 
     // ── 3) Apertura (solo con senal de compra y sin posicion).
     if (!posicion && senal === "buy") {
+      // El filtro de regimen (la MISMA regla que el motor en vivo): con la
+      // estrategia equivocada para el mercado, no se abre nada. Se calcula con
+      // las velas CERRADAS (nada de futuro).
+      if (config.filtroRegimen?.activo === true) {
+        const cerradas = velas.slice(Math.max(0, i - 300), i);
+        const analisis = detectarRegimen(cerradas, {
+          ...(config.filtroRegimen.ventana !== undefined
+            ? { ventana: config.filtroRegimen.ventana }
+            : {}),
+          ...(config.filtroRegimen.umbralVolatilidadPct !== undefined
+            ? { umbralVolatilidadPct: config.filtroRegimen.umbralVolatilidadPct }
+            : {}),
+          ...(config.filtroRegimen.umbralTendenciaPct !== undefined
+            ? { umbralTendenciaPct: config.filtroRegimen.umbralTendenciaPct }
+            : {}),
+        });
+        const tipo = tipoDeIndicadores(config.indicadores, (id) => {
+          const def = buscarIndicador(id);
+          return def ? def.tipo : null;
+        });
+        const veredicto = operarEnRegimen({
+          regimen: analisis.regimen,
+          tipoEstrategia: tipo,
+          activo: true,
+        });
+        if (!veredicto.permitido) {
+          // El filtro de regimen: esta operacion no se abria.
+          omitidasPorRegimen++;
+          continue;
+        }
+      }
       const dia = diaUtc(vela.time);
       const operacionesDia = operacionesPorDia.get(dia) ?? 0;
       if (operativas === 0 || operacionesDia < operativas) {

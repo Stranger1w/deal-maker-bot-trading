@@ -41,6 +41,9 @@ const USUARIO = [
   // posicionamiento de traders, flujo de ordenes). No toca la base de datos
   // ni devuelve nada del usuario: cualquiera con sesion puede pedirlo.
   "medirCopyTrading",
+  // El informe del carry: lee las cuotas de financiacion y los precios
+  // PUBLICOS de Binance. No toca la base ni devuelve nada del usuario.
+  "informeCarry",
   // Borrar y mover un bot: cada usuario puede hacerlo SOLO con los suyos
   // (exigirBotPropio comprueba la fila antes de tocar nada).
   "eliminarBot",

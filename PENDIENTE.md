@@ -97,6 +97,41 @@ dinero baja). Por eso se queda el stop fijo.
   dejar de perder. Medir una estrategia de tendencia de verdad (un MACD con
   filtro de regimen, por ejemplo) es el siguiente paso, y se mide con el
   mismo protocolo.
+### B3. El carry: la unica estrategia que SUBE el margen (21-oct)
+
+**Que es**: comprar el **spot** y vender el **perpetuo**. El perpetuo cotiza
+por encima del spot, y esa diferencia (la cuota de financiacion, cada 8 h) se
+la paga el que esta vendido en el perpetuo. **No depende de que el precio suba
+o baje**: es cobertura, no adivinar.
+
+**Medido con los datos reales de Binance** (6.000 cuotas de financiacion,
+2021-05 -> 2026-10, 5,5 años):
+
+| Año | Cuotas cobradas | Anualizado |
+| --- | --- | --- |
+| 2021 | +9,76 % | 14,9 % |
+| 2022 | +4,16 % | 4,2 % |
+| 2023 | +7,87 % | 7,9 % |
+| 2024 | +11,96 % | 11,9 % |
+| 2025 | +5,13 % | 5,1 % |
+| 2026 (81 %) | +2,41 % | 3,0 % |
+| **Total** | **+41,28 %** | **6,51 %/año** |
+
+- El **carry completo** (spot + perp corto): **+41,48 % en 5,5 años = 6,54 %/año**.
+- **Positivo en TODOS los años**, incluso el peor (2026, 3,0 %).
+- El spot solo, en el mismo periodo: +49,59 %. El perpetuo solo: +49,39 %.
+- El "basis" (perp - spot) era del +0,09 % al principio y del -0,05 % al final.
+
+> **Es la unica estrategia medida que no depende de la direccion del precio** y
+> la unica que ha sido positiva todos los años. El resto (RSI, MACD,
+> precio de cierre) depende de acertar el movimiento, y con los indicadores
+> que hay no lo consigue: lo mejor que se ha medido es no perder.
+>
+> **Lo que falta para que sea un bot**: una cuenta con futuros (el motor ahora
+> solo compra spot en testnet) y un modo de dos patas en el motor (una
+> posicion larga en spot y una corta en el perpetuo a la vez, con el
+> mantenimiento de las dos). La app **ya lo muestra medido** en
+> _Mercados → Cobertura (carry)_, no prometido.
 ### B2. Los 13 mercados y el precio justo (21-oct)
 
 Se añADIERON seis mercados con sus velas (probados uno a uno, cada uno con su

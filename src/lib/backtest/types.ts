@@ -70,6 +70,21 @@ export type ConfigBacktest = {
    * de entrada (la perdida maxima pasa a ser 0). 0 = apagado.
    */
   breakEvenPct?: number;
+  /**
+   * Filtro de regimen: no se abre posicion si el regimen actual no es
+   * compatible con la estrategia (misma regla que el motor en vivo:
+   * src/lib/regimen.ts).
+   */
+  filtroRegimen?: {
+    /** Si esta apagado, el filtro no bloquea nada. */
+    activo: boolean;
+    /** Ventana (en velas) para medir la tendencia. */
+    ventana?: number;
+    /** Volatilidad (ATR %) por encima de la cual no se opera. */
+    umbralVolatilidadPct?: number;
+    /** Cambio minimo (%) para hablar de tendencia. */
+    umbralTendenciaPct?: number;
+  };
   /** Maximo de operaciones por dia (0 = sin limite). */
   maxOperacionesDia?: number;
   /**

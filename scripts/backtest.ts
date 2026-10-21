@@ -75,6 +75,18 @@ const config: ConfigBacktest = {
   ...(num("stop-atr", 0) > 0 ? { stopAtrMult: num("stop-atr", 0) } : {}),
   ...(num("trailing", 0) > 0 ? { trailingStopPct: num("trailing", 0) } : {}),
   ...(num("break-even", 0) > 0 ? { breakEvenPct: num("break-even", 0) } : {}),
+  ...(arg("filtro-regimen")
+    ? {
+        filtroRegimen: {
+          activo: true,
+          ...(num("regimen-ventana", 0) > 0 ? { ventana: num("regimen-ventana", 0) } : {}),
+          ...(num("regimen-vol", 0) > 0 ? { umbralVolatilidadPct: num("regimen-vol", 0) } : {}),
+          ...(num("regimen-tendencia", 0) > 0
+            ? { umbralTendenciaPct: num("regimen-tendencia", 0) }
+            : {}),
+        },
+      }
+    : {}),
   costes: {
     comision: num("comision", 0.001),
     slippage: num("slippage", 0.0005),
