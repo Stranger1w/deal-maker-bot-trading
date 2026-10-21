@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, Wallet } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { StatusPill, statusTone } from "@/components/StatusPill";
@@ -33,6 +33,7 @@ import { useSecuritySession } from "@/hooks/useSecuritySession";
 import { createDeposit } from "@/lib/dealmaker.functions";
 import { listarMetodosPago } from "@/lib/metodos-pago.functions";
 import { createSecureWithdrawal, saveCapitalPolicy } from "@/lib/risk.functions";
+import { saldoRealBinance } from "@/lib/saldo-binance.functions";
 import { dateTime, money } from "@/lib/format";
 import {
   auditQuery,
@@ -87,6 +88,15 @@ function FondosPage() {
   });
   const withdraw = useServerFn(createSecureWithdrawal);
   const savePolicy = useServerFn(saveCapitalPolicy);
+  // El saldo REAL de la cuenta de Binance (no la libreta interna).
+  const saldoBinanceFn = useServerFn(saldoRealBinance);
+  const [verSaldoReal, setVerSaldoReal] = useState(false);
+  const saldoReal = useQuery({
+    queryKey: ["saldo_real_binance"],
+    queryFn: () => saldoBinanceFn({}),
+    enabled: verSaldoReal,
+    staleTime: 60 * 1000,
+  });
 
   const [depositAmount, setDepositAmount] = useState("");
   const [depositMethod, setDepositMethod] = useState<Method>("transfer");
@@ -283,6 +293,92 @@ function FondosPage() {
         subtitle="Tesorería operativa: saldo libre, capital comprometido por bots activos y trazabilidad completa de cada movimiento."
       />
 
+      <Card className="border-primary/30 bg-primary/5">
+        <CardHeader>
+          <CardTitle className="flex flex-wrap items-center justify-between gap-3">
+            <span className="flex items-center gap-2">
+              <Wallet className="size-4 text-primary" /> Tu dinero en Binance (saldo real)
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setVerSaldoReal(true)}
+              disabled={saldoReal.isFetching}
+            >
+              {saldoReal.isFetching ? "Consultando…" : "Consultar saldo real"}
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          {saldoReal.data === undefined ? (
+            <p className="text-muted-foreground">
+              Las cifras de abajo son la <strong>libreta interna</strong> de la app (los depósitos y
+              retiros que anotas). Tu dinero de verdad está en tu cuenta de Binance: pulsa
+              «Consultar saldo real» y lo leemos en vivo con la clave, sin mover nada.
+            </p>
+          ) : saldoReal.data.ok ? (
+            <>
+              <p className="tabular text-3xl font-semibold">
+                {money(saldoReal.data.totalUsdt)}{" "}
+                <span className="text-sm font-normal text-muted-foreground">(estimado)</span>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Leído de Binance ahora mismo, en modo solo lectura · entorno:{" "}
+                {saldoReal.data.entorno}
+              </p>
+              {saldoReal.data.spot.length === 0 && saldoReal.data.futuros.length === 0 ? (
+                <p className="text-muted-foreground">No hay saldo en la cuenta.</p>
+              ) : (
+                <div className="space-y-2">
+                  {saldoReal.data.spot.map((s) => (
+                    <div
+                      key={s.activo}
+                      className="flex items-center justify-between gap-3 border-b border-border/60 pb-1 text-xs last:border-0"
+                    >
+                      <span className="font-medium">{s.activo}</span>
+                      <span className="tabular text-muted-foreground">
+                        {s.libre.toLocaleString("es-DO", { maximumFractionDigits: 8 })}
+                        {s.bloqueado > 0 ? ` (+${s.bloqueado} bloqueado)` : ""}
+                      </span>
+                      <span className="tabular w-28 text-right">
+                        {s.valor === null ? "—" : money(s.valor)}
+                      </span>
+                    </div>
+                  ))}
+                  {saldoReal.data.futuros.map((f) => (
+                    <div
+                      key={`fut-${f.activo}`}
+                      className="flex items-center justify-between gap-3 border-b border-border/60 pb-1 text-xs last:border-0"
+                    >
+                      <span className="font-medium">{f.activo} (futuros)</span>
+                      <span className="tabular text-muted-foreground">
+                        cartera {f.cartera.toLocaleString("es-DO", { maximumFractionDigits: 4 })}
+                      </span>
+                      <span className="tabular w-28 text-right">
+                        {money(f.cartera + f.pnlAbierto)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {saldoReal.data.futurosSinPermiso && (
+                <p className="text-xs text-warning">
+                  La clave no tiene permiso de futuros: no se ha podido consultar la cartera de
+                  perpetuos.
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Para sacar el dinero: entra en <strong>Binance</strong> (web o app) →{" "}
+                <strong>Wallet</strong> → <strong>Withdraw</strong>. La API key no necesita el
+                permiso de retiros para eso (de hecho, no lo tiene, y es a propósito).
+              </p>
+            </>
+          ) : (
+            <p className="text-destructive">{saldoReal.data.error}</p>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
@@ -415,9 +511,16 @@ function FondosPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Retiro</CardTitle>
+            <CardTitle>Retiro (registro interno)</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <p className="rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-muted-foreground">
+              <strong className="text-foreground">Esto no mueve dinero.</strong> Solo anota en la
+              libreta de la app que has pedido un retiro, para cuadrar tu tesorería. El dinero lo
+              sacas tú desde <strong>Binance</strong> (web o app → Wallet → Withdraw), que pide tu
+              2FA y tu lista de direcciones. La API key del bot no tiene permiso de retiros: es a
+              propósito, para que un robo de la clave no pueda vaciarte la cuenta.
+            </p>
             <div className="space-y-2">
               <Label htmlFor="wd-amount">Monto (USDT)</Label>
               <Input
@@ -427,7 +530,9 @@ function FondosPage() {
                 onChange={(e) => setWithdrawAmount(e.target.value)}
                 placeholder="500.00"
               />
-              <p className="text-xs text-muted-foreground">Disponible: {money(available)}</p>
+              <p className="text-xs text-muted-foreground">
+                Disponible (libreta): {money(available)}
+              </p>
             </div>
             <div className="space-y-2">
               <Label>Método</Label>
@@ -446,11 +551,11 @@ function FondosPage() {
             </div>
             <div className="rounded-md border border-border bg-secondary/40 px-3 py-2 text-xs">
               {session.twoFactorVerified ? (
-                <span className="text-success">2FA verificada: retiros habilitados.</span>
+                <span className="text-success">2FA verificada: puedes registrar el retiro.</span>
               ) : (
                 <span className="text-warning">
-                  Retiros bloqueados: inicia sesión y verifica tu segundo factor en “Acceso y 2FA”.
-                  No se acepta ningún código sin autenticación real.
+                  Registros bloqueados: inicia sesión y verifica tu segundo factor en “Acceso y
+                  2FA”. No se acepta ningún código sin autenticación real.
                 </span>
               )}
             </div>
@@ -460,7 +565,7 @@ function FondosPage() {
               className="w-full"
               disabled={!session.twoFactorVerified}
             >
-              Solicitar retiro
+              Registrar retiro en la libreta
             </Button>
           </CardContent>
         </Card>
@@ -587,10 +692,12 @@ function FondosPage() {
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirmar retiro</DialogTitle>
+            <DialogTitle>Confirmar el registro del retiro</DialogTitle>
             <DialogDescription>
-              Vas a retirar {money(Number(withdrawAmount || 0))} mediante{" "}
-              {methodLabels[withdrawMethod]}. Esta acción queda registrada en la auditoría.
+              Vas a <strong>registrar</strong> {money(Number(withdrawAmount || 0))} mediante{" "}
+              {methodLabels[withdrawMethod]} en la libreta interna.{" "}
+              <strong>No se mueve dinero desde aquí</strong>: el retiro real lo haces en Binance
+              (Wallet → Withdraw), con tu 2FA y tu lista de direcciones.
             </DialogDescription>
           </DialogHeader>
           <p className="rounded-md border border-border bg-secondary/40 px-3 py-2 text-xs text-muted-foreground">

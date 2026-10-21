@@ -193,6 +193,15 @@ llame a `POST /api/public/automation-tick` con `Authorization: Bearer
   confunda otra vez.
 - **Fase 7**: re-cifrar las credenciales y apagar flags definitivos. Dime
   cuándo y lo hacemos.
+- **¿Cómo se retira el dinero?** (21-oct) Desde **Binance** (web o app →
+  Wallet → Withdraw), nunca desde la app. Por eso la API key **no** lleva el
+  permiso «Enable Withdrawals»: si se lo filtran, cualquiera puede vaciarte
+  la cuenta sin 2FA. La app solo **anota** el retiro en su libreta interna
+  (la tarjeta ahora lo dice, para que no se confunda). Además, en _Fondos_
+  hay una tarjeta nueva: **«Consultar saldo real»**, que lee la cuenta de
+  Binance en vivo (solo lectura) y te dice cuánto dinero tienes de verdad,
+  activo por activo y con su valor en USDT. Antes solo se veía la libreta
+  interna, que no es el dinero real.
 - **¿Minamos?** El enjambre está encendido y dice la verdad: **−0,70 USD/día**.
   Si no lo quieres: _Minería → Detener enjambre_.
 
