@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { buscarEstrategia } from "./strategies/index";
 import { ejecutarBacktest } from "./backtest/engine";
+import { backtestAleatorio, compararConAleatoria } from "./backtest/aleatorio";
 import type { ConfigBacktest, Vela } from "./backtest/types";
 
 /** Velas sinteticas SOLO para el test (aqui no se mide nada: se comprueba
@@ -85,5 +86,48 @@ describe("motor de backtest (el mismo que usa el sandbox y el motor en vivo)", (
     };
     const r = ejecutarBacktest(velas(400), config);
     expect(Number.isFinite(r.metricas.retornoNetoPct)).toBe(true);
+  });
+});
+
+describe("referencia aleatoria (el sandbox mide si hay ventaja o es azar)", () => {
+  const config: ConfigBacktest = {
+    capitalInicial: 1000,
+    fraccionPorOperacion: 0.02,
+    stopLossPct: 2,
+    takeProfitPct: 4,
+    costes: { comision: 0.001, slippage: 0.0005, descuentoBnb: 0 },
+    indicadores: ["close_price"],
+  };
+
+  test("la referencia aleatoria es determinista (misma semilla, mismo resultado)", () => {
+    const a = backtestAleatorio(velas(400), config, 1234);
+    const b = backtestAleatorio(velas(400), config, 1234);
+    expect(a).toBe(b);
+  });
+
+  test("el percentil dice si la estrategia gana al azar", () => {
+    // Una estrategia que gana al 90 % de las aleatorias.
+    const aleatorios = [-1, -2, -3, -4, -5, -6, -7, -8, -9, 0];
+    const ref = compararConAleatoria(5, aleatorios);
+    expect(ref.ejecuciones).toBe(10);
+    expect(ref.percentil).toBe(100);
+    expect(ref.mejorQueLaMayoria).toBe(true);
+    expect(ref.veredicto).toContain("azar");
+  });
+
+  test("una estrategia en el tercio bajo no se distingue del azar", () => {
+    const aleatorios = [-10, -8, -6, -4, -2, 0, 2, 4, 6, 8];
+    // -6 solo gana a 3 de las 10 aleatorias (incluida ella): percentil 30.
+    const ref = compararConAleatoria(-6, aleatorios);
+    expect(ref.percentil).toBe(30);
+    expect(ref.mejorQueLaMayoria).toBe(false);
+    expect(ref.veredicto).toContain("azar");
+  });
+
+  test("sin referencia aleatoria no se concluye nada", () => {
+    const ref = compararConAleatoria(5, []);
+    expect(ref.ejecuciones).toBe(0);
+    expect(ref.mejorQueLaMayoria).toBe(false);
+    expect(ref.veredicto).toContain("no se puede concluir");
   });
 });

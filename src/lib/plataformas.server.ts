@@ -117,10 +117,10 @@ async function binance(
   simbolo: string,
   intervalo: string,
   limite: number,
+  hasta: number,
 ) {
   const host = marca === "futuros" ? "https://fapi.binance.com" : "https://api.binance.com";
   const ruta = marca === "futuros" ? "/fapi/v1/klines" : "/api/v3/klines";
-  const hasta = Date.now();
   const desde = hasta - limite * ms(intervalo);
   const url =
     `${host}${ruta}?symbol=${encodeURIComponent(simbolo)}&interval=${INTERVALOS[intervalo]}` +
@@ -144,7 +144,7 @@ async function binance(
 
 /* ------------------------------- BYBIT ------------------------------- */
 
-async function bybit(simbolo: string, intervalo: string, limite: number) {
+async function bybit(simbolo: string, intervalo: string, limite: number, hasta: number) {
   const minutos = Math.max(1, Math.round(ms(intervalo) / 60_000));
   const intervaloBybit = [
     "1",
@@ -164,7 +164,7 @@ async function bybit(simbolo: string, intervalo: string, limite: number) {
     : "60";
   const url =
     `https://api.bybit.com/v5/market/kline?category=linear&symbol=${encodeURIComponent(simbolo)}` +
-    `&interval=${intervaloBybit}&limit=${Math.min(1000, limite)}`;
+    `&interval=${intervaloBybit}&limit=${Math.min(1000, limite)}&end=${hasta}`;
   const cuerpo = (await getJson(url)) as { result?: { list?: unknown[][] } } | null;
   const lista = cuerpo?.result?.list;
   if (!Array.isArray(lista)) return null;
@@ -186,7 +186,7 @@ async function bybit(simbolo: string, intervalo: string, limite: number) {
 
 /* -------------------------------- OKX -------------------------------- */
 
-async function okx(simbolo: string, intervalo: string, limite: number) {
+async function okx(simbolo: string, intervalo: string, limite: number, hasta: number) {
   const barras: Record<string, string> = {
     "1m": "1m",
     "3m": "3m",
@@ -202,7 +202,7 @@ async function okx(simbolo: string, intervalo: string, limite: number) {
   };
   const barra = barras[intervalo] ?? "1H";
   const instId = simbolo.includes("-") ? simbolo : simbolo.replace("USDT", "-USDT");
-  const url = `https://www.okx.com/api/v5/market/candles?instId=${encodeURIComponent(instId)}&bar=${barra}&limit=${Math.min(300, limite)}`;
+  const url = `https://www.okx.com/api/v5/market/candles?instId=${encodeURIComponent(instId)}&bar=${barra}&limit=${Math.min(300, limite)}&after=${hasta}`;
   const cuerpo = (await getJson(url)) as { data?: unknown[][] } | null;
   const lista = cuerpo?.data;
   if (!Array.isArray(lista)) return null;
@@ -224,7 +224,7 @@ async function okx(simbolo: string, intervalo: string, limite: number) {
 
 /* ---------------------------- KRAKEN / COINBASE ---------------------------- */
 
-async function kraken(simbolo: string, intervalo: string, limite: number) {
+async function kraken(simbolo: string, intervalo: string, limite: number, hasta: number) {
   const minutos = Math.max(1, Math.round(ms(intervalo) / 60_000));
   const intervaloKraken = [1, 5, 15, 30, 60, 240, 1440, 10080].includes(minutos) ? minutos : 60;
   const par = simbolo.includes("/")
@@ -255,13 +255,13 @@ async function kraken(simbolo: string, intervalo: string, limite: number) {
   return velas.length ? velas.slice(-limite) : null;
 }
 
-async function coinbase(simbolo: string, intervalo: string, limite: number) {
+async function coinbase(simbolo: string, intervalo: string, limite: number, hasta: number) {
   // OJO: Coinbase quiere la granularidad en SEGUNDOS (no en ms).
   const granularidad = Math.max(60, Math.round(ms(intervalo) / 1000));
   const producto = simbolo.includes("-")
     ? simbolo
     : simbolo.replace("USDT", "-USD").replace("BTC", "BTC");
-  const url = `https://api.exchange.coinbase.com/products/${encodeURIComponent(producto)}/candles?granularity=${granularidad}`;
+  const url = `https://api.exchange.coinbase.com/products/${encodeURIComponent(producto)}/candles?granularity=${granularidad}&end=${new Date(hasta).toISOString()}`;
   const cuerpo = await getJson(url);
   if (!Array.isArray(cuerpo)) return null;
   const velas: Vela[] = [];
@@ -282,7 +282,7 @@ async function coinbase(simbolo: string, intervalo: string, limite: number) {
 
 /* ---------------------------- HYPERLIQUID ---------------------------- */
 
-async function hyperliquid(simbolo: string, intervalo: string, limite: number) {
+async function hyperliquid(simbolo: string, intervalo: string, limite: number, hasta: number) {
   // Hyperliquid usa el nombre de la moneda sin la divisa ("BTC", no "BTCUSDT")
   // y sus intervalos son propios ("1h", "4h"...).
   const moneda = simbolo.replace(/USDT$|USD$/, "");
@@ -303,7 +303,7 @@ async function hyperliquid(simbolo: string, intervalo: string, limite: number) {
   };
   const periodo = intervalos[intervalo] ?? "1h";
   const paso = ms(intervalo);
-  const inicio = Date.now() - limite * paso;
+  const inicio = hasta - limite * paso;
   const cuerpo = await getJson("https://api.hyperliquid.xyz/info", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -339,19 +339,22 @@ export async function descargarDePlataforma(
   simbolo: string,
   intervalo: string,
   limite: number,
+  hasta?: number,
 ): Promise<DescargaPlataforma | null> {
   // OJO: cada adaptador convierte el simbolo a su formato. No se convierte
   // antes (si no, se aplicaria dos veces: "BTC-USDT" -> "BTC--USDT").
   let velas: Vela[] | null = null;
   try {
-    if (plataforma.id === "binance") velas = await binance("spot", simbolo, intervalo, limite);
+    const fin = hasta ?? Date.now();
+    if (plataforma.id === "binance") velas = await binance("spot", simbolo, intervalo, limite, fin);
     else if (plataforma.id === "binance-futuros")
-      velas = await binance("futuros", simbolo, intervalo, limite);
-    else if (plataforma.id === "bybit") velas = await bybit(simbolo, intervalo, limite);
-    else if (plataforma.id === "okx") velas = await okx(simbolo, intervalo, limite);
-    else if (plataforma.id === "kraken") velas = await kraken(simbolo, intervalo, limite);
-    else if (plataforma.id === "coinbase") velas = await coinbase(simbolo, intervalo, limite);
-    else if (plataforma.id === "hyperliquid") velas = await hyperliquid(simbolo, intervalo, limite);
+      velas = await binance("futuros", simbolo, intervalo, limite, fin);
+    else if (plataforma.id === "bybit") velas = await bybit(simbolo, intervalo, limite, fin);
+    else if (plataforma.id === "okx") velas = await okx(simbolo, intervalo, limite, fin);
+    else if (plataforma.id === "kraken") velas = await kraken(simbolo, intervalo, limite, fin);
+    else if (plataforma.id === "coinbase") velas = await coinbase(simbolo, intervalo, limite, fin);
+    else if (plataforma.id === "hyperliquid")
+      velas = await hyperliquid(simbolo, intervalo, limite, fin);
   } catch {
     velas = null;
   }
@@ -370,13 +373,19 @@ export async function descargarVelasMultiplataforma(
   simbolo: string,
   intervalo: string,
   limite: number,
-  opciones: { mercado?: "spot" | "futuros"; excluir?: string[] } = {},
+  opciones: { mercado?: "spot" | "futuros"; excluir?: string[]; hasta?: number } = {},
 ): Promise<DescargaPlataforma | null> {
   const mercado = opciones.mercado ?? "futuros";
   const excluir = new Set(opciones.excluir ?? []);
   const candidatas = PLATAFORMAS.filter((p) => p.mercado === mercado && !excluir.has(p.id));
   for (const plataforma of candidatas) {
-    const descarga = await descargarDePlataforma(plataforma, simbolo, intervalo, limite);
+    const descarga = await descargarDePlataforma(
+      plataforma,
+      simbolo,
+      intervalo,
+      limite,
+      opciones.hasta,
+    );
     if (descarga) return descarga;
   }
   return null;

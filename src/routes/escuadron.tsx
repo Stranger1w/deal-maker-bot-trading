@@ -1588,6 +1588,8 @@ function TrainingTab() {
                         "backtestReal"
                       ] as
                         | {
+                            desde?: string;
+                            hasta?: string;
                             velas?: number;
                             operaciones?: number;
                             profitFactor?: number;
@@ -1595,6 +1597,13 @@ function TrainingTab() {
                             benchmarkPct?: number;
                             superaBenchmark?: boolean;
                             avisos?: string[];
+                            referencia?: {
+                              ejecuciones?: number;
+                              percentil?: number;
+                              medianaPct?: number;
+                              veredicto?: string;
+                              mejorQueLaMayoria?: boolean;
+                            } | null;
                           }
                         | undefined;
                       return (
@@ -1612,6 +1621,9 @@ function TrainingTab() {
                           {real && (
                             <>
                               <p className="tabular text-[11px] text-muted-foreground">
+                                {real.desde && real.hasta
+                                  ? `Periodo medido: ${real.desde.slice(0, 10)} → ${real.hasta.slice(0, 10)} · `
+                                  : ""}
                                 {real.velas} velas · {real.operaciones} operaciones · PF{" "}
                                 {real.profitFactor} · costes {real.costePct} % · comprar y mantener{" "}
                                 {real.benchmarkPct} %{" "}
@@ -1619,6 +1631,13 @@ function TrainingTab() {
                                   ? "(lo supera)"
                                   : "(NO lo supera: sin ventaja sobre el mercado)"}
                               </p>
+                              {real.referencia && (real.referencia.ejecuciones ?? 0) > 0 && (
+                                <p className="tabular text-[11px] text-muted-foreground">
+                                  Contra {real.referencia.ejecuciones} estrategias con la señal al
+                                  azar: gana al {real.referencia.percentil} % de ellas (mediana{" "}
+                                  {real.referencia.medianaPct} %).
+                                </p>
+                              )}
                               {real.avisos && real.avisos.length > 0 && (
                                 <ul className="space-y-0.5 text-[11px] text-warning">
                                   {real.avisos.map((a) => (

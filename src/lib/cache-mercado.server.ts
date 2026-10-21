@@ -52,14 +52,19 @@ async function leerCache(
   simbolo: string,
   intervalo: string,
   limite: number,
+  hasta?: number,
 ): Promise<Vela[]> {
-  const { data, error } = await db
+  let consulta = db
     .from("market_candles")
     .select("time,open,high,low,close,volume,source")
     .eq("symbol", simbolo.toUpperCase())
     .eq("interval", intervalo)
     .order("time", { ascending: false })
     .limit(limite);
+  // Con "hasta" se pide un tramo historico concreto: el sandbox tiene que
+  // medir el periodo que eligio el dueno, no los ultimos minutos.
+  if (hasta !== undefined) consulta = consulta.lte("time", hasta);
+  const { data, error } = await consulta;
   if (error || !data) return [];
   const velas = (
     data as Array<{
@@ -143,13 +148,15 @@ export async function velasConCache(
   opciones: {
     mercado?: "spot" | "futuros";
     refrescar?: boolean;
+    /** Final del tramo historico pedido (epoch ms). Sin esto, los ultimos. */
+    hasta?: number;
     /** Plataformas ya probadas (para comparar entre varias). */
     excluir?: string[];
   } = {},
 ): Promise<ResultadoCache> {
   const mercado = opciones.mercado ?? "futuros";
   const conCache = !opciones.refrescar && (await cacheDisponible(db));
-  const cacheadas = conCache ? await leerCache(db, simbolo, intervalo, limite) : [];
+  const cacheadas = conCache ? await leerCache(db, simbolo, intervalo, limite, opciones.hasta) : [];
 
   const paso = (() => {
     const ms = intervalo === "1d" ? 86_400_000 : intervalo === "4h" ? 14_400_000 : 3_600_000;
@@ -157,24 +164,59 @@ export async function velasConCache(
   })();
 
   const ahora = Date.now();
+  // Si se pide un tramo historico concreto, el "faltante" se mide contra el
+  // FINAL de ese tramo, no contra ahora: si no, se descargarian los ultimos
+  // minutos y se mezclarian con el periodo pedido.
+  const referencia = opciones.hasta ?? ahora;
   const ultimaEnCache = cacheadas.length ? cacheadas[cacheadas.length - 1]!.time : 0;
   // Quantas velas nuevas hacen falta (como mucho las que pidas).
-  const faltan = Math.max(0, Math.min(limite, Math.ceil((ahora - ultimaEnCache) / paso)));
+  const faltan = Math.max(0, Math.min(limite, Math.ceil((referencia - ultimaEnCache) / paso)));
 
   let descargadas: Vela[] = [];
   let plataformas: string[] = [];
+  const opcionesDescarga = {
+    mercado,
+    ...(opciones.hasta !== undefined ? { hasta: opciones.hasta } : {}),
+    ...(opciones.excluir ? { excluir: opciones.excluir } : {}),
+  };
   if (faltan > 0) {
     const descarga: DescargaPlataforma | null = await descargarVelasMultiplataforma(
       simbolo,
       intervalo,
       Math.max(faltan, Math.min(limite, 200)),
-      { mercado, ...(opciones.excluir ? { excluir: opciones.excluir } : {}) },
+      opcionesDescarga,
     );
     if (descarga) {
       descargadas = descarga.velas;
       plataformas = [descarga.plataforma.nombre];
       if (conCache) {
         await guardarCache(db, simbolo, intervalo, descargadas, descarga.plataforma, mercado);
+      }
+    }
+  }
+
+  // Si se pide un tramo historico, puede faltar el PRINCIPIO del tramo:
+  // la cache guardo las velas del medio y el principio nunca se descargo.
+  // Sin esto, el sandbox mediria un periodo mas corto del pedido.
+  if (opciones.hasta !== undefined) {
+    const inicioEsperado = opciones.hasta - limite * paso;
+    const primeraEnCache = cacheadas.length ? cacheadas[0]!.time : 0;
+    const faltanInicio = Math.max(0, Math.ceil((primeraEnCache - inicioEsperado) / paso));
+    if (faltanInicio > 0) {
+      const descarga: DescargaPlataforma | null = await descargarVelasMultiplataforma(
+        simbolo,
+        intervalo,
+        Math.min(faltanInicio, limite),
+        { ...opcionesDescarga, hasta: primeraEnCache - paso },
+      );
+      if (descarga) {
+        descargadas = [...descarga.velas, ...descargadas];
+        if (!plataformas.includes(descarga.plataforma.nombre)) {
+          plataformas.push(descarga.plataforma.nombre);
+        }
+        if (conCache) {
+          await guardarCache(db, simbolo, intervalo, descarga.velas, descarga.plataforma, mercado);
+        }
       }
     }
   }

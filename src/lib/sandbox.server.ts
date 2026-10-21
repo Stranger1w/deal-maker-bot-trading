@@ -18,6 +18,8 @@
  */
 
 import { ejecutarBacktest } from "./backtest/engine";
+import { backtestAleatorio, compararConAleatoria } from "./backtest/aleatorio";
+import type { ReferenciaAleatoria } from "./backtest/aleatorio";
 import type { ConfigBacktest } from "./backtest/types";
 import { buscarEstrategia } from "./strategies/index";
 import { velasDeBinance } from "./velas.server";
@@ -36,6 +38,9 @@ export type EvaluacionUsada = {
 
 /** Con datos de verdad: todas las cifras son numeros. */
 export type EvaluacionConDatos = {
+  /** Periodo realmente medido (ISO): el sandbox tiene que decir que midio. */
+  desde: string;
+  hasta: string;
   sinDatos: false;
   simbolo: string;
   velas: number;
@@ -49,12 +54,16 @@ export type EvaluacionConDatos = {
   superaBenchmark: boolean;
   /** Lo que el resultado NO demuestra (los avisos del motor). */
   avisos: string[];
+  /** Comparacion con la MISMA estrategia pero con la senal al azar. */
+  referencia: ReferenciaAleatoria | null;
   motivo: null;
   usado: EvaluacionUsada;
 };
 
 /** Sin datos: no se inventa nada y se dice por que. */
 export type EvaluacionSinDatos = {
+  desde: string;
+  hasta: string;
   sinDatos: true;
   simbolo: string;
   velas: number;
@@ -67,6 +76,7 @@ export type EvaluacionSinDatos = {
   benchmarkPct: null;
   superaBenchmark: null;
   avisos: string[];
+  referencia: ReferenciaAleatoria | null;
   motivo: string;
   usado: EvaluacionUsada;
 };
@@ -77,7 +87,6 @@ type Args = {
   simbolo: string;
   intervalo: string;
   limite: number;
-  hasta: number;
   capital: number;
   stopLossPct: number;
   takeProfitPct: number;
@@ -85,6 +94,11 @@ type Args = {
   indicadores: string[];
   /** Ignora la cache local y vuelve a descargar (boton "actualizar"). */
   refrescar?: boolean;
+  /**
+   * Final del periodo a medir (epoch ms). Sin esto se mediria "ahora" en
+   * vez del tramo que eligio el dueno.
+   */
+  hasta?: number;
 };
 
 /**
@@ -119,6 +133,7 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
       // Con datos de traders, el precio es de FUTUROS: si no, se mezclarian
       // precios de spot con flujo de futuros.
       mercado: conTraders ? "futuros" : "spot",
+      ...(args.hasta !== undefined ? { hasta: args.hasta } : {}),
       ...(args.refrescar ? { refrescar: true } : {}),
     });
     velas = cache.velas;
@@ -134,6 +149,8 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
   if (!velas.length) {
     return {
       simbolo,
+      desde: "",
+      hasta: "",
       velas: 0,
       operaciones: 0,
       retornoPct: null,
@@ -144,6 +161,7 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
       benchmarkPct: null,
       superaBenchmark: null,
       avisos: [],
+      referencia: null,
       sinDatos: true,
       motivo:
         motivo ??
@@ -201,6 +219,8 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
     return {
       sinDatos: true,
       simbolo,
+      desde: velas.length ? new Date(velas[0]!.time).toISOString() : "",
+      hasta: velas.length ? new Date(velas[velas.length - 1]!.time).toISOString() : "",
       velas: resultado.velas,
       operaciones: 0,
       retornoPct: null,
@@ -211,31 +231,52 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
       benchmarkPct: null,
       superaBenchmark: null,
       avisos: resultado.avisos,
+      referencia: null,
       motivo: `Con estos parametros no se cerro ninguna operacion en ${resultado.velas} velas: no hay resultado que mostrar.`,
       usado,
     };
   }
 
-  // Aviso propio: en un mercado que BAJA, "perder menos que comprar y
-  // mantener" no es tener ventaja: los dos pierden. Sin esta frase, el
-  // "supera al benchmark" se lee como una buena noticia que no lo es.
-  const avisos = [...resultado.avisos];
-  if (resultado.benchmark.superar && resultado.benchmark.retornoPct < 0) {
-    avisos.push(
-      `Perdio menos que comprar y mantener (que cayo ${Math.abs(resultado.benchmark.retornoPct).toFixed(2)} %), ` +
-        `pero los dos pierden: en un mercado a la baja, perder menos NO es tener ventaja.`,
-    );
+  // La REFERENCIA ALEATORIA: la misma estrategia pero con la senal al azar.
+  // Sin esto, un bot puede 'ganar' por suerte durante un mes.
+  // 20 ejecuciones: suficiente para saber si hay ventaja o es azar.
+  const EJECUCIONES_ALEATORIAS = 20;
+  const aleatorios: number[] = [];
+  for (let i = 0; i < EJECUCIONES_ALEATORIAS; i++) {
+    try {
+      aleatorios.push(
+        backtestAleatorio(velas, config, 1000 + i, { operacionesObjetivo: m.operaciones }),
+      );
+    } catch {
+      // Si una ejecucion falla, se sigue con las que hayan salido.
+      break;
+    }
   }
+  const referencia = compararConAleatoria(m.retornoNetoPct, aleatorios);
+
+  // Avisos: los del motor (que ya dicen lo de "perder menos no es ventaja")
+  // mas los propios del sandbox. Se deduplican para no repetir la misma
+  // frase dos veces.
+  const avisos = [...new Set(resultado.avisos)];
   if (m.retornoNetoPct <= 0) {
     avisos.push(
       `El resultado es negativo (${m.retornoNetoPct.toFixed(2)} %): con estos parametros, en este periodo, ` +
         `perdia dinero despues de costes.`,
     );
   }
+  if (referencia.ejecuciones > 0 && !referencia.mejorQueLaMayoria) {
+    avisos.push(
+      "Referencia aleatoria: " +
+        referencia.veredicto +
+        " (20 ejecuciones con la misma estrategia pero la senal al azar).",
+    );
+  }
 
   return {
     sinDatos: false,
     simbolo,
+    desde: velas.length ? new Date(velas[0]!.time).toISOString() : "",
+    hasta: velas.length ? new Date(velas[velas.length - 1]!.time).toISOString() : "",
     velas: resultado.velas,
     operaciones: m.operaciones,
     retornoPct: Number(m.retornoNetoPct.toFixed(2)),
@@ -246,6 +287,7 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
     benchmarkPct: Number(resultado.benchmark.retornoPct.toFixed(2)),
     superaBenchmark: resultado.benchmark.superar,
     avisos,
+    referencia,
     motivo: null,
     usado,
   };

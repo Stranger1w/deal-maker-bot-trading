@@ -563,6 +563,8 @@ export const runSandbox = createServerFn({ method: "POST" })
         simbolo,
         intervalo: "1h",
         limite: limiteVelas,
+        // El periodo que eligio el dueno en el sandbox: sin esto se
+        // medirian los ultimos minutos, no el rango pedido.
         hasta: hasta || Date.now(),
         capital: Number(bot.capital ?? 1000),
         stopLossPct: Number(bot.stop_loss_pct ?? 2),
@@ -590,6 +592,8 @@ export const runSandbox = createServerFn({ method: "POST" })
           symbol: simbolo,
           layer: MARKET_DATA_LAYER_VERSION,
           backtestReal: {
+            desde: evaluacion.desde,
+            hasta: evaluacion.hasta,
             velas: evaluacion.velas,
             operaciones: evaluacion.operaciones,
             profitFactor: evaluacion.profitFactor,
@@ -600,6 +604,7 @@ export const runSandbox = createServerFn({ method: "POST" })
             indicadores: indicadoresPlataforma,
             intervalo: "1h",
             avisos: evaluacion.avisos,
+            referencia: evaluacion.referencia,
           },
         },
       });
