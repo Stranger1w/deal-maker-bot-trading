@@ -10,6 +10,7 @@ import {
   hashRateRedDesdeDificultad,
   recompensaDiariaRed,
   repartirHashRate,
+  usdHonesto,
   workersActivos,
   type HashRatePropio,
   type RedMoneda,
@@ -145,6 +146,15 @@ describe("balance diario (lo que cuenta el enjambre son las GANANCIAS)", () => {
     const balance = balanceDiario(hashDe(3e6), RED, 65, 0.15, 5);
     expect(balance.comisionUsd).toBeCloseTo(balance.brutoUsd * 0.99, 12);
     expect(balance.gananciaUsd).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("formato honesto de las cifras minusculas", () => {
+  test("una cifra que no cabe en 8 decimales dice 'menor que', no 0,00000000", () => {
+    // La comision del 0,5 % sobre 3e-08 USD al dia: no es cero.
+    expect(usdHonesto(1.5e-10)).toBe("< 0,00000001 USD");
+    expect(usdHonesto(0)).toBe("0,00 USD");
+    expect(usdHonesto(0.00000003)).toBe("0,00000003 USD");
   });
 });
 

@@ -148,6 +148,25 @@ export type Balance = {
 };
 
 /** Calcula el balance diario de un equipo. */
+/**
+ * Formato honesto de una cifra en USD.
+ *
+ * Un PC de casa gana 0,00000003 USD al dia: con 8 decimales sale
+ * «0,00000003», pero la comision del pool (0,5 % de eso) sale
+ * «0,00000000», que parece cero y NO es cero. Cuando la cifra es
+ * menor que lo que se puede escribir, se dice «menor que».
+ */
+export function usdHonesto(valor: number, decimales = 8): string {
+  const v = Number(valor ?? 0);
+  if (!Number.isFinite(v)) return "—";
+  if (v === 0) return "0,00 USD";
+  const minimo = Math.pow(10, -decimales);
+  if (Math.abs(v) < minimo) {
+    return `< ${minimo.toFixed(decimales).replace(".", ",")} USD`;
+  }
+  return v.toFixed(decimales).replace(".", ",") + " USD";
+}
+
 export function balanceDiario(
   hashPropio: HashRatePropio,
   red: RedMoneda | null,
@@ -173,9 +192,9 @@ export function balanceDiario(
     veredicto =
       "Tu hash rate es una fraccion de la red: la recompensa diaria te da cero. No hay ganancia posible con esta maquina.";
   } else {
-    veredicto = "Ganas " + gananciaUsd.toFixed(8) + " USD al dia con tu hash rate";
+    veredicto = "Ganas " + usdHonesto(gananciaUsd) + " al dia con tu hash rate";
     if (comisionUsd > 0) {
-      veredicto += " (el pool se lleva " + comisionUsd.toFixed(8) + " USD)";
+      veredicto += " (el pool se lleva " + usdHonesto(comisionUsd) + ")";
     }
     veredicto += ".";
     if (laLuzSeLoCome) {

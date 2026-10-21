@@ -52,7 +52,13 @@ export function medirHashRateMaquina(milisegundos = 1200): {
     };
   }
 
-  const muestras = medirHashes(milisegundos);
+  // Dos rondas, la mejor: si el PC esta ocupado, la primera medida sale
+  // bajisima y envenenaba la cache (el enjambre arrive a 36 KH/s cuando
+  // la maquina da 1,6 MH/s).
+  const duracionRonda = Math.max(300, Math.floor(milisegundos / 2));
+  const primera = medirHashes(duracionRonda);
+  const segunda = medirHashes(duracionRonda);
+  const muestras = segunda.hashPorSegundo >= primera.hashPorSegundo ? segunda : primera;
   const hashPorSegundo = muestras.hashPorSegundo;
   cache = { hashPorSegundo, medidoAt: ahora, muestras: muestras.hashes };
 

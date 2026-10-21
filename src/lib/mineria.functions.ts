@@ -38,8 +38,8 @@ export const estadoMineria = createServerFn({ method: "POST" })
     // y 20261028000000): si faltan, se leen las antiguas y la app lo avisa,
     // pero sigue funcionando.
     const columnas = [
-      "id,user_id,name,coin,pool,rig_id,status,hash_rate,hash_unit,uptime_seconds,estimated_daily_earnings,last_seen_at,power_watts,gross_daily_usd,net_daily_usd,network_config,pool_fee_pct,hash_rate_sostenido",
-      "id,user_id,name,coin,pool,rig_id,status,hash_rate,hash_unit,uptime_seconds,estimated_daily_earnings,last_seen_at,power_watts,gross_daily_usd,net_daily_usd,network_config",
+      "id,user_id,name,coin,pool,rig_id,status,hash_rate,hash_unit,uptime_seconds,estimated_daily_earnings,last_seen_at,power_watts,gross_daily_usd,net_daily_usd,network_config,pool_fee_pct,hash_rate_sostenido,hilos",
+      "id,user_id,name,coin,pool,rig_id,status,hash_rate,hash_unit,uptime_seconds,estimated_daily_earnings,last_seen_at,power_watts,gross_daily_usd,net_daily_usd,network_config,hilos",
       "id,user_id,name,coin,pool,rig_id,status,hash_rate,hash_unit,uptime_seconds,estimated_daily_earnings",
     ];
     let filas: unknown[] = [];
@@ -81,6 +81,7 @@ export const estadoMineria = createServerFn({ method: "POST" })
       network_config: Record<string, string | number | undefined> | null;
       pool_fee_pct?: number | null;
       hash_rate_sostenido?: number | null;
+      hilos?: number | null;
     }>;
 
     // Precio del kWh (columna nueva; si no esta, el valor por defecto).
@@ -92,24 +93,37 @@ export const estadoMineria = createServerFn({ method: "POST" })
     const precioKwh = Number((ajustes ?? [])[0]?.mineria_kwh_usd ?? 0) || PRECIO_KWH_POR_DEFECTO;
 
     const activos = workersActivos(filasTipadas);
-    const hashPorWorker = repartirHashRate(hashMaquina, activos);
+
+    // El reparto: la CAPACIDAD REAL de la maquina (multihilo, SHA-256 de
+    // verdad con workers reales) dividida segun los hilos de cada equipo.
+    // Antes se usaba el hash rate de UN solo hilo: el numero salia entre 4
+    // y 5 veces mas bajo de lo que la maquina da de verdad.
+    const { medirCapacidad, repartirPorHilos } = await import("./mineria/entrenamiento");
+    const hilosPorWorker = filasTipadas
+      .filter((w) => w.status === "mining")
+      .map((w) => Math.max(1, Number(w.hilos ?? 1)));
+    const hilosTotales = hilosPorWorker.reduce((s, h) => s + h, 0);
+    const capacidad = await medirCapacidad(hilosTotales, 8000);
+    const hashPorWorker = repartirPorHilos(capacidad.hashPorSegundo, hilosPorWorker);
+    const hashDeWorker = (indice: number) => hashPorWorker[indice] ?? 0;
 
     const workers = [];
     let brutoTotal = 0;
     let luzTotal = 0;
     let netoTotal = 0;
 
-    for (const w of filasTipadas) {
+    for (const [indice, w] of filasTipadas.entries()) {
       const config = (w.network_config ?? null) as Parameters<typeof obtenerRed>[1];
       const red = await obtenerRed(w.coin, config);
       const watts = Number(w.power_watts ?? 0) || 65;
       const esActivo = w.status === "mining";
+      const hashDeEste = esActivo ? hashDeWorker(indice) : 0;
       const balance = balanceDiario(
         {
-          hashPorSegundo: esActivo ? hashPorWorker : 0,
-          hashPorSegundoRed: aUnidadLegible(esActivo ? hashPorWorker : 0).valor,
-          hashPorSegundoHashes: esActivo ? hashPorWorker : 0,
-          unidad: aUnidadLegible(esActivo ? hashPorWorker : 0).unidad,
+          hashPorSegundo: hashDeEste,
+          hashPorSegundoRed: aUnidadLegible(hashDeEste).valor,
+          hashPorSegundoHashes: hashDeEste,
+          unidad: aUnidadLegible(hashDeEste).unidad,
         },
         red,
         watts,
@@ -129,8 +143,8 @@ export const estadoMineria = createServerFn({ method: "POST" })
         pool: w.pool,
         rigId: w.rig_id,
         status: w.status,
-        hashRate: esActivo ? aUnidadLegible(hashPorWorker).valor : 0,
-        hashUnit: aUnidadLegible(esActivo ? hashPorWorker : 0).unidad,
+        hashRate: aUnidadLegible(hashDeEste).valor,
+        hashUnit: aUnidadLegible(hashDeEste).unidad,
         uptimeSegundos: Number(w.uptime_seconds ?? 0),
         potenciaWatts: watts,
         poolFeePct: Number(w.pool_fee_pct ?? 0),

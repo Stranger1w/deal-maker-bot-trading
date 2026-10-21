@@ -267,7 +267,7 @@ export async function ultimoEntrenamiento(
  * Con cache: medir cuesta CPU de verdad (y el motor lo llama cada minuto),
  * asi que la medicion se reutiliza durante unos minutos.
  */
-const CACHE_CAPACIDAD_MS = 10 * 60 * 1000;
+const CACHE_CAPACIDAD_MS = 5 * 60 * 1000;
 const cacheCapacidad = new Map<
   number,
   { medicion: Awaited<ReturnType<typeof medirHashRateHilos>>; at: number }
@@ -277,7 +277,18 @@ export async function medirCapacidad(hilos: number, duracionMs = 1200) {
   const n = Math.max(1, Math.min(Math.round(hilos), nucleosDisponibles()));
   const guardado = cacheCapacidad.get(n);
   if (guardado && Date.now() - guardado.at < CACHE_CAPACIDAD_MS) return guardado.medicion;
-  const medicion = await medirHashRateHilos(n, duracionMs);
+
+  // DOS rondas y se queda con la mejor.
+  // Si el PC esta ocupado (una compilacion, el antivirus, el navegador
+  // tragandose CPU...), la primera medida sale bajisima y envenenaba el
+  // cache 10 minutos: el enjambre arrive a 36 KH/s cuando la maquina de
+  // verdad da 1,6 MH/s, y las ganancias salian 45 veces mas bajas.
+  // La capacidad que importa es la del equipo cuando esta libre (el PC
+  // mina 23 horas al dia, no solo cuando compila).
+  const duracionRonda = Math.max(300, Math.floor(duracionMs / 2));
+  const primera = await medirHashRateHilos(n, duracionRonda);
+  const segunda = await medirHashRateHilos(n, duracionRonda);
+  const medicion = segunda.hashPorSegundo >= primera.hashPorSegundo ? segunda : primera;
   cacheCapacidad.set(n, { medicion, at: Date.now() });
   return medicion;
 }
