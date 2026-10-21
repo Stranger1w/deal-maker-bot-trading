@@ -43,6 +43,15 @@ Comprobado después de aplicarlas:
 
 ### B. Los indicadores del motor (5 minutos)
 
+> ⚠ **Ojo: con los 6 indicadores que tienes ahora el motor NO ABRE NADA.**
+> No es un fallo: el motor exige que **todos** los indicadores coincidan a la
+> vez (si uno dice compra y otro venta, no hay señal). Con 6 indicadores
+> eso no pasa: medido sobre 2.000 velas reales de Q1-2025, **0 operaciones**.
+> El campo de entrenamiento te lo dice ahora mismo, indicador por indicador:
+> `close_price` 470 oper. (-4,0 %), `stochastic` 223 (-2,13 %), `bollinger`
+> 112 (-1,34 %), `rsi` 89 (-1,13 %), `ai_indicator` 0.
+> **Empieza con 1 o 2 indicadores** (Precio de cierre, o Precio + RSI).
+
 1. _Motor → Configuración del motor_.
 2. Empieza por **un solo indicador** (Precio de cierre) y la estrategia
    _Fija_, horizonte 15 min, importe 20 USDT → **Guardar configuración**.
@@ -235,7 +244,7 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
 | El hash rate               | **Real**: SHA-256 de verdad. Medido: 1 hilo 284 KH/s → 4 hilos 673 KH/s (x2,37) |
 | Las monedas y los pools    | Listas reales leídas en vivo (2miners, nanopool, Binance)                       |
 | Los datos simulados        | **Cero tablas con datos de ejemplo** (auditoría de `is_demo` completa)          |
-| La app                     | `tsc` 0, **372 tests** en verde, eslint sin errores, `.exe` compilado           |
+| La app                     | `tsc` 0, **374 tests** en verde, eslint sin errores, `.exe` compilado           |
 
 ### Lo que Changed y hay que saber
 
@@ -253,6 +262,15 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
   mientras decía medir el rango pedido: era un fallo real, ya corregido). Además
   compara con **20 estrategias con la señal al azar** y te dice el percentil:
   «¿gana al 60 % de las aleatorias o no se distingue del azar?».
+- **El sandbox mide el periodo que eliges** (antes medía los últimos minutos
+  mientras decía medir el rango pedido: era un fallo real, ya corregido). Además
+  compara con **20 estrategias con la señal al azar** y te dice el percentil:
+  «¿gana al 60 % de las aleatorias o no se distingue del azar?».
+- **El sandbox dice por qué no hay resultado**: si con tus indicadores no se
+  abre ni una operación, mide cada uno por separado y te lo enseña. Antes
+  solo decía «no hay resultado que mostrar» y te dejabas sin saber.
+- **Cada bot se mide con SUS indicadores**, no con los del primero (antes todos
+  los bots se medían con la configuración del primero de la lista).
 - **La minería ya descuenta la comisión de tu pool** (la puedes poner en
   _Minería → el botón de engranaje de cada equipo_) y usa el hash rate
   **sostenido** (10 s, no el pico de 1,5 s): minar es de horas, y el PC se calienta.

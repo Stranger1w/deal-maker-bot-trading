@@ -526,12 +526,7 @@ export const runSandbox = createServerFn({ method: "POST" })
     const { buscarEstrategia } = await import("@/lib/strategies/index");
     const { leerConfigSenales } = await import("@/lib/senal-motor.server");
 
-    // Indicadores: los del bot si tiene, si no los de la plataforma.
-    const { data: cfgBot } = await db
-      .from("engine_strategies")
-      .select("indicator_ids, strategy_id")
-      .eq("bot_id", candidates[0]?.id ?? "00000000-0000-0000-0000-000000000000")
-      .limit(1);
+    // Los indicadores de la plataforma (si un bot no tiene los suyos).
     const cfgPlataforma = await leerConfigSenales(db, duenoId);
     const indicadoresPlataforma = cfgPlataforma?.ids ?? ["close_price"];
 
@@ -558,7 +553,16 @@ export const runSandbox = createServerFn({ method: "POST" })
     for (const [i, bot] of candidates.entries()) {
       const simbolo = (bot.pair || pairs[i % Math.max(1, pairs.length)] || "BTCUSDT").toUpperCase();
       const params = suggestStrategyParams(snapshot, simbolo, sandbox.dataset);
+      // La config del bot (si tiene): antes se usaba la del primer bot para
+      // todos, asi que se media a bots que no eran los que se creian.
+      const { data: cfgBot } = await db
+        .from("engine_strategies")
+        .select("indicator_ids, strategy_id")
+        .eq("bot_id", bot.id)
+        .limit(1);
       const estrategiaId = (cfgBot?.[0]?.strategy_id as string | undefined) ?? "fixed";
+      const idsBot = (cfgBot?.[0]?.indicator_ids as string[] | undefined) ?? [];
+      const indicadoresUsados = idsBot.length ? idsBot : indicadoresPlataforma;
       const evaluacion = await evaluarEstrategia({
         simbolo,
         intervalo: "1h",
@@ -570,7 +574,7 @@ export const runSandbox = createServerFn({ method: "POST" })
         stopLossPct: Number(bot.stop_loss_pct ?? 2),
         takeProfitPct: Number(bot.take_profit_pct ?? 4),
         estrategiaId,
-        indicadores: indicadoresPlataforma,
+        indicadores: indicadoresUsados,
       });
       if (evaluacion.sinDatos) {
         // Las columnas de training_runs no admiten null: un bot sin datos NO
@@ -601,7 +605,7 @@ export const runSandbox = createServerFn({ method: "POST" })
             benchmarkPct: evaluacion.benchmarkPct,
             superaBenchmark: evaluacion.superaBenchmark,
             estrategia: estrategiaId,
-            indicadores: indicadoresPlataforma,
+            indicadores: indicadoresUsados,
             intervalo: "1h",
             avisos: evaluacion.avisos,
             referencia: evaluacion.referencia,

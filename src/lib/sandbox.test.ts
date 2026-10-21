@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { buscarEstrategia } from "./strategies/index";
 import { ejecutarBacktest } from "./backtest/engine";
 import { backtestAleatorio, compararConAleatoria } from "./backtest/aleatorio";
+import { medirIndicadoresPorSeparado } from "./sandbox.server";
 import type { ConfigBacktest, Vela } from "./backtest/types";
 
 /** Velas sinteticas SOLO para el test (aqui no se mide nada: se comprueba
@@ -129,5 +130,48 @@ describe("referencia aleatoria (el sandbox mide si hay ventaja o es azar)", () =
     expect(ref.ejecuciones).toBe(0);
     expect(ref.mejorQueLaMayoria).toBe(false);
     expect(ref.veredicto).toContain("no se puede concluir");
+  });
+});
+
+describe("medir cada indicador por separado", () => {
+  const config: ConfigBacktest = {
+    capitalInicial: 1000,
+    fraccionPorOperacion: 0.02,
+    stopLossPct: 2,
+    takeProfitPct: 4,
+    costes: { comision: 0.001, slippage: 0.0005, descuentoBnb: 0 },
+    indicadores: ["close_price"],
+  };
+
+  test("cada indicador se mide con las mismas velas", () => {
+    const medidas = medirIndicadoresPorSeparado(
+      velas(400),
+      config,
+      ["close_price", "rsi"],
+      "BTCUSDT",
+      undefined,
+    );
+    expect(medidas.length).toBe(2);
+    expect(medidas[0]?.indicador).toBe("close_price");
+    expect(medidas[1]?.indicador).toBe("rsi");
+    for (const m of medidas) {
+      expect(Number.isFinite(m.operaciones)).toBe(true);
+      expect(m.benchmarkPct).not.toBeNull();
+    }
+  });
+
+  test("un indicador que no da senales lo dice (no se inventa un resultado)", () => {
+    // Un indicador inventado no existe: se mide igual y no da operaciones.
+    const medidas = medirIndicadoresPorSeparado(
+      velas(400),
+      config,
+      ["indicador_que_no_existe"],
+      "BTCUSDT",
+      undefined,
+    );
+    expect(medidas.length).toBe(1);
+    expect(medidas[0]?.operaciones).toBe(0);
+    expect(medidas[0]?.retornoPct).toBeNull();
+    expect(medidas[0]?.motivo).toContain("ninguna senal");
   });
 });
