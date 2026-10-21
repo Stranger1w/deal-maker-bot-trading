@@ -1256,7 +1256,7 @@ function TrainingTab() {
     dateTo: "2025-03-31",
     pairs: "BTCUSDT, ETHUSDT",
     simulatedCapital: "10000",
-    speed: "25",
+    speed: "1",
   });
 
   const refresh = () => {
@@ -1282,7 +1282,7 @@ function TrainingTab() {
             .map((p) => p.trim())
             .filter(Boolean),
           simulatedCapital: Number(form.simulatedCapital) || 1000,
-          speed: Number(form.speed) || 10,
+          speed: Number(form.speed) || 1,
         },
       });
       toast.success("Sandbox creado — sin fondos reales");
@@ -1505,13 +1505,13 @@ function TrainingTab() {
               onChange={(e) => setForm({ ...form, simulatedCapital: e.target.value })}
             />
           </Field>
-          <Field label="Velocidad (x)">
-            <Input
-              inputMode="numeric"
-              value={form.speed}
-              onChange={(e) => setForm({ ...form, speed: e.target.value })}
-            />
-          </Field>
+          <div className="space-y-1.5">
+            <Label>Velocidad</Label>
+            <p className="text-xs text-muted-foreground">
+              1x (real). El backtest corre sobre las velas reales del periodo que eliges: no hay
+              simulación inventada ni "x10 acelerado".
+            </p>
+          </div>
           <div className="flex items-end">
             <Button className="w-full" onClick={submit}>
               Crear sandbox
@@ -1686,7 +1686,7 @@ function TrainingTab() {
                     }
                   }}
                 >
-                  Ejecutar simulación acelerada
+                  Medir con datos reales
                 </Button>
               </CardContent>
             </Card>
