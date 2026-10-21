@@ -67,6 +67,20 @@ export const estadoApp = createServerFn({ method: "POST" })
       sesion = null;
     }
 
+    // Las notificaciones por correo: si estan activadas y a donde van.
+    let notificaciones = { activo: false, destino: null as string | null };
+    try {
+      const { leerAjustesPlataforma } = await import("./propietario.server");
+      const plataforma = await leerAjustesPlataforma(db);
+      const fila = plataforma?.fila ?? null;
+      notificaciones = {
+        activo: fila?.notify_email_enabled === true,
+        destino: fila?.notify_email ?? null,
+      };
+    } catch {
+      notificaciones = { activo: false, destino: null };
+    }
+
     const secreto = await leerSecretoCron(db);
 
     const pendientes = migraciones.filter((m) => !m.aplicada);
@@ -75,6 +89,7 @@ export const estadoApp = createServerFn({ method: "POST" })
       migraciones,
       pendientes: pendientes.length,
       todoAplicado: pendientes.length === 0,
+      notificaciones,
       motor: {
         indicadores,
         tieneConfig,

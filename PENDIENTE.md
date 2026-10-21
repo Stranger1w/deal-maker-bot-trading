@@ -199,12 +199,16 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
 - **Telegram**: pásame `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID` (en el
   entorno del servidor, nunca en el repo) y te aviso por Telegram de los
   límites y errores críticos del motor.
-- **Correo**: los reportes diario/semanal salen sin enviar porque falta un
-  dominio de envío verificado.
-- **Minería, moneda KAS**: no hay API pública fiable para su red, así que
-  sale "sin datos de la red". Si me pegas los números de tu pool (hash rate
-  de la red, recompensa por bloque y tiempo de bloque) los meto en el equipo
-  y ya calcula.
+- **Correo**: **hecho (21-oct)**. En _Seguridad > Notificaciones por correo_
+  hay un interruptor para activarlo y desactivarlo; por defecto los avisos van
+  al **correo con el que creaste la cuenta** (`andrew.paulino.reyes@gmail.com`),
+  que ya esta activated en la base. Lo que falta es el **proveedor de correo**
+  en el servidor: `RESEND_API_KEY` (resend.com, gratis). Sin el, el interruptor
+  se guarda pero no sale ningun correo (la app lo avisa).
+- **Minería, moneda KAS**: **hecho (21-oct)**. La app lee los datos de la red
+  de la página del pool (2miners) en vivo: red 359,3 PH/s, 2,06 KAS por bloque,
+  1 s de bloque y el precio real (CoinGecko). Ya no tienes que pegar nada;
+  el formulario manual sigue por si un pool no publica los datos.
 - **Datos de miners en la nube**: el hash rate se mide en la máquina donde
   corre la app. Si el motor vive en la nube, el hash rate medido será el de
   la nube, no el de tu PC. Para que el campo de entrenamiento mida TU
@@ -254,6 +258,12 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
   está ocupado (una compilación, el antivirus) la medición baja y ya no
   envenena el cáche 10 minutos. Antes pasaba: 36 KH/s en vez de 1,6 MH/s, y
   las ganancias salían 45 veces más bajas de lo real.
+- **Las notificaciones por correo ya se mandan de verdad**: el interruptor de
+  _Seguridad_ activa y desactiva los avisos (límites de riesgo, órdenes
+  rechazadas, reportes diario y semanal) y van al correo de tu cuenta. Falta
+  la clave del proveedor (`RESEND_API_KEY`) para que salgan.
+- **KAS ya tiene datos reales de red** (leídos de la página del pool): antes
+  decía "sin datos de la red".
 - **La clave de cifrado de tus credenciales se rotó** (Fase 7): la nueva está
   en el fichero de secretos y en el `.exe` recién compilado. La vieja se
   borró. Si al abrir el `.exe` viejo la página de Binance dijera que no hay

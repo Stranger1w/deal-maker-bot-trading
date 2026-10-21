@@ -4,7 +4,7 @@ import { useState } from "react";
 import { generateReports } from "@/lib/risk.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { ArrowUpRight, Bot, ChartNoAxesColumn, Gauge, KeyRound, Wrench } from "lucide-react";
+import { ArrowUpRight, Bot, ChartNoAxesColumn, Gauge, KeyRound, Mail, Wrench } from "lucide-react";
 
 import { ActividadPanel } from "@/components/ActividadPanel";
 import type {
@@ -235,6 +235,15 @@ function Dashboard() {
       to: "/motor",
       etiquetaAccion: "Configurar",
       icono: Wrench,
+    },
+    {
+      hecho: estado.data?.notificaciones.activo ?? false,
+      titulo: "Activa los avisos por correo",
+      detalle:
+        "Los límites de riesgo y los reportes te llegan al correo con el que creaste la cuenta. Puedes desactivarlos cuando quieras (Seguridad > Notificaciones por correo).",
+      to: "/acceso",
+      etiquetaAccion: "Activar avisos",
+      icono: Mail,
     },
     {
       hecho: hayOperaciones,

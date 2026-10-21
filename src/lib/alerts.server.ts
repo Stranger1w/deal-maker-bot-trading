@@ -39,9 +39,10 @@ export async function raiseAlert(db: Db, alert: AlertInput) {
   // que devolvia la fila de cualquiera (la del administrador).
   const { leerAjustesDeUsuario } = await import("./propietario.server");
   let emailConfigured = false;
+  let correo: string | null = null;
   try {
     const ajustes = await leerAjustesDeUsuario(db, alert.userId);
-    const correo = ajustes?.notify_email;
+    correo = ajustes?.notify_email ?? null;
     emailConfigured =
       ajustes?.notify_email_enabled === true && typeof correo === "string" && correo.includes("@");
   } catch {
@@ -80,6 +81,21 @@ export async function raiseAlert(db: Db, alert: AlertInput) {
       );
     } catch {
       // Un fallo de la notificacion NUNCA rompe la alerta ni el motor.
+    }
+
+    // Y el correo: al que el dueno haya activado (por defecto, el de su
+    // cuenta). Sin proveedor de correo, esto no hace nada.
+    if (emailConfigured && correo) {
+      try {
+        const { enviarEmail, cuerpoAviso } = await import("./email.server");
+        await enviarEmail(
+          correo,
+          `[Deal Maker] ${alert.title}`,
+          cuerpoAviso(alert.title, alert.message),
+        );
+      } catch {
+        // Igual que Telegram: un fallo de correo no rompe nada.
+      }
     }
   }
 }

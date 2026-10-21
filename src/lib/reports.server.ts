@@ -25,7 +25,7 @@ export async function buildReports(period: "daily" | "weekly") {
   const settings = plataforma?.fila ?? null;
   if (!duenoId) throw new Error("No hay dueño de plataforma para el reporte");
 
-  const emailStatus =
+  const emailStatusInicial =
     settings?.notify_email_enabled && settings.notify_email
       ? "pendiente_dominio_verificado"
       : "no_configurado";
@@ -79,7 +79,7 @@ export async function buildReports(period: "daily" | "weekly") {
         executions: (executions ?? []).length,
       } as never,
       summary: `Escuadrón: P&L ${squadPnl.toFixed(2)} en ${(executions ?? []).length} ejecuciones, ${runningBots} bots activos, win rate medio ${winRate.toFixed(1)}%.`,
-      email_status: emailStatus,
+      email_status: emailStatusInicial,
     },
     {
       period,
@@ -93,7 +93,7 @@ export async function buildReports(period: "daily" | "weekly") {
         estimated_daily_usd: Number(dailyEarnings.toFixed(2)),
       } as never,
       summary: `Enjambre: ${activeWorkers.length} workers activos, hash rate ${hashTotal.toFixed(2)}, pagos ${payoutTotal.toFixed(2)} USD en el periodo.`,
-      email_status: emailStatus,
+      email_status: emailStatusInicial,
     },
   ];
 
@@ -116,9 +116,38 @@ export async function buildReports(period: "daily" | "weekly") {
     userId: duenoId,
   });
 
+  // El reporte, al correo del dueno (si lo ha activado). El estado del
+  // envio se guarda REAL: si no hay proveedor, se queda "pendiente_dominio"
+  // como antes (no se simula ninguna entrega).
+  let emailStatus = "no_configurado";
+  const destino = settings?.notify_email;
+  if (settings?.notify_email_enabled && destino && destino.includes("@")) {
+    const { enviarEmail, hayProveedorCorreo, cuerpoAviso } = await import("./email.server");
+    if (hayProveedorCorreo()) {
+      const resultado = await enviarEmail(
+        destino,
+        `[Deal Maker] Reporte ${period === "daily" ? "diario" : "semanal"}`,
+        cuerpoAviso(
+          `Reporte ${period === "daily" ? "diario" : "semanal"}`,
+          rows.map((r) => r.summary).join("\n"),
+          `Periodo: ${day(start)} → ${day(end)}`,
+        ),
+      );
+      emailStatus = resultado.ok ? "enviado" : "error_envio";
+    } else {
+      emailStatus = "pendiente_dominio_verificado";
+    }
+    // El estado real del envio se guarda en el reporte.
+    await client
+      .from("performance_reports")
+      .update({ email_status: emailStatus })
+      .eq("user_id", duenoId)
+      .eq("period", period)
+      .eq("period_start", day(start));
+  }
+
   return { ok: true, reports: rows.length, emailStatus };
 }
-
 /** Reserva o reinvierte la ganancia semanal según la política configurada. */
 export async function profitSweep() {
   const client = await db();

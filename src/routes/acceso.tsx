@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { KeyRound, ShieldCheck, LogOut } from "lucide-react";
+import { KeyRound, Mail, ShieldCheck, LogOut } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { StatusPill } from "@/components/StatusPill";
@@ -11,9 +11,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { useSecuritySession } from "@/hooks/useSecuritySession";
 import { supabase } from "@/integrations/supabase/client";
 import { estadoRegistroPublico } from "@/lib/registro.functions";
+import {
+  configurarNotificacionesCorreo,
+  enviarCorreoPrueba,
+  leerNotificacionesCorreo,
+} from "@/lib/notificaciones.functions";
 
 export const Route = createFileRoute("/acceso")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -79,6 +85,56 @@ function AccessPage() {
     }
     toast.success("Sesión iniciada");
     if (returnTo) window.location.href = returnTo;
+  };
+
+  // Notificaciones por correo: el destino por defecto es el correo de la
+  // cuenta con la que te has apuntado.
+  const notificacionesFn = useServerFn(leerNotificacionesCorreo);
+  const configurarNotificacionesFn = useServerFn(configurarNotificacionesCorreo);
+  const correoPruebaFn = useServerFn(enviarCorreoPrueba);
+  const [notificaciones, setNotificaciones] = useState<{
+    correoCuenta: string | null;
+    correoDestino: string;
+    activo: boolean;
+    hayProveedor: boolean;
+  } | null>(null);
+  const [guardandoCorreo, setGuardandoCorreo] = useState(false);
+  const [correoNotificaciones, setCorreoNotificaciones] = useState("");
+  const correoCuentaTexto = notificaciones?.correoCuenta
+    ? " (" + notificaciones.correoCuenta + ")"
+    : "";
+  useEffect(() => {
+    let vivo = true;
+    void notificacionesFn({})
+      .then((n) => {
+        if (!vivo) return;
+        setNotificaciones(n);
+        setCorreoNotificaciones(n.correoDestino ?? "");
+      })
+      .catch(() => undefined);
+    return () => {
+      vivo = false;
+    };
+  }, [notificacionesFn]);
+  const alternarCorreo = async (activo: boolean) => {
+    try {
+      setGuardandoCorreo(true);
+      const r = await configurarNotificacionesFn({
+        data: { activo, ...(correoNotificaciones ? { correo: correoNotificaciones } : {}) },
+      });
+      setNotificaciones((n) =>
+        n ? { ...n, activo: r.activo, correoDestino: r.correoDestino } : n,
+      );
+      toast.success(
+        r.activo
+          ? "Avisos activados: te llegan al correo de tu cuenta."
+          : "Avisos desactivados: no sale ningún correo.",
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar");
+    } finally {
+      setGuardandoCorreo(false);
+    }
   };
 
   const signUp = async () => {
@@ -210,6 +266,83 @@ function AccessPage() {
           {session.email
             ? `Cuenta: ${session.email}`
             : "Inicia sesión para habilitar operaciones sensibles."}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+            <Mail className="size-4 text-primary" /> Notificaciones por correo
+            <StatusPill tone={notificaciones?.activo ? "success" : "neutral"}>
+              {notificaciones?.activo ? "activadas" : "desactivadas"}
+            </StatusPill>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Los avisos importantes del motor (límites de riesgo, órdenes rechazadas, errores) y los
+            reportes diario y semanal. Por defecto van al{" "}
+            <strong>correo con el que creaste la cuenta</strong>
+            {correoCuentaTexto}: no tienes que escribirlo.
+          </p>
+
+          <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-secondary/40 px-3 py-2.5">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">
+                {notificaciones?.activo
+                  ? "Quiero recibir avisos por correo"
+                  : "No quiero avisos por correo"}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {notificaciones?.activo
+                  ? "Se mandan al correo de arriba. Puedes desactivarlo cuando quieras."
+                  : "No sale ningún correo. Los avisos se quedan dentro de la app."}
+              </p>
+            </div>
+            <Switch
+              checked={notificaciones?.activo ?? false}
+              disabled={guardandoCorreo || !notificaciones}
+              onCheckedChange={(v) => void alternarCorreo(v)}
+              aria-label="Activar o desactivar las notificaciones por correo"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="correo-notificaciones">Correo de destino</Label>
+            <Input
+              id="correo-notificaciones"
+              type="email"
+              placeholder={notificaciones?.correoCuenta ?? "el correo de tu cuenta"}
+              value={correoNotificaciones}
+              onChange={(e) => setCorreoNotificaciones(e.target.value)}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Por defecto, el de tu cuenta. Si lo cambias, los avisos van ahí.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              disabled={!notificaciones?.hayProveedor}
+              onClick={async () => {
+                try {
+                  const r = await correoPruebaFn({});
+                  toast.success("Correo de prueba enviado a " + r.destino);
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "No se pudo enviar");
+                }
+              }}
+            >
+              Enviar un correo de prueba
+            </Button>
+            {!notificaciones?.hayProveedor && (
+              <p className="text-[11px] text-warning">
+                El servidor no tiene proveedor de correo (falta RESEND_API_KEY): el interruptor se
+                guarda, pero no sale ningún correo hasta que se configure.
+              </p>
+            )}
+          </div>
         </CardContent>
       </Card>
 
