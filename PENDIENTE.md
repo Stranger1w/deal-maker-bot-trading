@@ -41,35 +41,60 @@ Comprobado después de aplicarlas:
 - La **seguridad** aguanta: con la clave pública sin sesión, todo devuelve
   401; con la sesión de otro usuario, 403.
 
-### B. Los indicadores del motor — HECHO (21-oct)
+### B. Los indicadores del motor — HECHO y AJUSTADO (21-oct)
 
-Medido con el backtest real (BTCUSDT, 1 h, 3.000 velas, capital 1.000, stop 2 %,
-take 4 %, walk-forward de 4 bloques y 30 estrategias aleatorias de referencia):
+**Indicador**: `rsi` (periodo 14, 30/70), estrategia `fixed`, horizonte 5 min,
+importe 20 USDT.
 
-| Indicadores                              | Retorno | Ops  | Walk-forward | Percentil vs azar |
-| --------------------------------------- | ------- | ---- | ------------ | ----------------- |
-| close_price                              | −1,36 % | 271 | 0/4 bloques   | **3 %** (peor que el azar) |
-| close_price + rsi                        | +0,03 % | 2    | 1/4 bloques   | 40 % (solo 2 ops: ruido) |
-| **rsi** (el que hay puesto)              | **+0,19 %** | 24 | **2/4 bloques** | **67 %** |
-| bollinger                                | −0,09 % | 55 | 1/4 bloques   | 53 % (indistinguible) |
-| stochastic                               | −0,51 % | 75 | 1/4 bloques   | 20 % (peor que el azar) |
-| los 6 de antes                           | 0,00 %  | **0** | 0/4 bloques | — (no abre NADA) |
-| AI Indicator (el que tenias)             | 0,00 %  | **0** | 0/4 bloques | — (no abre NADA) |
+**Barrido de 8 configuraciones** (BTCUSDT, 1 h, 3.000 velas, walk-forward de
+4 bloques y 30 estrategias aleatorias de referencia):
 
-**Por qué 0 operaciones**: el motor exige que **todos** los indicadores
-coincidan a la vez (si uno dice compra y otro venta, no hay señal). Con 5-6
-eso no pasa; y el *AI Indicator* es un **filtro**: no genera señal propia, así
-que solo él tampoco abre nada.
+| Configuración | Retorno | Ops | Walk-forward | Percentil vs azar |
+| --- | --- | --- | --- | --- |
+| close_price (el de antes) | −0,44 % | 131 | 2/4 | 40 % |
+| rsi 14 30/70, stop 2/take 4 | +0,19 % | 24 | 2/4 | 73 % |
+| rsi 7 30/70, stop 2/take 4 | −0,27 % | 61 | 0/4 | 50 % |
+| rsi 21 30/70, stop 2/take 4 | +0,14 % | 6 | 4/4 | 53 % |
+| rsi 14 25/75, stop 2/take 4 | +0,19 % | 9 | 4/4 | 47 % |
+| **rsi 14 35/65, stop 2/take 4** | +0,22 % | 39 | 2/4 | **77 %** |
+| rsi 14 30/70, stop 3/take 6 | +0,26 % | 19 | 4/4 | 73 % |
+| **rsi 14 30/70, stop 1,5/take 3** | +0,20 % | 34 | **3/4** | **100 %** |
+| rsi 14 30/70, stop 2/take 8 | +0,23 % | 23 | 2/4 | 73 % |
 
-**Decisión aplicada**: `indicator_ids = ["rsi"]`, estrategia `fixed` (cantidad
-fija), horizonte 5 min, importe 20 USDT. Es el único que no pierde contra el
-azar. Lo puedes cambiar en _Motor → Configuración del motor_.
+**La ganadora validada en OTRAS ventanas** (para no autoengañarme con el
+mejor de 8):
 
-> **Honestidad**: 24 operaciones en 4 meses son pocas (la app avisa de que por
-> debajo de 100 el resultado es ruido). El RSI no es una máquina de dinero:
-> es **el menos malo** de lo medido y sirve para acumular datos reales en
-> demo. Antes de poner dinero real, mide con walk-forward y contra la
-> referencia aleatoria (justo lo que está en `BACKTEST.md`).
+| Ventana | stop 1,5/take 3 | stop 2/take 4 |
+| --- | --- | --- |
+| 3.000 velas (4 meses) | +0,20 % · percentil **100 %** | +0,19 % · 73 % |
+| 6.000 velas (8 meses) | −0,65 % · percentil **93 %** | −0,66 % · 53 % |
+| 9.000 velas (12 meses) | −0,02 % · percentil **87 %** | −1,86 % · 73 % |
+
+Gana en las tres ventanas: no es sobreajuste de un periodo. **Aplicado**:
+`stop_loss_pct = 1,5`, `take_profit_pct = 3` en los 4 bots, y los parámetros
+del RSI (14, 30/70) en la configuración del motor.
+
+> **La verdad uncomfortable**: el RSI gana a las estrategias aleatorias (87-100 %
+> de percentil) pero **pierde dinero en las ventanas largas** (−0,65 % y
+> −2,02 %): en el mercado que subio, entrar y salir no.compensa. Es la
+> mejor configuracion medida, no una mina de oro. Para que de dinero falta
+> otra cosa: que el motor no entre en operaciones que pierden (filtro de
+> regimen, stop por ATR) — la app ya tiene esas piezas, pero estan en
+> `auto` y sin medir.
+
+### B2. Los 13 mercados y el precio justo (21-oct)
+
+Se añADIERON seis mercados con sus velas (probados uno a uno, cada uno con su
+formato): **Bitstamp, KuCoin, Gate.io, Bitfinex, Crypto.com y Bitget**. Con
+Binance (spot y futuros), Bybit, OKX, Hyperliquid, Kraken y Coinbase son **13**.
+
+Indicador nuevo `precio_justo`: la prima del precio de Binance frente a la
+mediana de los otros 12 mercados (z-score, ventana de 60 velas).
+
+> **Medido**: las diferencias entre mercados son de **0,02-0,07 %**. El
+> mercado es muy eficiente: no hay arbitraje que explotar. El indicador da
+> 34 operaciones pero **percentil 20 %** (solo) y 55 % (con close_price): no
+> supera al azar. Se queda con la medicion a la vista, no como promesa.
 ### C. El motor 24/7 — DESCARTADO por ahora (20-oct)
 
 **Decisión tuya**: el 24/7 automático se queda fuera (no tienes cuenta de

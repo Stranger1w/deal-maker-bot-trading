@@ -179,13 +179,7 @@ describe("registro de indicadores", () => {
     // TENDENCIA: MACD, Precio de cierre y los dos de copy trading.
     expect(tendencia.sort()).toEqual(["close_price", "macd", "taker_flow", "top_traders"]);
     // REVERSION: RSI, Estocastico, Bollinger, CCI y el precio justo.
-    expect(reversion.sort()).toEqual([
-      "bollinger",
-      "cci",
-      "precio_justo",
-      "rsi",
-      "stochastic",
-    ]);
+    expect(reversion.sort()).toEqual(["bollinger", "cci", "precio_justo", "rsi", "stochastic"]);
     // FILTRO: el AI Indicator, que no genera senal propia.
     expect(filtro).toEqual(["ai_indicator"]);
   });
