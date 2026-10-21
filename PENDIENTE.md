@@ -244,7 +244,7 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
 | El hash rate               | **Real**: SHA-256 de verdad. Medido: 1 hilo 284 KH/s → 4 hilos 673 KH/s (x2,37) |
 | Las monedas y los pools    | Listas reales leídas en vivo (2miners, nanopool, Binance)                       |
 | Los datos simulados        | **Cero tablas con datos de ejemplo** (auditoría de `is_demo` completa)          |
-| La app                     | `tsc` 0, **374 tests** en verde, eslint sin errores, `.exe` compilado           |
+| La app                     | `tsc` 0, **375 tests** en verde, eslint sin errores, `.exe` compilado           |
 
 ### Lo que Changed y hay que saber
 
@@ -267,6 +267,11 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
   mientras decía medir el rango pedido: era un fallo real, ya corregido). Además
   compara con **20 estrategias con la señal al azar** y te dice el percentil:
   «¿gana al 60 % de las aleatorias o no se distingue del azar?».
+- **El hash rate que ves es el real de tu máquina** (SHA-256 de verdad con
+  workers reales), medido en dos rondas y quedándose con la mejor: si el PC
+  está ocupado (una compilación, el antivirus) la medición baja y ya no
+  envenena el cáche 10 minutos. Antes pasaba: 36 KH/s en vez de 1,6 MH/s, y
+  las ganancias salían 45 veces más bajas de lo real.
 - **La comparativa de minería acepta cualquier moneda**: en _Mínería →
   «Compara monedas con TU equipo» puedes elegir la que quieras (las
   listas reales, leídas en vivo de los pools y de Binance) y ver la cuenta con
