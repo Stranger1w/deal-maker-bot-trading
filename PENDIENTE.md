@@ -68,12 +68,29 @@ mejor de 8):
 | --- | --- | --- |
 | 3.000 velas (4 meses) | +0,20 % · percentil **100 %** | +0,19 % · 73 % |
 | 6.000 velas (8 meses) | −0,65 % · percentil **93 %** | −0,66 % · 53 % |
-| 9.000 velas (12 meses) | −0,02 % · percentil **87 %** | −1,86 % · 73 % |
+| 9.000 velas (12 meses) | −2,02 % · percentil **87 %** | −1,86 % · 73 % |
 
 Gana en las tres ventanas: no es sobreajuste de un periodo. **Aplicado**:
 `stop_loss_pct = 1,5`, `take_profit_pct = 3` en los 4 bots, y los parámetros
 del RSI (14, 30/70) en la configuración del motor.
 
+> **OJO: el percentil NO es la tasa de acierto.** El 87-100 % es "esta
+> configuracion gana a 26-30 de las 30 estrategias ALEATORIAS de referencia"
+> (entradas y salidas al azar, con los mismos costes). La tasa de acierto real
+> es del **26-33 %**: en la ventana de 9.000 velas, 176 operaciones con 47
+> ganadoras y 129 perdedoras. Se puede ganar al azar y perder dinero a la vez: el
+> azar pierde todavia mas.
+>
+> | Ventana | Operaciones (ganadoras/perdedoras) | Tasa de acierto | Bot | Comprar y mantener |
+> | --- | --- | --- | --- | --- |
+> | 6.000 velas | 89 (29/60) | 32,6 % | −0,65 % | **+22,22 %** (el bot se queda fuera de la subida) |
+> | 9.000 velas | 176 (47/129) | 26,7 % | −2,02 % | −24,70 % (el bot pierde mucho menos) |
+>
+> Es una estrategia **defensiva**: en el mercado que bajo perdio mucho menos que
+> comprar y mantener (por eso el percentil es alto), pero en el que subio no se
+> entero de la subida. Con stop del 1,5 % y take del 3 % hacen falta mas del 33 %
+> de aciertos para no perder, y con comisiones mas todavia.
+>
 > **La verdad uncomfortable**: el RSI gana a las estrategias aleatorias (87-100 %
 > de percentil) pero **pierde dinero en las ventanas largas** (−0,65 % y
 > −2,02 %): en el mercado que subio, entrar y salir no.compensa. Es la
