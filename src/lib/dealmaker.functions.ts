@@ -222,6 +222,104 @@ export const testBinanceConnection = createServerFn({ method: "POST" })
     return test;
   });
 
+/**
+ * DIAGNOSTICO DE LA CLAVE: donde vale de verdad.
+ *
+ * "Probar conexion" solo mira el entorno configurado (testnet o produccion).
+ * Si guardas una clave de testnet con la app en produccion (o al reves), el
+ * fallo es un 401 seco ("Invalid API-key, IP, or permissions") que no dice
+ * nada util. Esto prueba la MISMA clave en los cuatro sitios (spot y futuros,
+ * testnet y produccion) y devuelve un veredicto claro:
+ *
+ *   - "Es una clave de TESTNET: aqui solo hay dinero de prueba."
+ *   - "Es una clave de PRODUCCION: estas claves mueven dinero real."
+ *   - "No funciona en ninguno: revisa que la copia esten completa y la lista
+ *      blanca de IPs."
+ *
+ * Solo lectura: usa /api/v3/account y /fapi/v2/account, que no mueven nada.
+ */
+export const diagnosticarClaveBinance = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
+  .inputValidator((input: unknown) =>
+    z.object({ apiKey: z.string().min(8), apiSecret: z.string().min(8) }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { signBinanceQuery } = await import("./crypto.server");
+
+    type Resultado = { ok: boolean; status: number; detalle: string };
+
+    const probar = async (host: string, path: string): Promise<Resultado> => {
+      const query = `recvWindow=5000&timestamp=${Date.now()}`;
+      try {
+        const signature = await signBinanceQuery(query, data.apiSecret.trim());
+        const res = await fetch(`${host}${path}?${query}&signature=${signature}`, {
+          headers: { "X-MBX-APIKEY": data.apiKey.trim() },
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (res.ok) return { ok: true, status: res.status, detalle: "" };
+        const raw = await res.text().catch(() => "");
+        let detalle = raw.replace(/\s+/g, " ").slice(0, 180);
+        try {
+          const parsed = JSON.parse(raw) as { msg?: string };
+          if (parsed.msg) detalle = parsed.msg;
+        } catch {
+          /* cuerpo no JSON */
+        }
+        return { ok: false, status: res.status, detalle };
+      } catch (error) {
+        return {
+          ok: false,
+          status: 0,
+          detalle: error instanceof Error ? error.message : "error desconocido",
+        };
+      }
+    };
+
+    const [spotProd, spotTest, futProd, futTest] = await Promise.all([
+      probar("https://api.binance.com", "/api/v3/account"),
+      probar("https://testnet.binance.vision", "/api/v3/account"),
+      probar("https://fapi.binance.com", "/fapi/v2/account"),
+      probar("https://testnet.binancefuture.com", "/fapi/v2/account"),
+    ]);
+
+    const prod = spotProd.ok;
+    const test = spotTest.ok;
+    const entorno = prod && test ? "ambas" : prod ? "production" : test ? "testnet" : "ninguna";
+
+    let veredicto: string;
+    let titulo: string;
+    if (entorno === "production") {
+      titulo = "Clave de PRODUCCION";
+      veredicto = prod ? "Esta clave mueve dinero real: es de tu cuenta de Binance de verdad." : "";
+      if (!futProd.ok) {
+        veredicto +=
+          " Ojo: con esta clave NO se puede operar en futuros (el permiso 'Enable Futures' no esta activo o la IP no esta en la lista blanca).";
+      }
+    } else if (entorno === "testnet") {
+      titulo = "Clave de TESTNET";
+      veredicto =
+        "Esta clave solo funciona en el testnet: aqui el dinero es de prueba y no se puede perder. Para operar con dinero real necesitas una API key creada en binance.com (Mi cuenta > Gestion de API keys).";
+    } else if (entorno === "ambas") {
+      titulo = "Clave valida en los dos entornos";
+      veredicto =
+        "Raro: la misma clave responde en testnet y en produccion. Comprueba que no te la hayas equivocado.";
+    } else {
+      titulo = "La clave no funciona en ningun entorno";
+      veredicto =
+        "Comprueba que la hayas copiado entera (API Key y Secret) y que no tenga una lista blanca de IPs que bloquee esta maquina.";
+    }
+
+    return {
+      entorno,
+      titulo,
+      veredicto,
+      spot_produccion: spotProd,
+      spot_testnet: spotTest,
+      futuros_produccion: futProd,
+      futuros_testnet: futTest,
+    };
+  });
+
 export const saveBinanceCredentials = createServerFn({ method: "POST" })
   .middleware([requireAdmin])
   .inputValidator((input: unknown) =>

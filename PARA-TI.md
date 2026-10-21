@@ -318,23 +318,48 @@ La clave esta en `C:\Users\Usuario\secrets\deal-maker.env` (
 ## 8b. Permiso de futuros (para el bot de cobertura)
 
 El bot de cobertura (carry) necesita **vender el perpetuo**, asi que la clave
-tiene que tener el permiso de futuros de Binance. **Tu clave ahora mismo no lo
-tiene** (lo he comprobado: Binance responde "Invalid API-key, IP, or
-permissions").
+tiene que tener el permiso de futuros de Binance.
 
-**Pasos** (2 minutos):
+### OJO (21-oct): la clave que tienes NO es de producción
 
-1. Binance > Mi perfil > Gestionar API keys:
-   <https://www.binance.com/en/my/settings/api-management>
-2. Edita tu API key y activa el permiso **«Enable Futures»**.
-3. Guarda (Binance puede pedirte 2FA).
-4. En la app: _Cuentas de trading > Permiso de futuros > «Comprobar el permiso de
-   futuros»_. Tiene que salir **«listo»**.
+La clave que me has pegado (terminada en `AIrA`) es la misma que ya estaba
+guardada desde el 2-oct, y la he probado contra los cuatro servidores:
+
+| Servidor                | Resultado                                  |
+| ----------------------- | ------------------------------------------ |
+| `api.binance.com`       | **401** Invalid API-key, IP, or permissions |
+| `testnet.binance.vision` | **200 OK** (spot)                         |
+| `fapi.binance.com`      | **401**                                     |
+| `testnet.binancefuture.com` | **401**                                 |
+
+Es decir: **es una clave de TESTNET** (creada en `testnet.binance.vision`, no
+en `binance.com`). Con ella no se puede tocar dinero real ni operar futuros.
+
+### Qué hacer para poder operar de verdad (10 minutos)
+
+1. Entra en **binance.com de verdad** (no en testnet) > Mi perfil > Gestionar
+   API keys: <https://www.binance.com/en/my/settings/api-management>
+2. **Crea una API key nueva** (no edites la de testnet). Activa:
+   - «Enable Reading» ✔ (obligatorio)
+   - «Enable Spot & Margin Trading» ✔ (para operar spot)
+   - «Enable Futures» ✔ (para la cobertura: vender perpetuo)
+   - **Retiros: NUNCA** (desactivado).
+3. Si usas **restricción por IP**, pon la IP de salida de esta maquina:
+   `148.255.4.191` (Santo Domingo, DO). Si no, dejalo sin restringir.
+4. Pega la clave nueva en la app: _Cuentas de trading > Credenciales > pegarla >
+   **«Diagnóstico: ¿testnet o producción?»**_. Tiene que decir
+   **«Clave de PRODUCCION»** y, en la lista, `Spot producción: OK` y
+   `Futuros producción: OK`.
+5. Solo entonces: _Cuentas de trading > Entorno de trading > PRODUCCION_
+   (pide 2FA, el aviso de riesgo y que escribas `PRODUCCION`).
+
+> El botón de diagnóstico existe justo para esto: antes, «Probar conexión»
+> solo miraba el entorno configurado y devolvía un 401 sordo que no decía si
+> el problema era la clave, el entorno o la IP.
 
 > **Ojo**: en **demo** (testnet) la cobertura se simula en papel con los precios
 > reales, asi que **no necesita este permiso**. Solo hace falta cuando pases a
-> PRODUCCION (dinero real). Si tu clave tiene la IP restringida, añade tambien la
-> IP de salida del servidor (la app la muestra en «Ubicación del backend»).
+> PRODUCCION (dinero real).
 
 ## 9. Lo que NO tienes que hacer
 

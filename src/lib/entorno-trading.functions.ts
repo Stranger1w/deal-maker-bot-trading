@@ -148,7 +148,8 @@ export const cambiarEntornoTrading = createServerFn({ method: "POST" })
     if (!prueba.ok) {
       throw new Error(
         `La clave guardada no funciona en ${data.entorno}: ${prueba.motivo}. ` +
-          "Guarda primero una API key de PRODUCCION (con el permiso de futuros si quieres usar la cobertura) en la pagina de Binance.",
+          "Guarda primero una API key de PRODUCCION (con el permiso de futuros si quieres usar la cobertura) en la pagina de Binance. " +
+          "En 'Cuentas de trading > Credenciales' tienes el boton 'Diagnostico: testnet o produccion?': te dice de que entorno es la clave que has pegado.",
       );
     }
 

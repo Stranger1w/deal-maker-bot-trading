@@ -181,6 +181,16 @@ llame a `POST /api/public/automation-tick` con `Authorization: Bearer
   apagados y el entorno es testnet. Dime "ya está" y te los enciendo; hazlo
   solo con la compuerta de promoción satisfied (P&L real positivo, drawdown
   dentro del límite, mínimo de operaciones y superar al mercado).
+- **La clave que hay guardada es de TESTNET (21-oct)**: la misma que me
+ -has pegado (terminada en `AIrA`) está guardada desde el 2-oct. Probada
+  contra los cuatro servidores: `testnet.binance.vision` **200 OK**;
+  `api.binance.com`, `fapi.binance.com` y `testnet.binancefuture.com`
+  **401**. Es decir: es una clave de **prueba**, no de producción. Para
+  operar con dinero real hace falta una API key creada en **binance.com**
+  (con «Enable Futures» para la cobertura). Pasos en `PARA-TI.md` §8b.
+  La app tiene ahora un botón **«Diagnóstico: ¿testnet o producción?»** que
+  prueba la clave en los cuatro sitios y lo dice claro, para que no se
+  confunda otra vez.
 - **Fase 7**: re-cifrar las credenciales y apagar flags definitivos. Dime
   cuándo y lo hacemos.
 - **¿Minamos?** El enjambre está encendido y dice la verdad: **−0,70 USD/día**.

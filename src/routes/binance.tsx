@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  diagnosticarClaveBinance,
   leerCredencialesBinance,
   saveBinanceCredentials,
   testBinanceConnection,
@@ -34,7 +35,7 @@ import { regionProbeQuery } from "@/lib/queries";
 export const Route = createFileRoute("/binance")({
   head: () => ({
     meta: [
-      { title: "API Keys de Binance — Deal Maker" },
+      { title: "Cuentas de trading — Deal Maker" },
       {
         name: "description",
         content:
@@ -69,6 +70,7 @@ function BinancePage() {
   });
   const test = useServerFn(testBinanceConnection);
   const save = useServerFn(saveBinanceCredentials);
+  const diagnosticoFn = useServerFn(diagnosticarClaveBinance);
 
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
@@ -98,6 +100,33 @@ function BinancePage() {
     message: string;
     restricted?: boolean;
   }>(null);
+  // El diagnostico: donde vale de verdad la clave (testnet o produccion).
+  const [diag, setDiag] = useState<null | {
+    entorno: string;
+    titulo: string;
+    veredicto: string;
+    spot_produccion: { ok: boolean; status: number; detalle: string };
+    spot_testnet: { ok: boolean; status: number; detalle: string };
+    futuros_produccion: { ok: boolean; status: number; detalle: string };
+    futuros_testnet: { ok: boolean; status: number; detalle: string };
+  }>(null);
+  const [diagnosticando, setDiagnosticando] = useState(false);
+
+  const runDiagnostico = async () => {
+    if (apiKey.length < 8 || apiSecret.length < 8) {
+      toast.error("Introduce una API Key y un API Secret válidos");
+      return;
+    }
+    setDiagnosticando(true);
+    try {
+      const r = await diagnosticoFn({ data: { apiKey, apiSecret } });
+      setDiag(r);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Error en el diagnóstico");
+    } finally {
+      setDiagnosticando(false);
+    }
+  };
 
   const runTest = async () => {
     if (apiKey.length < 8 || apiSecret.length < 8) {
@@ -215,10 +244,42 @@ function BinancePage() {
               <Button variant="secondary" onClick={runTest} disabled={busy}>
                 <PlugZap className="size-4" /> Probar conexión (solo lectura)
               </Button>
+              <Button variant="outline" onClick={runDiagnostico} disabled={busy || diagnosticando}>
+                {diagnosticando ? "Comprobando…" : "Diagnóstico: ¿testnet o producción?"}
+              </Button>
               <Button onClick={runSave} disabled={busy}>
                 Guardar cifrado
               </Button>
             </div>
+            {diag && (
+              <div className="space-y-2 rounded-xl border border-border/70 bg-muted/40 p-3 text-sm">
+                <p className="font-medium">
+                  {diag.titulo}
+                  {diag.entorno === "production" ? " ✅" : ""}
+                </p>
+                <p className="text-muted-foreground">{diag.veredicto}</p>
+                <ul className="space-y-0.5 text-xs text-muted-foreground">
+                  {(
+                    [
+                      ["Spot producción", diag.spot_produccion],
+                      ["Spot testnet", diag.spot_testnet],
+                      ["Futuros producción", diag.futuros_produccion],
+                      ["Futuros testnet", diag.futuros_testnet],
+                    ] as const
+                  ).map(([etiqueta, r]) => (
+                    <li key={etiqueta} className="flex items-center gap-2">
+                      <span className={r.ok ? "text-success" : "text-destructive"}>
+                        {r.ok ? "OK" : "FALLA"}
+                      </span>
+                      <span className="min-w-40">{etiqueta}</span>
+                      <span className="truncate">
+                        {r.ok ? "" : r.detalle || `HTTP ${r.status}`}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {tested && !tested.restricted && (
               <p className={tested.ok ? "text-sm text-success" : "text-sm text-destructive"}>
                 {tested.message}
