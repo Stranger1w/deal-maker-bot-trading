@@ -219,10 +219,10 @@ function Dashboard() {
       icono: KeyRound,
     },
     {
-      hecho: engineOn,
-      titulo: "Enciende el motor",
+      hecho: engineOn && (estado.data?.motor.sesionActiva ?? false),
+      titulo: "Abre una sesión del motor",
       detalle:
-        "El motor es el que abre y cierra posiciones, y lo hace con la sesión que tú abres. Sin motor, los bots se quedan quietos.",
+        "El motor abre y cierra posiciones SOLO dentro de una sesión con temporizador que abras tú. Con el 24/7 automático descartado, sin sesión los bots esperan (no operan).",
       to: "/motor",
       etiquetaAccion: "Abrir el motor",
       icono: Gauge,
@@ -264,6 +264,24 @@ function Dashboard() {
         subtitle="Lo que hay money en juego, qué está haciendo el motor y lo que te falta por mirar. Sin adornos: las cifras son reales y las alertas no se esconden."
         action={<KillSwitchButton />}
       />
+
+      {/* Aviso grande: el motor encendido pero SIN sesion no hace nada. */}
+      {engineOn && !kill && !estado.data?.motor.sesionActiva && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/50 bg-warning/10 px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-warning">
+              El motor está encendido pero no hay sesión: no abrirá ninguna posición.
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Con el 24/7 automático descartado, el motor solo opera mientras haya una sesión con
+              temporizador abierta en esta app. Los bots que estén "corriendo" esperan, no operan.
+            </p>
+          </div>
+          <Button size="sm" variant="secondary" onClick={() => (window.location.href = "/motor")}>
+            Abrir una sesión
+          </Button>
+        </div>
+      )}
 
       {/* Pasos iniciales: ventanita arriba que va avanzando sola. */}
       <PasosIniciales pasos={pasos} />
