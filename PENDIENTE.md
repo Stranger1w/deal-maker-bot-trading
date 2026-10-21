@@ -41,34 +41,35 @@ Comprobado después de aplicarlas:
 - La **seguridad** aguanta: con la clave pública sin sesión, todo devuelve
   401; con la sesión de otro usuario, 403.
 
-### B. Los indicadores del motor (5 minutos)
+### B. Los indicadores del motor — HECHO (21-oct)
 
-> ⚠ **Ojo: con los 6 indicadores que tienes ahora el motor NO ABRE NADA.**
-> No es un fallo: el motor exige que **todos** los indicadores coincidan a la
-> vez (si uno dice compra y otro venta, no hay señal). Con 6 indicadores
-> eso no pasa: medido sobre 2.000 velas reales de Q1-2025, **0 operaciones**.
-> El campo de entrenamiento te lo dice ahora mismo, indicador por indicador:
-> `close_price` 470 oper. (-4,0 %), `stochastic` 223 (-2,13 %), `bollinger`
-> 112 (-1,34 %), `rsi` 89 (-1,13 %), `ai_indicator` 0.
-> **Empieza con 1 o 2 indicadores** (Precio de cierre, o Precio + RSI).
+Medido con el backtest real (BTCUSDT, 1 h, 3.000 velas, capital 1.000, stop 2 %,
+take 4 %, walk-forward de 4 bloques y 30 estrategias aleatorias de referencia):
 
-1. _Motor → Configuración del motor_.
-2. Empieza por **un solo indicador** (Precio de cierre) y la estrategia
-   _Fija_, horizonte 15 min, importe 20 USDT → **Guardar configuración**.
-3. Mídelo antes de dejarlo correr:
-   ```powershell
-   cd C:\Users\Usuario\.copilot\repos\deal-maker-bot-trading
-   $env:PATH = "C:\Users\Usuario\.bun\bin;" + $env:PATH
-   bun run backtest -- --simbolo BTCUSDT --intervalo 1h --velas 3000 --indicadores close_price --capital 1000 --stop 2 --take 4 --walk-forward 4 --aleatorio 30
-   ```
-4. Si el resultado no aguanta (walk-forward con bloques negativos, o no
-   gana a las aleatorias), **no añadas más indicadores**: casi nunca mejora.
-5. Cuando te convence → _Motor → Iniciar 24/7_ (abre la sesión del motor).
+| Indicadores                              | Retorno | Ops  | Walk-forward | Percentil vs azar |
+| --------------------------------------- | ------- | ---- | ------------ | ----------------- |
+| close_price                              | −1,36 % | 271 | 0/4 bloques   | **3 %** (peor que el azar) |
+| close_price + rsi                        | +0,03 % | 2    | 1/4 bloques   | 40 % (solo 2 ops: ruido) |
+| **rsi** (el que hay puesto)              | **+0,19 %** | 24 | **2/4 bloques** | **67 %** |
+| bollinger                                | −0,09 % | 55 | 1/4 bloques   | 53 % (indistinguible) |
+| stochastic                               | −0,51 % | 75 | 1/4 bloques   | 20 % (peor que el azar) |
+| los 6 de antes                           | 0,00 %  | **0** | 0/4 bloques | — (no abre NADA) |
+| AI Indicator (el que tenias)             | 0,00 %  | **0** | 0/4 bloques | — (no abre NADA) |
 
-> Los bots se tienen que poner en marcha uno a uno: _Mis bots → botón del
-> bot → Iniciar_. El motor solo opera los que estén `running` y con
-> automatización activada.
+**Por qué 0 operaciones**: el motor exige que **todos** los indicadores
+coincidan a la vez (si uno dice compra y otro venta, no hay señal). Con 5-6
+eso no pasa; y el *AI Indicator* es un **filtro**: no genera señal propia, así
+que solo él tampoco abre nada.
 
+**Decisión aplicada**: `indicator_ids = ["rsi"]`, estrategia `fixed` (cantidad
+fija), horizonte 5 min, importe 20 USDT. Es el único que no pierde contra el
+azar. Lo puedes cambiar en _Motor → Configuración del motor_.
+
+> **Honestidad**: 24 operaciones en 4 meses son pocas (la app avisa de que por
+> debajo de 100 el resultado es ruido). El RSI no es una máquina de dinero:
+> es **el menos malo** de lo medido y sirve para acumular datos reales en
+> demo. Antes de poner dinero real, mide con walk-forward y contra la
+> referencia aleatoria (justo lo que está en `BACKTEST.md`).
 ### C. El motor 24/7 — DESCARTADO por ahora (20-oct)
 
 **Decisión tuya**: el 24/7 automático se queda fuera (no tienes cuenta de
