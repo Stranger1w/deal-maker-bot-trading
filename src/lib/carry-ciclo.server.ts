@@ -66,6 +66,17 @@ export async function cicloCobertura(args: {
   const { db, bot, env, credenciales, size, dryRun, log } = args;
   const simbolo = bot.pair.toUpperCase();
 
+  // Sin la migracion (bots.modo_operacion y bot_executions.market) NO se puede
+  // saber cual pata es cual: las dos usan el mismo par. Mejor no operar que
+  // dejar la cobertura a medias.
+  const { error: errorColumnas } = await db.from("bot_executions").select("market").limit(1);
+  if (errorColumnas) {
+    const motivo =
+      "Falta la migracion 20261030000000_bots_cobertura.sql: aplicala en el SQL Editor de Supabase para poder distinguir las dos patas de la cobertura.";
+    await log("warn", `Cobertura omitida. ${motivo}`);
+    return { accion: "omitido", detalle: motivo, pnl: 0, error: motivo };
+  }
+
   const estado = await estadoCobertura({ db, botId: bot.id, simbolo });
   if (estado.bloqueo) {
     await log("warn", `Cobertura omitida: ${estado.bloqueo}`);
