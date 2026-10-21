@@ -218,7 +218,10 @@ export const avanzarMineria = createServerFn({ method: "POST" })
  */
 export const compararMineria = createServerFn({ method: "POST" })
   .middleware([requireAdmin])
-  .handler(async ({ context }) => {
+  .inputValidator((input: unknown) =>
+    z.object({ moneda: z.string().max(16).optional() }).parse(input ?? {}),
+  )
+  .handler(async ({ data, context }) => {
     const db = await admin();
     const { medirHashRateMaquina } = await import("./mineria/hashrate");
     const { aUnidadLegible } = await import("./mineria/modelo");
@@ -255,6 +258,9 @@ export const compararMineria = createServerFn({ method: "POST" })
     }
     const monedas = [...new Set((workers ?? []).map((w) => String(w.coin).toUpperCase()))];
     if (!monedas.includes("BTC")) monedas.push("BTC");
+    // La moneda que el dueno quiere probar ("¿y si minara esta?").
+    const pedida = (data.moneda ?? "").trim().toUpperCase();
+    if (pedida && !monedas.includes(pedida)) monedas.push(pedida);
 
     const medicion = medirHashRateMaquina(1500);
     // El hash rate del enjambre: el SOSTENIDO de cada equipo (10 s), que es

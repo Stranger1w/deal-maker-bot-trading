@@ -102,11 +102,14 @@ function MiningPage() {
     fuenteHash?: string;
   } | null>(null);
   const [comparando, setComparando] = useState(false);
+  const [monedaComparar, setMonedaComparar] = useState("");
 
   const comparar = async () => {
     setComparando(true);
     try {
-      const r = await compararFn({});
+      const r = await compararFn({
+        data: { ...(monedaComparar ? { moneda: monedaComparar } : {}) },
+      });
       setComparativa(r);
       void qc.invalidateQueries();
     } catch (e) {
@@ -765,6 +768,29 @@ function MiningPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="min-w-52 space-y-1">
+                <Label className="text-[11px]">¿Y si minara otra moneda?</Label>
+                <Select value={monedaComparar} onValueChange={setMonedaComparar}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Elige de la lista" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(opciones?.mercado ?? []).map((m) => (
+                      <SelectItem key={m.simbolo} value={m.simbolo}>
+                        {m.simbolo}
+                        {m.minable ? " · minable con CPU" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {monedaComparar && (
+                <Button variant="ghost" size="sm" onClick={() => setMonedaComparar("")}>
+                  Quitar
+                </Button>
+              )}
+            </div>
             Usa el hash rate medido en esta máquina, los datos reales de la red y el precio real
             para ver cuánto da cada moneda y cuánto cuesta la luz. Antes aquí había números de
             ejemplo de una máquina dedicada (120 TH/s): no eran de este equipo.
