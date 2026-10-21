@@ -120,6 +120,19 @@ o baje**: es cobertura, no adivinar.
 > precio de cierre) depende de acertar el movimiento, y con los indicadores
 > que hay no lo consigue: lo mejor que se ha medido es no perder.
 >
+> **Como bot, ya esta implementado** (21-oct): en _Mis bots > Motor de cada bot_
+> hay un interruptor **\u00ABCobertura (carry)»**. Con el interruptor activado, el bot
+> deja de seguir la se\u00F1al y hace la cobertura: en **demo** con los precios reales
+> (spot y perpetuo) y la financiaci\u00F3n real de Binance; en **real**, con las dos
+> ordenes de verdad (compra el spot y vende el perpetuo) y la pata corta se cierra
+> antes de vender el spot, para no quedar nunca en corto desnudo (que puede
+> perder sin limite).
+>
+> **Necesitas una migracion** (`20261030000000_bots_cobertura.sql`, el SQL esta en el
+> portapapeles) y, para operar de verdad, **activar el permiso \u00ABEnable Futures\u00BB**
+> de tu API key en Binance (ahora mismo tu clave no lo tiene: la app lo comprueba y
+> lo dice).
+>
 > **Lo que falta para que sea un bot**: una cuenta con futuros (el motor ahora
 > solo compra spot en testnet) y un modo de dos patas en el motor (una
 > posicion larga en spot y una corta en el perpetuo a la vez, con el

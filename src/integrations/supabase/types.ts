@@ -529,6 +529,7 @@ export type Database = {
           created_at: string
           daily_loss: number
           demo_engine: string
+          modo_operacion: string
           demo_since: string
           demo_trades: number
           exchange: string
@@ -564,6 +565,7 @@ export type Database = {
           created_at?: string
           daily_loss?: number
           demo_engine?: string
+          modo_operacion?: string
           demo_since?: string
           demo_trades?: number
           exchange?: string
@@ -599,6 +601,7 @@ export type Database = {
           created_at?: string
           daily_loss?: number
           demo_engine?: string
+          modo_operacion?: string
           demo_since?: string
           demo_trades?: number
           exchange?: string

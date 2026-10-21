@@ -44,6 +44,9 @@ const USUARIO = [
   // El informe del carry: lee las cuotas de financiacion y los precios
   // PUBLICOS de Binance. No toca la base ni devuelve nada del usuario.
   "informeCarry",
+  // Marcar un bot como cobertura (carry): cada usuario lo hace con SU bot
+  // (exigirBotPropio comprueba la fila antes de tocar nada).
+  "configurarModoCobertura",
   // Borrar y mover un bot: cada usuario puede hacerlo SOLO con los suyos
   // (exigirBotPropio comprueba la fila antes de tocar nada).
   "eliminarBot",

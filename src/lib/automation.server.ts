@@ -1239,6 +1239,64 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           continue;
         }
 
+        const idempotencyKeyCobertura = `${bot.id}:${cycleKey}:${tickSecs}s`;
+        // ── Cobertura (carry) ────────────────────────────
+        // Un bot de cobertura no sigue la señal: compra el spot y vende
+        // el perpetuo para cobrar la financiación (no depende de la
+        // dirección del precio). Si no esta marcada así, el bot es
+        // direccional y sigue el camino de siempre.
+        if (String(bot.modo_operacion ?? "direccional") === "cobertura") {
+          try {
+            const { cicloCobertura } = await import("./carry-ciclo.server");
+            const { loadBinanceSecret } = await import("./credenciales.server");
+            const { resolveBinanceTradingEnv } = await import("./binance-trading.server");
+            const envTrading = await resolveBinanceTradingEnv();
+            const credenciales =
+              bot.mode === "real" ? await loadBinanceSecret(db, bot.user_id ?? null) : null;
+            // El importe a cubrir es el capital asignado al bot (la
+            // cobertura no arriesga direccion: arriesga el basis).
+            const importeCobertura = Math.min(Number(bot.capital), Number(bot.max_capital));
+            const resultado = await cicloCobertura({
+              db,
+              bot: {
+                id: bot.id,
+                name: bot.name,
+                pair: bot.pair,
+                capital: Number(bot.capital),
+                max_capital: Number(bot.max_capital),
+                mode: String(bot.mode),
+              },
+              env: envTrading,
+              credenciales,
+              size: importeCobertura,
+              dryRun: bot.mode === "real" && settings.allow_live_orders !== true,
+              idempotencyKey: idempotencyKeyCobertura,
+              log: (nivel, mensaje) => log(db, bot.id, nivel, mensaje),
+            });
+            if (resultado.accion === "cerrado" && resultado.pnl) {
+              pnlDelta = resultado.pnl;
+            }
+            registrarDecision(
+              resultado.accion === "abierto"
+                ? "entrada"
+                : resultado.accion === "cerrado"
+                  ? "salida"
+                  : "omitido",
+              `Cobertura: ${resultado.detalle}`,
+            );
+            omitir("cobertura", resultado.detalle);
+          } catch (e) {
+            await log(
+              db,
+              bot.id,
+              "error",
+              `Ciclo de cobertura fallido: ${e instanceof Error ? e.message : "error desconocido"}`,
+            );
+            omitir("cobertura_error", "El ciclo de cobertura fallo.");
+          }
+          continue;
+        }
+
         // Fase 1 · aperturas: sin sesión activa (o en cierre por timer,
         // Detener o Kill Switch) no se abren posiciones nuevas. Una posición
         // real abierta sí pasa por realCycleOrder más abajo, que en ese caso

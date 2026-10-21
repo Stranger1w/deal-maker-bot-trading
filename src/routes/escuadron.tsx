@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { eliminarBot, moverBot } from "@/lib/bots-orden.functions";
+import { configurarModoCobertura } from "@/lib/carry.functions";
 import { AlertsPanel } from "@/components/AlertsPanel";
 import { EmptyState } from "@/components/EmptyState";
 import { Explicar } from "@/components/Explicar";
@@ -202,6 +203,26 @@ Se borran tambien sus logs, ejecuciones y configuracion. No se puede deshacer.`,
   const [groupBy, setGroupBy] = useState<"strategy" | "pair">("strategy");
   const [realTarget, setRealTarget] = useState<BotRow | null>(null);
   const [motorFor, setMotorFor] = useState<BotRow | null>(null);
+  // Cobertura (carry): que bots compran el spot y venden el perpetuo.
+  const [coberturaPorBot, setCoberturaPorBot] = useState<Record<string, boolean>>({});
+  const alternarCobertura = async (bot: BotRow, cobertura: boolean) => {
+    try {
+      setCoberturaGuardando(true);
+      await configurarModoCobertura({ data: { botId: bot.id, cobertura } });
+      setCoberturaPorBot((prev) => ({ ...prev, [bot.id]: cobertura }));
+      toast.success(
+        cobertura
+          ? `${bot.name} pasa a cobertura (carry): compra spot y vende perpetuo.`
+          : `${bot.name} vuelve a operar con la señal de los indicadores.`,
+      );
+      void qc.invalidateQueries();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo cambiar el modo");
+    } finally {
+      setCoberturaGuardando(false);
+    }
+  };
+  const [coberturaGuardando, setCoberturaGuardando] = useState(false);
   const [motorIndicadores, setMotorIndicadores] = useState<string[]>([]);
   const [motorEstrategia, setMotorEstrategia] = useState<
     "fixed" | "conservative" | "optimal" | "aggressive"
