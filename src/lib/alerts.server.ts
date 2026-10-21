@@ -68,23 +68,12 @@ export async function raiseAlert(db: Db, alert: AlertInput) {
     throw new Error(`No se pudo guardar la alerta "${alert.title}": ${error.message}`);
   }
 
-  // Aviso externo opcional (Telegram): el motor puede correr en un cron que
-  // nadie mira, y un limite de riesgo debe salir de la app. Si no hay
-  // Telegram configurado o no hay internet, esto no hace nada y no falla.
+  // Aviso externo por CORREO: el motor puede correr en un cron que nadie
+  // mira, y un limite de riesgo debe salir de la app. Sin proveedor de
+  // correo, o sin internet, esto no hace nada y no falla.
+  //
+  // (Telegram se descarto: el dueno prefiere el correo de su cuenta.)
   if (alert.severity === "critical" || alert.severity === "warning") {
-    try {
-      const { notificar } = await import("./notificar.server");
-      await notificar(
-        alert.severity === "critical" ? "critico" : "aviso",
-        alert.title,
-        alert.message,
-      );
-    } catch {
-      // Un fallo de la notificacion NUNCA rompe la alerta ni el motor.
-    }
-
-    // Y el correo: al que el dueno haya activado (por defecto, el de su
-    // cuenta). Sin proveedor de correo, esto no hace nada.
     if (emailConfigured && correo) {
       try {
         const { enviarEmail, cuerpoAviso } = await import("./email.server");
@@ -94,7 +83,7 @@ export async function raiseAlert(db: Db, alert: AlertInput) {
           cuerpoAviso(alert.title, alert.message),
         );
       } catch {
-        // Igual que Telegram: un fallo de correo no rompe nada.
+        // Un fallo de correo NUNCA rompe la alerta ni el motor.
       }
     }
   }

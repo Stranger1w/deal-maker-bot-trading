@@ -190,7 +190,8 @@ llame a `POST /api/public/automation-tick` con `Authorization: Bearer
 
 | Extra                  | Qué necesito                                                                                    |
 | ---------------------- | ----------------------------------------------------------------------------------------------- |
-| Avisos por Telegram    | `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID` (en el entorno del servidor)                          |
+| Avisos por Telegram    | **Descartado** (21-oct): el aviso va por correo, que es lo que pide el dueno                        |
+| Avisos por correo      | **Hecho**: el interruptor esta en _Seguridad > Notificaciones por correo_ y va al correo de la cuenta |
 | Correo de los reportes | Un dominio con el remitente verificado (o te dejo el aviso de "pendiente de dominio")           |
 | Red de KAS para minar  | Hash rate de la red, recompensa por bloque y tiempo de bloque (los tienes en la web de tu pool) |
 | Cron propio en la nube | Tu VPS/Railway/Cloudflare (o dime cuál y te doy los ficheros)                                   |
@@ -277,9 +278,14 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
 
 ## 3. Extras (cuando haya tiempo)
 
-- **Telegram**: pásame `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID` (en el
-  entorno del servidor, nunca en el repo) y te aviso por Telegram de los
-  límites y errores críticos del motor.
+- **Telegram**: **descartado** (21-oct). El módulo se ha borrado del código: los
+  avisos críticos van **por correo**, que es lo que pidió el dueno.
+- **Correo (Gmail)**: **hecho y funcionando** (21-oct). El interruptor está en
+  _Seguridad > Notificaciones por correo_: activa y desactiva los avisos, y van al
+  correo con el que se creó la cuenta (`andrew.paulino.reyes@gmail.com`), que
+  ya está activado. El proveedor (Resend) tiene la clave puesta: se probó un
+  correo real y un aviso de prueba. Los reportes diario y semanal también
+  salen por correo, con su estado de envío real guardado.
 - **Correo**: **HECHO Y FUNCIONANDO (21-oct)**. En _Seguridad > Notificaciones
   por correo_ hay un interruptor para activarlo y desactivarlo; los avisos van
   al **correo con el que creaste la cuenta** (`andrew.paulino.reyes@gmail.com`),

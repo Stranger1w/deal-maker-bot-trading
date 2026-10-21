@@ -83,7 +83,12 @@ export function AlertsPanel({
             <p className="mt-1 text-xs text-muted-foreground">{a.message}</p>
             <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
               <span>
-                Entrega: {a.delivery_status === "in_app_only" ? "solo in-app" : a.delivery_status}
+                Entrega:{" "}
+                {a.delivery_status === "in_app_only"
+                  ? "solo dentro de la app"
+                  : a.delivery_status === "queued_email"
+                    ? "por correo"
+                    : a.delivery_status}
               </span>
               {a.is_demo && <span>Datos demo / seed</span>}
               {!a.acknowledged && (

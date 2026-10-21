@@ -65,7 +65,7 @@
 - [x] Interfaz amigable e intuitiva: navegación por tareas con el grupo visible,
       glosario con "?" en cada término técnico, estados vacíos que explican qué pasa
       y qué hacer, formularios con ayuda y el panel diciendo qué hacer cuando algo falla
-- [ ] Alertas por Telegram ya están (opcional); falta el canal de correo con dominio
+- [x] Alertas por correo al correo de la cuenta (hecho 21-oct, con la clave de Resend puesta). Telegram descartado.
       verificado
 - [ ] Idempotencia y reintentos con backoff en el envío de órdenes (parcial: ya hay
       clave de idempotencia, manejo del 23505 y reconciliación de la posición; falta
