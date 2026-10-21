@@ -1338,8 +1338,10 @@ export type Database = {
           gross_daily_usd: number | null
           hash_rate: number
           hash_rate_max: number | null
+          hash_rate_sostenido: number | null
           hash_unit: string
           hilos: number
+          pool_fee_pct: number
           id: string
           last_payout_at: string | null
           last_seen_at: string | null
@@ -1360,8 +1362,10 @@ export type Database = {
           estimated_daily_earnings?: number
           hash_rate?: number
           hash_rate_max?: number | null
+          hash_rate_sostenido?: number | null
           hash_unit?: string
           hilos?: number
+          pool_fee_pct?: number
           id?: string
           name: string
           pool: string
@@ -1383,8 +1387,10 @@ export type Database = {
           estimated_daily_earnings?: number
           hash_rate?: number
           hash_rate_max?: number | null
+          hash_rate_sostenido?: number | null
           hash_unit?: string
           hilos?: number
+          pool_fee_pct?: number
           id?: string
           name?: string
           pool?: string

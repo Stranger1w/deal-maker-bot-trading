@@ -53,4 +53,30 @@ describe("comparativa de monedas con tu equipo", () => {
       r.filas.reduce((min, f) => Math.min(min, f.gananciaUsd), Infinity),
     );
   });
+
+  test("la comision del pool se resta de la ganancia de esa moneda", () => {
+    const redes = new Map([["BTC", RED_BTC]]);
+    const sinFee = compararMonedas(["BTC"], redes, hash(3e6), 65, 0.15);
+    const conFee = compararMonedas(["BTC"], redes, hash(3e6), 65, 0.15, new Map([["BTC", 0.01]]));
+    expect(conFee.filas[0]?.comisionUsd).toBeCloseTo((sinFee.filas[0]?.brutoUsd ?? 0) * 0.01, 12);
+    expect(conFee.filas[0]?.gananciaUsd).toBeLessThan(sinFee.filas[0]?.gananciaUsd ?? 0);
+    // El bruto sigue siendo el bruto.
+    expect(conFee.filas[0]?.brutoUsd).toBe(sinFee.filas[0]?.brutoUsd);
+  });
+
+  test("la comision de una moneda no afecta a las otras", () => {
+    const redes = new Map([
+      ["BTC", RED_BTC],
+      ["KAS", { ...RED_BTC, coin: "KAS", hashRateRed: 1e18, precioUsd: 0.2 }],
+    ]);
+    const conFee = compararMonedas(
+      ["BTC", "KAS"],
+      redes,
+      hash(3e6),
+      65,
+      0.15,
+      new Map([["BTC", 0.01]]),
+    );
+    expect(conFee.filas.find((f) => f.coin === "KAS")?.comisionUsd).toBe(0);
+  });
 });

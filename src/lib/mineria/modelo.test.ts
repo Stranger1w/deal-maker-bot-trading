@@ -125,6 +125,27 @@ describe("balance diario (lo que cuenta el enjambre son las GANANCIAS)", () => {
     expect(balance.laLuzSeLoCome).toBe(false);
     expect(balance.veredicto).toContain("Ganas");
   });
+
+  test("la comision del pool se resta de la ganancia (no llega a tu cartera)", () => {
+    const sinComision = balanceDiario(hashDe(3e6), RED, 65, 0.15);
+    const conComision = balanceDiario(hashDe(3e6), RED, 65, 0.15, 0.005);
+    // El pool se lleva el 0,5 % de lo bruto.
+    expect(conComision.comisionUsd).toBeCloseTo(sinComision.brutoUsd * 0.005, 12);
+    expect(conComision.gananciaUsd).toBeCloseTo(sinComision.brutoUsd * 0.995, 12);
+    // El bruto sigue siendo el bruto: la comision es informacion aparte.
+    expect(conComision.brutoUsd).toBe(sinComision.brutoUsd);
+    // La luz sigue sin descontarse de la ganancia.
+    expect(conComision.luzUsd).toBe(sinComision.luzUsd);
+    // Y el neto es la ganancia menos la luz.
+    expect(conComision.netoUsd).toBeCloseTo(conComision.gananciaUsd - conComision.luzUsd, 12);
+    expect(conComision.veredicto).toContain("pool");
+  });
+
+  test("una comision absurda se limita (no deja ganar dinero negativo)", () => {
+    const balance = balanceDiario(hashDe(3e6), RED, 65, 0.15, 5);
+    expect(balance.comisionUsd).toBeCloseTo(balance.brutoUsd * 0.99, 12);
+    expect(balance.gananciaUsd).toBeGreaterThanOrEqual(0);
+  });
 });
 
 describe("capacidad del enjambre", () => {

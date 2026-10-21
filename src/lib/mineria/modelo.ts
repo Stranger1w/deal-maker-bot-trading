@@ -131,6 +131,8 @@ export type Balance = {
   gananciaUsd: number;
   /** Alias de `gananciaUsd` (el bruto de siempre). */
   brutoUsd: number;
+  /** Lo que se lleva el pool (comision). */
+  comisionUsd: number;
   /** Coste de luz al dia, en USD (se informa aparte, no se resta). */
   luzUsd: number;
   /** Bruto menos luz (queda a mano, pero el enjambre no lo usa como titular). */
@@ -151,11 +153,17 @@ export function balanceDiario(
   red: RedMoneda | null,
   watts: number,
   precioKwhUsd: number,
+  /** Comision del pool (0,01 = 1 %): lo que se lleva el pool de tu parte. */
+  comisionPoolPct = 0,
 ): Balance {
   const bruto = red ? gananciaBrutaDiaria(hashPropio, red) : { usd: 0, monedas: 0, cuotaRed: 0 };
+  // El pool se lleva su parte ANTES de la luz: es dinero que no llega a tu
+  // cartera, como la luz.
+  const comisionUsd = bruto.usd * Math.max(0, Math.min(0.99, comisionPoolPct));
+  const gananciaUsd = bruto.usd - comisionUsd;
   const luzUsd = costeLuzDiario(watts, precioKwhUsd);
-  const netoUsd = bruto.usd - luzUsd;
-  const laLuzSeLoCome = luzUsd > bruto.usd;
+  const netoUsd = gananciaUsd - luzUsd;
+  const laLuzSeLoCome = luzUsd > gananciaUsd;
 
   let veredicto: string;
   if (!red) {
@@ -165,7 +173,11 @@ export function balanceDiario(
     veredicto =
       "Tu hash rate es una fraccion de la red: la recompensa diaria te da cero. No hay ganancia posible con esta maquina.";
   } else {
-    veredicto = `Ganas ${bruto.usd.toFixed(8)} USD al dia con tu hash rate.`;
+    veredicto = "Ganas " + gananciaUsd.toFixed(8) + " USD al dia con tu hash rate";
+    if (comisionUsd > 0) {
+      veredicto += " (el pool se lleva " + comisionUsd.toFixed(8) + " USD)";
+    }
+    veredicto += ".";
     if (laLuzSeLoCome) {
       // Dato, no sermoneo: la luz se informa aparte (no se resta de la cifra
       // principal) y se dice cuanto se lleva.
@@ -174,8 +186,9 @@ export function balanceDiario(
   }
 
   return {
-    gananciaUsd: bruto.usd,
+    gananciaUsd,
     brutoUsd: bruto.usd,
+    comisionUsd,
     luzUsd,
     netoUsd,
     monedasDia: bruto.monedas,

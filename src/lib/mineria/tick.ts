@@ -48,6 +48,8 @@ type WorkerMina = {
   network_config?: NetworkConfig | null;
   /** Cuantos nucleos usa este equipo. */
   hilos?: number | null;
+  /** Comision del pool (0,01 = 1 %). */
+  pool_fee_pct?: number | null;
 };
 
 /** Precio por kWh por defecto si el dueno no lo pone (0,15 USD es tipico). */
@@ -94,38 +96,48 @@ export async function tickMineria(
 ): Promise<ResultadoMineria> {
   const errores: string[] = [];
 
-  // Las columnas nuevas (migracion 20261026000000) todavia pueden no estar:
-  // en ese caso se leen las antiguas y el motor avisa, pero sigue operando.
-  const conNuevas = await db
-    .from("mining_workers")
-    .select(
-      "id,user_id,name,coin,pool,status,hash_rate,hash_unit,uptime_seconds,estimated_daily_earnings,updated_at,last_seen_at,power_watts,gross_daily_usd,net_daily_usd,last_payout_at,network_config,hilos",
-    )
-    .in("status", ["mining", "offline"]);
-  let filas: unknown[] | null = (conNuevas.data ?? []) as unknown[];
-  if (conNuevas.error) {
-    const antiguas = await db
+  // Las columnas nuevas (migraciones 20261026000000 y 20261028000000) todavia
+  // pueden no estar: en ese caso se leen las antiguas y el motor avisa, pero
+  // sigue operando. Se prueban de la mas nueva a la mas antigua.
+  const columnas = [
+    // Las de 20261026000000 + 20261028000000 (comision del pool).
+    "id,user_id,name,coin,pool,status,hash_rate,hash_unit,uptime_seconds,estimated_daily_earnings,updated_at,last_seen_at,power_watts,gross_daily_usd,net_daily_usd,last_payout_at,network_config,hilos,pool_fee_pct",
+    // Las de 20261026000000 (sin la comision del pool).
+    "id,user_id,name,coin,pool,status,hash_rate,hash_unit,uptime_seconds,estimated_daily_earnings,updated_at,last_seen_at,power_watts,gross_daily_usd,net_daily_usd,last_payout_at,network_config,hilos",
+    // Las de siempre (sin nada de mineria real).
+    "id,user_id,name,coin,pool,status,hash_rate,hash_unit,uptime_seconds,estimated_daily_earnings,updated_at,hilos",
+  ];
+  let filas: unknown[] | null = null;
+  let faltanColumnas = false;
+  for (const columnasSel of columnas) {
+    const consulta = await db
       .from("mining_workers")
-      .select(
-        "id,user_id,name,coin,pool,status,hash_rate,hash_unit,uptime_seconds,estimated_daily_earnings,updated_at,hilos",
-      )
+      .select(columnasSel)
       .in("status", ["mining", "offline"]);
-    if (antiguas.error) {
-      return {
-        workersRevisados: 0,
-        workersActualizados: 0,
-        offlineDetectados: 0,
-        payoutsGenerados: 0,
-        hashRateMaquina: 0,
-        hashRateUnidad: "MH/s",
-        porUsuario: [],
-        errores: [antiguas.error.message],
-      };
+    if (!consulta.error) {
+      filas = (consulta.data ?? []) as unknown[];
+      if (columnasSel !== columnas[0]) faltanColumnas = true;
+      break;
     }
-    filas = (antiguas.data ?? []) as unknown[];
+  }
+  if (faltanColumnas) {
     errores.push(
-      "Faltan las columnas del motor de mineria (migracion 20261026000000_mineria_real.sql): se avanza el enjambre sin guardar el hash rate real ni el neto.",
+      "Faltan columnas del motor de mineria (migracion 20261026000000_mineria_real.sql y 20261028000000_mineria_comision_pool.sql): se avanza el enjambre sin la comision del pool.",
     );
+  }
+  if (filas === null) {
+    return {
+      workersRevisados: 0,
+      workersActualizados: 0,
+      offlineDetectados: 0,
+      payoutsGenerados: 0,
+      hashRateMaquina: 0,
+      hashRateUnidad: "MH/s",
+      porUsuario: [],
+      errores: [
+        "No se pudieron leer los equipos de mineria: revisa las migraciones 20261026000000_mineria_real.sql y 20261028000000_mineria_comision_pool.sql.",
+      ],
+    };
   }
 
   const workers = (filas ?? []) as unknown as WorkerMina[];
@@ -161,7 +173,9 @@ export async function tickMineria(
     // ellos segun los hilos de cada uno.
     const hilosPorWorker = lista.map((w) => Math.max(1, Number(w.hilos ?? 1)));
     const hilosTotales = hilosPorWorker.reduce((s, h) => s + h, 0);
-    const capacidad = await medirCapacidad(hilosTotales, 1200);
+    // 8 segundos, no 1,2: un PC caliente rinde menos que en un pico de
+    // un segundo, y minar es de horas. La medicion se cachea 10 minutos.
+    const capacidad = await medirCapacidad(hilosTotales, 8000);
     const hashPorWorker = repartirPorHilos(capacidad.hashPorSegundo, hilosPorWorker);
 
     for (const [indice, w] of lista.entries()) {
@@ -177,7 +191,13 @@ export async function tickMineria(
         hashPorSegundoHashes: hashDeEste,
         unidad: aUnidadLegible(hashDeEste).unidad,
       };
-      const balance = balanceDiario(hashPropio, red, watts, precioKwh);
+      const balance = balanceDiario(
+        hashPropio,
+        red,
+        watts,
+        precioKwh,
+        Number(w.pool_fee_pct ?? 0) / 100,
+      );
 
       // Uptime: lo que ha pasado desde la ultima vez que se vio al worker.
       const ultimaVez = Date.parse(w.last_seen_at ?? w.updated_at ?? ahoraIso);

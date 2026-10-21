@@ -45,6 +45,12 @@ export type ResultadoEntrenamiento = {
   workerNombre: string;
   /** Nucleos de la maquina. */
   nucleos: number;
+  /** Hash rate SOSTENIDO (10 s): el que de verdad se gana minando horas. */
+  hashSostenido: number;
+  valorSostenido: number;
+  unidadSostenido: string;
+  /** Cuanto baja el rendimiento con el tiempo (el PC se calienta). */
+  caidaPct: number;
   /** La curva medida (de verdad). */
   curva: PasoEntrenamiento[];
   /** Hilos elegidos (los que mejor rinden). */
@@ -110,6 +116,15 @@ export async function entrenarWorker(
 
   const legible = aUnidadLegible(mejor.hashPorSegundo);
 
+  // El hash rate SOSTENIDO: 10 segundos con los mismos hilos. Es el numero
+  // que vale para un dia entero de minado (el PC se calienta y baja).
+  const sostenido = await medirHashRateHilos(mejor.hilos, 10_000);
+  const legibleSostenido = aUnidadLegible(sostenido.hashPorSegundo);
+  const caidaPct =
+    mejor.hashPorSegundo > 0
+      ? ((mejor.hashPorSegundo - sostenido.hashPorSegundo) / mejor.hashPorSegundo) * 100
+      : 0;
+
   // Se guarda el entrenamiento (si la tabla existe; si no, sigue funcionando).
   let guardado = false;
   try {
@@ -129,18 +144,35 @@ export async function entrenarWorker(
       nota: `Medido con SHA-256 real en ${nucleos} nucleos`,
     });
     if (!error) {
-      // Las columnas del equipo (hilos, hash_rate_max) tambien son nuevas: si
-      // no estan todavia, el entrenamiento se guarda igual y solo no se asigna.
+      // Las columnas del equipo (hilos, hash_rate_max, hash_rate_sostenido)
+      // tambien son nuevas: si no estan todavia, el entrenamiento se guarda
+      // igual y solo no se asigna al equipo.
       const { error: errorWorker } = await db
         .from("mining_workers")
         .update({
           hilos: mejor.hilos,
           hash_rate_max: Number(mejor.hashPorSegundo.toFixed(3)),
+          hash_rate_sostenido: Number(sostenido.hashPorSegundo.toFixed(3)),
           updated_at: new Date().toISOString(),
         })
         .eq("id", fila.id)
         .eq("user_id", userId);
-      guardado = !errorWorker;
+      if (errorWorker) {
+        // Puede que falte solo la columna del hash rate sostenido: se
+        // reintenta sin ella (migracion 20261028000000).
+        const { error: errorSinSostenido } = await db
+          .from("mining_workers")
+          .update({
+            hilos: mejor.hilos,
+            hash_rate_max: Number(mejor.hashPorSegundo.toFixed(3)),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", fila.id)
+          .eq("user_id", userId);
+        guardado = !errorSinSostenido;
+      } else {
+        guardado = true;
+      }
     }
   } catch {
     guardado = false;
@@ -161,6 +193,10 @@ export async function entrenarWorker(
     hashPorSegundo: mejor.hashPorSegundo,
     valor: legible.valor,
     unidad: legible.unidad,
+    hashSostenido: sostenido.hashPorSegundo,
+    valorSostenido: legibleSostenido.valor,
+    unidadSostenido: legibleSostenido.unidad,
+    caidaPct: Number(caidaPct.toFixed(1)),
     antesHashPorSegundo: antes,
     mejora: antes > 0 ? mejor.hashPorSegundo / antes : 1,
     guardado,

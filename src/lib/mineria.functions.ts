@@ -34,27 +34,32 @@ export const estadoMineria = createServerFn({ method: "POST" })
     const medicion = medirHashRateMaquina(1200);
     const hashMaquina = medicion.hashPorSegundo;
 
-    // Las columnas nuevas todavia pueden no estar (migracion 20261026000000):
-    // si faltan, se leen las antiguas y la app lo avisa, pero sigue.
-    const conNuevas = await db
-      .from("mining_workers")
-      .select(
-        "id,user_id,name,coin,pool,rig_id,status,hash_rate,hash_unit,uptime_seconds,estimated_daily_earnings,last_seen_at,power_watts,gross_daily_usd,net_daily_usd,network_config",
-      )
-      .eq("user_id", context.userId);
-    let filas: unknown[] = (conNuevas.data ?? []) as unknown[];
+    // Las columnas nuevas todavia pueden no estar (migraciones 20261026000000
+    // y 20261028000000): si faltan, se leen las antiguas y la app lo avisa,
+    // pero sigue funcionando.
+    const columnas = [
+      "id,user_id,name,coin,pool,rig_id,status,hash_rate,hash_unit,uptime_seconds,estimated_daily_earnings,last_seen_at,power_watts,gross_daily_usd,net_daily_usd,network_config,pool_fee_pct,hash_rate_sostenido",
+      "id,user_id,name,coin,pool,rig_id,status,hash_rate,hash_unit,uptime_seconds,estimated_daily_earnings,last_seen_at,power_watts,gross_daily_usd,net_daily_usd,network_config",
+      "id,user_id,name,coin,pool,rig_id,status,hash_rate,hash_unit,uptime_seconds,estimated_daily_earnings",
+    ];
+    let filas: unknown[] = [];
     let avisoMigracion: string | null = null;
-    if (conNuevas.error) {
-      const antiguas = await db
+    for (const columnasSel of columnas) {
+      const consulta = await db
         .from("mining_workers")
-        .select(
-          "id,user_id,name,coin,pool,rig_id,status,hash_rate,hash_unit,uptime_seconds,estimated_daily_earnings",
-        )
+        .select(columnasSel)
         .eq("user_id", context.userId);
-      if (antiguas.error) throw new Error(antiguas.error.message);
-      filas = (antiguas.data ?? []) as unknown[];
-      avisoMigracion =
-        "Falta la migracion 20261026000000_mineria_real.sql: se muestran las cifras basicas, pero no se guardan el hash rate real, el neto ni el precio de la luz.";
+      if (!consulta.error) {
+        filas = (consulta.data ?? []) as unknown[];
+        if (columnasSel === columnas[1]) {
+          avisoMigracion =
+            "Falta la migracion 20261028000000_mineria_comision_pool.sql: se ve todo, pero sin la comision del pool.";
+        } else if (columnasSel === columnas[2]) {
+          avisoMigracion =
+            "Falta la migracion 20261026000000_mineria_real.sql: se muestran las cifras basicas, pero no se guardan el hash rate real, el neto ni el precio de la luz.";
+        }
+        break;
+      }
     }
 
     const filasTipadas = filas as Array<{
@@ -74,6 +79,8 @@ export const estadoMineria = createServerFn({ method: "POST" })
       gross_daily_usd: number | null;
       net_daily_usd: number | null;
       network_config: Record<string, string | number | undefined> | null;
+      pool_fee_pct?: number | null;
+      hash_rate_sostenido?: number | null;
     }>;
 
     // Precio del kWh (columna nueva; si no esta, el valor por defecto).
@@ -107,6 +114,8 @@ export const estadoMineria = createServerFn({ method: "POST" })
         red,
         watts,
         precioKwh,
+        // La comision del pool: se lleva su parte antes de la luz.
+        Number(w.pool_fee_pct ?? 0) / 100,
       );
       if (esActivo) {
         brutoTotal += balance.gananciaUsd;
@@ -124,8 +133,10 @@ export const estadoMineria = createServerFn({ method: "POST" })
         hashUnit: aUnidadLegible(esActivo ? hashPorWorker : 0).unidad,
         uptimeSegundos: Number(w.uptime_seconds ?? 0),
         potenciaWatts: watts,
+        poolFeePct: Number(w.pool_fee_pct ?? 0),
         gananciaUsd: balance.gananciaUsd,
-        brutoUsd: balance.gananciaUsd,
+        brutoUsd: balance.brutoUsd,
+        comisionUsd: balance.comisionUsd,
         luzUsd: balance.luzUsd,
         netoUsd: balance.netoUsd,
         veredicto: balance.veredicto,
@@ -215,21 +226,71 @@ export const compararMineria = createServerFn({ method: "POST" })
     const { compararMonedas } = await import("./mineria/comparar");
     const { PRECIO_KWH_POR_DEFECTO, POTENCIA_POR_DEFECTO } = await import("./mineria/tick");
 
-    const medicion = medirHashRateMaquina(1500);
-    const hashRate = {
-      hashPorSegundo: medicion.hashPorSegundo,
-      hashPorSegundoRed: medicion.valor,
-      hashPorSegundoHashes: medicion.hashPorSegundo,
-      unidad: medicion.unidad,
-    };
-
     // Las monedas: las de los equipos del dueno (y BTC siempre).
-    const { data: workers } = await db
-      .from("mining_workers")
-      .select("id, name, coin, pool")
-      .eq("user_id", context.userId);
+    // Se prueban las columnas de la mas nueva a la mas antigua: si falta la
+    // migracion de la comision del pool, la app sigue funcionando.
+    let workers: Array<{
+      id: string;
+      name: string;
+      coin: string;
+      pool: string;
+      hash_rate_sostenido?: number | null;
+      hash_rate_max?: number | null;
+      pool_fee_pct?: number | null;
+      hilos?: number | null;
+    }> = [];
+    for (const columnasSel of [
+      "id, name, coin, pool, hash_rate_sostenido, hash_rate_max, pool_fee_pct, hilos",
+      "id, name, coin, pool, hash_rate_max, hilos",
+      "id, name, coin, pool",
+    ]) {
+      const consulta = await db
+        .from("mining_workers")
+        .select(columnasSel)
+        .eq("user_id", context.userId);
+      if (!consulta.error) {
+        workers = (consulta.data ?? []) as unknown as typeof workers;
+        break;
+      }
+    }
     const monedas = [...new Set((workers ?? []).map((w) => String(w.coin).toUpperCase()))];
     if (!monedas.includes("BTC")) monedas.push("BTC");
+
+    const medicion = medirHashRateMaquina(1500);
+    // El hash rate del enjambre: el SOSTENIDO de cada equipo (10 s), que es
+    // el que se gana minando horas. Si no hay ninguno, se mide la capacidad
+    // de la maquina con los hilos de los equipos.
+    const sostenido = (workers ?? []).reduce((s, w) => {
+      const v = Number(w.hash_rate_sostenido ?? 0);
+      return s + (Number.isFinite(v) && v > 0 ? v : 0);
+    }, 0);
+    const picos = (workers ?? []).reduce((s, w) => {
+      const v = Number(w.hash_rate_max ?? 0);
+      return s + (Number.isFinite(v) && v > 0 ? v : 0);
+    }, 0);
+    let hashRateReal = sostenido > 0 ? sostenido : picos;
+    let fuenteHash = sostenido > 0 ? "sostenido (10 s)" : picos > 0 ? "pico medido" : "";
+    if (hashRateReal <= 0) {
+      // Sin hash rate guardado: se mide la maquina con los hilos de los equipos.
+      const { medirHashRateHilos, nucleosDisponibles } = await import("./mineria/hashrate-hilos");
+      const hilos = Math.max(
+        1,
+        Math.min(
+          nucleosDisponibles(),
+          (workers ?? []).reduce((s, w) => s + Number(w.hilos ?? 1), 0),
+        ),
+      );
+      const medido = await medirHashRateHilos(hilos, 3000);
+      hashRateReal = medido.hashPorSegundo;
+      fuenteHash = "medido ahora (" + hilos + " hilos)";
+    }
+    const legible = aUnidadLegible(hashRateReal);
+    const hashRate = {
+      hashPorSegundo: hashRateReal,
+      hashPorSegundoRed: legible.valor,
+      hashPorSegundoHashes: hashRateReal,
+      unidad: legible.unidad,
+    };
 
     // Potencia y config manual: columnas nuevas (migracion 20261026000000).
     // Si no estan, se usan los valores por defecto.
@@ -266,7 +327,14 @@ export const compararMineria = createServerFn({ method: "POST" })
 
     const watts =
       Number(extras.get((workers ?? [])[0]?.id ?? "")?.power_watts ?? 0) || POTENCIA_POR_DEFECTO;
-    const comparativa = compararMonedas(monedas, redes, hashRate, watts, precioKwh);
+    // La comision del pool de cada equipo (la que se lleva de tu parte).
+    const comisiones = new Map<string, number>();
+    for (const w of workers ?? []) {
+      const coin = String(w.coin).toUpperCase();
+      const fee = Number(w.pool_fee_pct ?? 0);
+      if (Number.isFinite(fee) && fee > 0) comisiones.set(coin, fee / 100);
+    }
+    const comparativa = compararMonedas(monedas, redes, hashRate, watts, precioKwh, comisiones);
 
     // Se guarda en mining_sandboxes (la comparativa) y mining_training_runs
     // (una fila por moneda), sustituyendo a los datos de ejemplo.
@@ -277,7 +345,7 @@ export const compararMineria = createServerFn({ method: "POST" })
       medidoAt: medicion.medidoAt,
     });
 
-    return { ...comparativa, sandboxId, watts, precioKwh, medido: medicion };
+    return { ...comparativa, sandboxId, watts, precioKwh, medido: medicion, fuenteHash };
   });
 
 /** Guarda la comparativa en las tablas de la app (best-effort). */

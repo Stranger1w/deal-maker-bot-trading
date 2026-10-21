@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Pickaxe, Play, RotateCcw, Square, Dumbbell, Database } from "lucide-react";
+import { Pickaxe, Play, RotateCcw, Square, Dumbbell, Database, Settings2 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
@@ -22,6 +22,7 @@ import {
 import { AlertsPanel } from "@/components/AlertsPanel";
 import { SortableTable, type Column } from "@/components/SortableTable";
 import { createWorker, setWorkerStatus } from "@/lib/dealmaker.functions";
+import { guardarConfigMineria } from "@/lib/mineria-config.functions";
 import {
   avanzarMineria,
   compararMineria,
@@ -86,7 +87,9 @@ function MiningPage() {
       coin: string;
       hashRate: number;
       hashUnit: string;
+      gananciaUsd: number;
       brutoUsd: number;
+      comisionUsd: number;
       luzUsd: number;
       netoUsd: number;
       monedasDia: number;
@@ -96,6 +99,7 @@ function MiningPage() {
     mejor: { coin: string; netoUsd: number } | null;
     veredicto: string;
     ningunaSaleACuenta: boolean;
+    fuenteHash?: string;
   } | null>(null);
   const [comparando, setComparando] = useState(false);
 
@@ -124,6 +128,35 @@ function MiningPage() {
   const entrenarFn = useServerFn(entrenarWorkerMineria);
   const entrenarEnjambreFn = useServerFn(entrenarEnjambreMineria);
   const [entrenando, setEntrenando] = useState(false);
+  const [configAbierto, setConfigAbierto] = useState<string | null>(null);
+  const [cfg, setCfg] = useState({
+    poolFeePct: "",
+    powerWatts: "",
+    networkHashRate: "",
+    networkReward: "",
+    networkBlockSeconds: "",
+  });
+  const guardarCfg = async (workerId: string) => {
+    try {
+      await guardarConfigMineria({
+        data: {
+          workerId,
+          ...(cfg.poolFeePct !== "" ? { poolFeePct: Number(cfg.poolFeePct) } : {}),
+          ...(cfg.powerWatts !== "" ? { powerWatts: Number(cfg.powerWatts) } : {}),
+          ...(cfg.networkHashRate !== "" ? { networkHashRate: Number(cfg.networkHashRate) } : {}),
+          ...(cfg.networkReward !== "" ? { networkReward: Number(cfg.networkReward) } : {}),
+          ...(cfg.networkBlockSeconds !== ""
+            ? { networkBlockSeconds: Number(cfg.networkBlockSeconds) }
+            : {}),
+        },
+      });
+      toast.success("Configuracion del equipo guardada");
+      setConfigAbierto(null);
+      void qc.invalidateQueries();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar");
+    }
+  };
   const [entrenamiento, setEntrenamiento] = useState<{
     workerNombre: string;
     nucleos: number;
@@ -133,6 +166,9 @@ function MiningPage() {
     unidad: string;
     antesHashPorSegundo: number;
     mejora: number;
+    valorSostenido: number;
+    unidadSostenido: string;
+    caidaPct: number;
     aviso: string | null;
   } | null>(null);
 
@@ -462,6 +498,13 @@ function MiningPage() {
                 Antes (1 hilo): {(entrenamiento.antesHashPorSegundo / 1e6).toFixed(3)} MH/s · mejora
                 x{entrenamiento.mejora.toFixed(2)} · núcleos de la máquina: {entrenamiento.nucleos}
               </p>
+              <p className="text-xs text-muted-foreground">
+                <strong>Sostenido (10 s)</strong>: {entrenamiento.valorSostenido.toFixed(2)}{" "}
+                {entrenamiento.unidadSostenido}
+                {entrenamiento.caidaPct > 1
+                  ? ` (el PC se calienta y baja un ${entrenamiento.caidaPct.toFixed(0)} %: este es el número que vale para minar todo el día)`
+                  : " (estable en esta medición)"}
+              </p>
               <div className="overflow-x-auto">
                 <table className="w-full text-[11px]">
                   <thead>
@@ -502,14 +545,106 @@ function MiningPage() {
                     {Number(w.hash_rate).toFixed(2)} {w.hash_unit}
                   </p>
                 </div>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => void entrenar(w.id, w.name)}
-                  disabled={entrenando}
-                >
-                  {entrenando ? "…" : "Entrenar"}
-                </Button>
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => void entrenar(w.id, w.name)}
+                    disabled={entrenando}
+                  >
+                    {entrenando ? "…" : "Entrenar"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      if (configAbierto === w.id) {
+                        setConfigAbierto(null);
+                        return;
+                      }
+                      // Rellenar con lo que ya hay guardado.
+                      const est = estado.data?.workers.find((x) => x.id === w.id);
+                      setCfg({
+                        poolFeePct: est?.poolFeePct ? String(est.poolFeePct) : "",
+                        powerWatts: est?.potenciaWatts ? String(est.potenciaWatts) : "",
+                        networkHashRate: est?.red?.hashRateRed ? String(est.red.hashRateRed) : "",
+                        networkReward: est?.red?.recompensaBloque
+                          ? String(est.red.recompensaBloque)
+                          : "",
+                        networkBlockSeconds: est?.red?.tiempoBloqueSegundos
+                          ? String(est.red.tiempoBloqueSegundos)
+                          : "",
+                      });
+                      setConfigAbierto(w.id);
+                    }}
+                    aria-label={"Configurar " + w.name}
+                  >
+                    <Settings2 className="size-3.5" />
+                  </Button>
+                </div>
+                {configAbierto === w.id && (
+                  <div className="mt-2 space-y-2 rounded-md border border-border bg-secondary/30 px-3 py-2">
+                    <p className="text-[11px] text-muted-foreground">
+                      Tu pool se lleva su parte (0,5 % es lo normal) y el equipo consume cierta
+                      potencia (watts). Con eso el calculo es real.
+                    </p>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <div className="space-y-1">
+                        <Label className="text-[11px]">Comision del pool (%)</Label>
+                        <Input
+                          inputMode="decimal"
+                          placeholder="0.5"
+                          value={cfg.poolFeePct}
+                          onChange={(e) => setCfg({ ...cfg, poolFeePct: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px]">Potencia (watts)</Label>
+                        <Input
+                          inputMode="numeric"
+                          placeholder="65"
+                          value={cfg.powerWatts}
+                          onChange={(e) => setCfg({ ...cfg, powerWatts: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px]">Datos del pool (opcional)</Label>
+                        <p className="text-[10px] text-muted-foreground">
+                          Para las monedas sin API: hash rate de la red, recompensa por bloque y
+                          tiempo de bloque (en la web de tu pool).
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <Input
+                        inputMode="decimal"
+                        placeholder="Hash rate de la red (H/s)"
+                        value={cfg.networkHashRate}
+                        onChange={(e) => setCfg({ ...cfg, networkHashRate: e.target.value })}
+                      />
+                      <Input
+                        inputMode="decimal"
+                        placeholder="Recompensa por bloque"
+                        value={cfg.networkReward}
+                        onChange={(e) => setCfg({ ...cfg, networkReward: e.target.value })}
+                      />
+                      <Input
+                        inputMode="numeric"
+                        placeholder="Tiempo de bloque (s)"
+                        value={cfg.networkBlockSeconds}
+                        onChange={(e) => setCfg({ ...cfg, networkBlockSeconds: e.target.value })}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={() => void guardarCfg(w.id)}>
+                        Guardar
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setConfigAbierto(null)}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -635,12 +770,20 @@ function MiningPage() {
           </p>
           {comparativa && (
             <>
+              {comparativa.fuenteHash && (
+                <p className="mb-2 text-[11px] text-muted-foreground">
+                  Hash rate del enjambre: <strong>{comparativa.fuenteHash}</strong>. La ganancia es
+                  lo que da la red menos la comisión de tu pool; la luz se informa aparte (no se
+                  resta de la ganancia).
+                </p>
+              )}
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-border text-left text-muted-foreground">
                       <th className="py-1.5 pr-3 font-medium">Moneda</th>
-                      <th className="py-1.5 pr-3 font-medium">Bruto/día</th>
+                      <th className="py-1.5 pr-3 font-medium">Ganancia/día</th>
+                      <th className="py-1.5 pr-3 font-medium">Pool</th>
                       <th className="py-1.5 pr-3 font-medium">Luz/día</th>
                       <th className="py-1.5 pr-3 font-medium">Neto/día</th>
                       <th className="py-1.5 font-medium">Nota</th>
@@ -650,7 +793,10 @@ function MiningPage() {
                     {comparativa.filas.map((f) => (
                       <tr key={f.coin} className="border-b border-border/50">
                         <td className="py-1.5 pr-3 font-medium">{f.coin}</td>
-                        <td className="py-1.5 pr-3 tabular">{usdFino(f.brutoUsd)}</td>
+                        <td className="py-1.5 pr-3 tabular">{usdFino(f.gananciaUsd)}</td>
+                        <td className="py-1.5 pr-3 tabular text-muted-foreground">
+                          {f.comisionUsd > 0 ? `-${usdFino(f.comisionUsd)}` : "—"}
+                        </td>
                         <td className="py-1.5 pr-3 tabular text-destructive">
                           {usdFino(f.luzUsd)}
                         </td>

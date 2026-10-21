@@ -23,6 +23,8 @@ export type FilaComparativa = {
   gananciaUsd: number;
   /** Alias de `gananciaUsd`. */
   brutoUsd: number;
+  /** Lo que se lleva el pool (comision): dinero que no llega a tu cartera. */
+  comisionUsd: number;
   /** Coste de luz al dia (se informa aparte: no se resta de la ganancia). */
   luzUsd: number;
   /** Bruto menos luz. */
@@ -61,18 +63,22 @@ export function compararMonedas(
   hashRate: HashRatePropio,
   watts: number,
   precioKwh: number,
+  /** Comision del pool por moneda (fraccion: 0,005 = 0,5 %). */
+  comisiones?: ReadonlyMap<string, number>,
 ): ResultadoComparativa {
   const filas: FilaComparativa[] = [];
 
   for (const coin of monedas) {
     const red = redes.get(coin) ?? null;
-    const balance = balanceDiario(hashRate, red, watts, precioKwh);
+    const comision = comisiones?.get(coin) ?? 0;
+    const balance = balanceDiario(hashRate, red, watts, precioKwh, comision);
     filas.push({
       coin,
       hashRate: hashRate.hashPorSegundoRed,
       hashUnit: hashRate.unidad,
       gananciaUsd: balance.gananciaUsd,
-      brutoUsd: balance.gananciaUsd,
+      brutoUsd: balance.brutoUsd,
+      comisionUsd: balance.comisionUsd,
       luzUsd: balance.luzUsd,
       netoUsd: balance.netoUsd,
       monedasDia: balance.monedasDia,
