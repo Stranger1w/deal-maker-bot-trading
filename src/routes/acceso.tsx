@@ -24,6 +24,9 @@ import {
 export const Route = createFileRoute("/acceso")({
   validateSearch: (s: Record<string, unknown>) => ({
     next: typeof s["next"] === "string" ? s["next"] : undefined,
+    // Por que se te pide entrar: "caducada" (la sesion de 1 h se acabo) o
+    // "sin_sesion" (nunca has entrado en esta sesion).
+    motivo: s["motivo"] === "caducada" ? ("caducada" as const) : undefined,
   }),
   head: () => ({
     meta: [
@@ -51,12 +54,22 @@ function safeNext(next: string | undefined): string | null {
 
 function AccessPage() {
   const session = useSecuritySession();
-  const { next } = Route.useSearch();
+  const { next, motivo } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [qr, setQr] = useState<{ id: string; svg: string; secret: string } | null>(null);
   const [code, setCode] = useState("");
+
+  // Si te echaron porque la sesion caduco, dilo: si no parece que la app este
+  // rota (la sesion de Supabase dura una hora).
+  useEffect(() => {
+    if (motivo === "caducada") {
+      toast.info(
+        "Tu sesion ha caducado (dura una hora). Vuelve a entrar: te dejamos justo donde estabas.",
+      );
+    }
+  }, [motivo]);
 
   // El registro publico esta cerrado por defecto (el multiusuario todavia no
   // esta probado). El boton solo aparece si el administrador lo abre.
