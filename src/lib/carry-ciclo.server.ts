@@ -290,7 +290,7 @@ export async function cicloCobertura(args: {
   } as never);
   await log(
     "info",
-    `Cobertura cerrada (demo): P&L ${(pnl * 100).toFixed(3)} % (cuotas ${(cuotas * 100).toFixed(3)} %${estimado ? ", estimadas por el basis" : ", reales"}).`,
+    `Cobertura cerrada (demo): P&L ${(pnl * 100).toFixed(3)} % (cuotas ${(cuotas * 100).toFixed(3)} %${estimado ? ", estimadas con la financiacion media" : ", reales"}).`,
   );
   return {
     accion: "cerrado",
@@ -518,7 +518,7 @@ async function cerrarCoberturaReal(args: {
   } as never);
   await log(
     "info",
-    `Cobertura cerrada (real): P&L ${(args.pnl * 100).toFixed(3)} % (cuotas ${(args.cuotas * 100).toFixed(3)} %${args.estimado ? ", estimadas" : ", reales"}).`,
+    `Cobertura cerrada (real): P&L ${(args.pnl * 100).toFixed(3)} % (cuotas ${(args.cuotas * 100).toFixed(3)} %${args.estimado ? ", estimadas con la financiacion media" : ", reales"}).`,
   );
   return {
     accion: "cerrado",
