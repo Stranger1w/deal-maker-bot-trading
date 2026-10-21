@@ -259,6 +259,25 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
 
 ### 2.3 El dinero (decidido el 21-oct)
 
+> **Estado a 21-oct**: el trading real esta **autorizado** (`allow_real_trading` y
+> `allow_live_orders` activados) y el **motor late cada minuto** en el PC (la tarea
+> programada "DealMaker Motor" vuelve a estar instalada; el 24/7 en la nube sigue
+> descartado).
+>
+> - El **entorno** se cambia desde _Binance > Entorno de trading_: pide 2FA, el aviso
+>   de riesgo aceptado, escribir PRODUCION y que la clave guardada funcione en
+>   destino. Ahora sigue en **testnet**.
+> - Para operar de verdad hacen falta **dos cosas tuyas**: guardar una **API key de
+>   PRODUCCION** (con el permiso de futuros si quieres la cobertura) y
+>   **promover un bot a Real**.
+> - La **compuerta de promocion** sigue vigente: un bot direccional necesita 14
+>   dias, 50 operaciones cerradas, P&L positivo y superar al mercado. Con el RSI no
+>   llega (0 operaciones en 36 dias: el motor no tickaba sin sesion). Por eso el bot
+>   **"st" esta en modo cobertura (carry)**: ese si puede cumplirla, porque su
+>   unica condicion es tiempo + P&L positivo + drawdown bajo (la cobertura hace 1-2
+>   operaciones por diseno y no depende de la direccion del precio).
+>
+
 - **Real trading**: **te quedas en DEMO** (decidido el 21-oct). `allow_real_trading`
   y `allow_live_orders` siguen **apagados** y el entorno es **testnet**. El
   interruptor de arriba existe, pero pasará a REAL pide que enciendas esas dos

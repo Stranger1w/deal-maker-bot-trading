@@ -93,17 +93,24 @@ export async function evaluatePromotionCore(botId: string): Promise<PromotionChe
   );
 
   const maxDrawdownLimitePct = Number(bot.max_drawdown_pct ?? 0);
+  // Un bot de COBERTURA (carry) juega con otras reglas: compra el spot y
+  // vende el perpetuo y los mantiene (una o dos operaciones en semanas), asi
+  // que no puede cumplir "50 operaciones" ni tiene que superar al mercado
+  // (su gracia es NO depender de la direccion). Lo que se le exige es lo
+  // importante: tiempo suficiente, P&L positivo, drawdown bajo y claves
+  // verificadas.
+  const esCobertura = String(bot.modo_operacion ?? "direccional") === "cobertura";
   const gate = evaluarGate(
     {
       dias: demoDays,
       minDias: minDemoDays,
-      minOperaciones: minDemoTrades,
+      minOperaciones: esCobertura ? 1 : minDemoTrades,
       maxDrawdownPct: maxDrawdownLimitePct,
-      exigirBenchmark: benchmarkRequired,
+      exigirBenchmark: esCobertura ? false : benchmarkRequired,
       botReturnPct,
       benchmarkReturnPct,
-      stopLossPct: Number(bot.stop_loss_pct ?? 0),
-      takeProfitPct: Number(bot.take_profit_pct ?? 0),
+      stopLossPct: esCobertura ? 1 : Number(bot.stop_loss_pct ?? 0),
+      takeProfitPct: esCobertura ? 1 : Number(bot.take_profit_pct ?? 0),
       binanceVerificado: binanceVerified,
       capital,
     },

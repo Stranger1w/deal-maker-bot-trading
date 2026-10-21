@@ -27,6 +27,14 @@ import { KillSwitchButton } from "@/components/KillSwitchButton";
 import { SwitchModoCuenta } from "@/components/SwitchModoCuenta";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { AlertsPanel } from "@/components/AlertsPanel";
+import {
   CommandDialog,
   CommandEmpty,
   CommandGroup,
@@ -121,6 +129,8 @@ export const NAV_GRUPOS: GrupoNav[] = [
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [paleta, setPaleta] = useState(false);
+  // El panel de avisos: el boton del campanito abria el buscador (error).
+  const [avisos, setAvisos] = useState(false);
   const [movil, setMovil] = useState(false);
   const [colapsada, setColapsada] = useState(false);
 
@@ -281,7 +291,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 size="icon"
                 className="relative text-muted-foreground"
                 aria-label="Avisos"
-                onClick={() => setPaleta(true)}
+                onClick={() => setAvisos(true)}
               >
                 <Bell className="size-4" />
                 {sinRevisar > 0 && (
@@ -297,6 +307,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <main className="mx-auto max-w-[110rem] px-4 py-8 md:px-8">{children}</main>
       </div>
+
+      {/* Avisos: el boton del campanito. Antes abria el buscador. */}
+      <Dialog open={avisos} onOpenChange={setAvisos}>
+        <DialogContent className="max-h-[80vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Avisos del motor y de la cuenta</DialogTitle>
+            <DialogDescription>
+              Lo que ha pasado: limites de riesgo, ordenes rechazadas, errores y avisos de Binance.
+              Con el correo activado, los importantes tambien te llegan a tu correo.
+            </DialogDescription>
+          </DialogHeader>
+          <AlertsPanel title="Avisos" limit={30} />
+        </DialogContent>
+      </Dialog>
 
       {/* Paleta de comandos (Cmd+K) */}
       <CommandDialog open={paleta} onOpenChange={setPaleta}>

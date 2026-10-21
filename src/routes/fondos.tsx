@@ -31,6 +31,7 @@ import { SortableTable, type Column } from "@/components/SortableTable";
 import { Switch } from "@/components/ui/switch";
 import { useSecuritySession } from "@/hooks/useSecuritySession";
 import { createDeposit } from "@/lib/dealmaker.functions";
+import { listarMetodosPago } from "@/lib/metodos-pago.functions";
 import { createSecureWithdrawal, saveCapitalPolicy } from "@/lib/risk.functions";
 import { dateTime, money } from "@/lib/format";
 import {
@@ -75,6 +76,15 @@ function FondosPage() {
   const settings = useQuery(automationQuery);
   const session = useSecuritySession();
   const deposit = useServerFn(createDeposit);
+  // Los metodos de pago REALES de Binance (PayPal, Google Pay, tarjeta...).
+  const metodosPagoFn = useServerFn(listarMetodosPago);
+  const [verMetodos, setVerMetodos] = useState(false);
+  const metodosPago = useQuery({
+    queryKey: ["metodos_pago"],
+    queryFn: () => metodosPagoFn({}),
+    enabled: verMetodos,
+    staleTime: 30 * 60 * 1000,
+  });
   const withdraw = useServerFn(createSecureWithdrawal);
   const savePolicy = useServerFn(saveCapitalPolicy);
 
@@ -343,6 +353,63 @@ function FondosPage() {
             <Button onClick={submitDeposit} disabled={busy} className="w-full">
               Registrar depósito
             </Button>
+
+            <div className="space-y-2 border-t border-border pt-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full"
+                disabled={verMetodos && metodosPago.isFetching}
+                onClick={() => setVerMetodos((v) => !v)}
+              >
+                {verMetodos
+                  ? "Ocultar los métodos de pago reales"
+                  : "¿Cómo puedo pagar? (PayPal, Google Pay, tarjeta…)"}
+              </Button>
+              {verMetodos && metodosPago.data && (
+                <div className="space-y-2 rounded-md border border-border bg-secondary/30 p-3">
+                  {metodosPago.data.aviso && (
+                    <p className="text-xs text-warning">{metodosPago.data.aviso}</p>
+                  )}
+                  {metodosPago.data.metodos.length > 0 && (
+                    <>
+                      <p className="text-xs text-muted-foreground">
+                        Estos son los métodos de pago que Binance ofrece ahora mismo, con dinero
+                        real (los lee su API, no es una lista inventada). El depósito de la app es
+                        un apunte: el dinero entra por la vía que elijas en Binance.
+                      </p>
+                      <ul className="space-y-1 text-xs">
+                        {metodosPago.data.metodos.slice(0, 24).map((m, i) => (
+                          <li
+                            key={`${m.nombre}-${m.moneda}-${i}`}
+                            className="flex flex-wrap items-center gap-2"
+                          >
+                            <span className="font-medium">{m.nombre}</span>
+                            <span className="text-muted-foreground">{m.moneda}</span>
+                            {m.minimo !== null && (
+                              <span className="tabular text-muted-foreground">
+                                desde {m.minimo} {m.moneda}
+                              </span>
+                            )}
+                            {m.maximo !== null && (
+                              <span className="tabular text-muted-foreground">
+                                hasta {m.maximo} {m.moneda}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                      {metodosPago.data.metodos.length > 24 && (
+                        <p className="text-[11px] text-muted-foreground">
+                          … y {metodosPago.data.metodos.length - 24} más (los tienes todos en
+                          Binance).
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 

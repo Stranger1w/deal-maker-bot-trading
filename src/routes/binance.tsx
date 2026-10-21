@@ -26,6 +26,7 @@ import {
 } from "@/lib/dealmaker.functions";
 import { checkBackendRegion } from "@/lib/region.functions";
 import { comprobarPermisoFuturos } from "@/lib/futuros.functions";
+import { cambiarEntornoTrading, leerEntornoTrading } from "@/lib/entorno-trading.functions";
 import { GEO_RESTRICTED_HINTS, GEO_RESTRICTED_MESSAGE } from "@/lib/binance-region";
 import { dateTime } from "@/lib/format";
 import { regionProbeQuery } from "@/lib/queries";
@@ -78,6 +79,16 @@ function BinancePage() {
     pasos: string[];
   } | null>(null);
   const [comprobandoFuturos, setComprobandoFuturos] = useState(false);
+  // El entorno de trading: donde se mandan las ordenes (testnet o produccion).
+  const entornoFn = useServerFn(leerEntornoTrading);
+  const cambiarEntornoFn = useServerFn(cambiarEntornoTrading);
+  const [confirmacionProduccion, setConfirmacionProduccion] = useState("");
+  const [cambiandoEntorno, setCambiandoEntorno] = useState(false);
+  const entorno = useQuery({
+    queryKey: ["entorno_trading"],
+    queryFn: () => entornoFn({}),
+    staleTime: 15_000,
+  });
   const [tested, setTested] = useState<null | {
     ok: boolean;
     message: string;
@@ -252,6 +263,89 @@ function BinancePage() {
               El secreto se almacena cifrado con AES-GCM y una clave que vive solo en el servidor.
               El navegador nunca recibe el valor completo.
             </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+              Entorno de trading
+              {entorno.data && (
+                <StatusPill tone={entorno.data.env === "production" ? "danger" : "success"}>
+                  {entorno.data.env === "production"
+                    ? "PRODUCCIÓN (dinero real)"
+                    : "Testnet (dinero de prueba)"}
+                </StatusPill>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <p className="text-xs text-muted-foreground">
+              Decide dónde van las órdenes: <strong>testnet</strong> es dinero de prueba (lo de
+              ahora) y <strong>producción</strong> es dinero real. Cambiarlo pide 2FA, el aviso de
+              riesgo aceptado y que la clave guardada funcione en el entorno de destino.
+            </p>
+            {entorno.data?.env === "production" ? (
+              <div className="space-y-2">
+                <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  Estás en PRODUCCIÓN: cada operación mueve dinero real. Si algo no cuadra, vuelve a
+                  testnet antes de tocar nada.
+                </p>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={cambiandoEntorno}
+                  onClick={async () => {
+                    try {
+                      setCambiandoEntorno(true);
+                      await cambiarEntornoFn({ data: { entorno: "testnet", confirmacion: "" } });
+                      toast.success("Vuelves a testnet (dinero de prueba).");
+                      void entorno.refetch();
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "No se pudo cambiar");
+                    } finally {
+                      setCambiandoEntorno(false);
+                    }
+                  }}
+                >
+                  Volver a testnet
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Para pasar a producción: guarda antes una API key de PRODUCCIÓN (con el permiso de
+                  futuros si quieres usar la cobertura) y escribe PRODUCION abajo.
+                </p>
+                <Input
+                  placeholder="PRODUCCION"
+                  value={confirmacionProduccion}
+                  onChange={(e) => setConfirmacionProduccion(e.target.value)}
+                />
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={cambiandoEntorno}
+                  onClick={async () => {
+                    try {
+                      setCambiandoEntorno(true);
+                      await cambiarEntornoFn({
+                        data: { entorno: "production", confirmacion: confirmacionProduccion },
+                      });
+                      toast.success("Ahora las órdenes van a producción: dinero real.");
+                      setConfirmacionProduccion("");
+                      void entorno.refetch();
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "No se pudo cambiar");
+                    } finally {
+                      setCambiandoEntorno(false);
+                    }
+                  }}
+                >
+                  Pasar a producción
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
