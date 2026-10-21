@@ -25,6 +25,7 @@ import {
   testBinanceConnection,
 } from "@/lib/dealmaker.functions";
 import { checkBackendRegion } from "@/lib/region.functions";
+import { comprobarPermisoFuturos } from "@/lib/futuros.functions";
 import { GEO_RESTRICTED_HINTS, GEO_RESTRICTED_MESSAGE } from "@/lib/binance-region";
 import { dateTime } from "@/lib/format";
 import { regionProbeQuery } from "@/lib/queries";
@@ -68,6 +69,15 @@ function BinancePage() {
   const [apiSecret, setApiSecret] = useState("");
   const [market, setMarket] = useState<Market>("spot");
   const [busy, setBusy] = useState(false);
+  // El permiso de futuros (lo necesita el bot de cobertura).
+  const comprobarPermisoFuturosFn = useServerFn(comprobarPermisoFuturos);
+  const [permisoFuturos, setPermisoFuturos] = useState<{
+    ok: boolean;
+    motivo: string | null;
+    notaDemo?: string | null;
+    pasos: string[];
+  } | null>(null);
+  const [comprobandoFuturos, setComprobandoFuturos] = useState(false);
   const [tested, setTested] = useState<null | {
     ok: boolean;
     message: string;
@@ -242,6 +252,72 @@ function BinancePage() {
               El secreto se almacena cifrado con AES-GCM y una clave que vive solo en el servidor.
               El navegador nunca recibe el valor completo.
             </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+              Permiso de futuros
+              {permisoFuturos && (
+                <StatusPill tone={permisoFuturos.ok ? "success" : "warning"}>
+                  {permisoFuturos.ok ? "listo" : "falta activarlo"}
+                </StatusPill>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <p className="text-xs text-muted-foreground">
+              Lo necesita el bot de cobertura (carry): compra el spot y vende el perpetuo para
+              cobrar la financiación. Es el único bot que no depende de que el precio suba o baje.
+              En demo funciona igual (usa los precios reales), pero para operar con dinero real la
+              clave necesita el permiso de futuros de Binance.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={comprobandoFuturos}
+                onClick={async () => {
+                  try {
+                    setComprobandoFuturos(true);
+                    const r = await comprobarPermisoFuturosFn({});
+                    setPermisoFuturos(r);
+                    if (r.ok) {
+                      toast.success("La clave ya puede operar en futuros.");
+                    } else {
+                      toast.warning(r.motivo ?? "La clave todavíA no puede operar en futuros.");
+                    }
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "No se pudo comprobar");
+                  } finally {
+                    setComprobandoFuturos(false);
+                  }
+                }}
+              >
+                {comprobandoFuturos ? "Comprobando…" : "Comprobar el permiso de futuros"}
+              </Button>
+              {permisoFuturos && !permisoFuturos.ok && permisoFuturos.motivo && (
+                <p className="text-xs text-warning">{permisoFuturos.motivo}</p>
+              )}
+            </div>
+            {permisoFuturos?.notaDemo && (
+              <p className="rounded-md border border-border bg-secondary/40 p-2 text-xs text-muted-foreground">
+                {permisoFuturos.notaDemo}
+              </p>
+            )}
+            {permisoFuturos && !permisoFuturos.ok && (
+              <ol className="list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
+                {permisoFuturos.pasos.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ol>
+            )}
+            {permisoFuturos?.ok && (
+              <p className="text-xs text-success">
+                Todo listo: la cobertura puede abrir las dos patas con dinero real.
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>

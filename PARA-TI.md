@@ -315,6 +315,27 @@ La clave esta en `C:\Users\Usuario\secrets\deal-maker.env` (
   "RESEND_API_KEY=.*", "RESEND_API_KEY=re_NUEVA" |
   Set-Content "C:\Users\Usuario\secrets\deal-maker.env"
 ```
+## 8b. Permiso de futuros (para el bot de cobertura)
+
+El bot de cobertura (carry) necesita **vender el perpetuo**, asi que la clave
+tiene que tener el permiso de futuros de Binance. **Tu clave ahora mismo no lo
+tiene** (lo he comprobado: Binance responde "Invalid API-key, IP, or
+permissions").
+
+**Pasos** (2 minutos):
+
+1. Binance > Mi perfil > Gestionar API keys:
+   <https://www.binance.com/en/my/settings/api-management>
+2. Edita tu API key y activa el permiso **«Enable Futures»**.
+3. Guarda (Binance puede pedirte 2FA).
+4. En la app: _Binance > Permiso de futuros > «Comprobar el permiso de
+   futuros»_. Tiene que salir **«listo»**.
+
+> **Ojo**: en **demo** (testnet) la cobertura se simula en papel con los precios
+> reales, asi que **no necesita este permiso**. Solo hace falta cuando pases a
+> PRODUCCION (dinero real). Si tu clave tiene la IP restringida, añade tambien la
+> IP de salida del servidor (la app la muestra en «Ubicación del backend»).
+
 ## 9. Lo que NO tienes que hacer
 
 - No tocar `binance_trading_env` a `production` sin un motivo claro.
