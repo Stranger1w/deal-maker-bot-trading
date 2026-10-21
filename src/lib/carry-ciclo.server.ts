@@ -202,8 +202,9 @@ export async function cicloCobertura(args: {
     return { accion: "omitido", detalle: motivo, pnl: 0, error: motivo };
   }
 
-  // Las cuotas cobradas de verdad (si hay clave de futuros); si no, se estima
-  // con el basis (se avisa en el log).
+  // Las cuotas cobradas de verdad (si hay clave de futuros); si no se puede
+  // leer (demo, o la clave sin permiso de futuros), se ESTIMAN con la
+  // financiacion media real de Binance por el tiempo que ha estado abierta.
   let cuotas = 0;
   let estimado = true;
   if (credenciales) {
@@ -217,6 +218,16 @@ export async function cicloCobertura(args: {
     });
     cuotas = leidas.cuotas;
     estimado = leidas.estimado;
+  }
+  if (estimado) {
+    // Estimacion con datos reales: la financiacion media de las ultimas horas
+    // por el numero de periodos de 8 h que lleva abierta la cobertura.
+    const horas = Math.max(
+      0,
+      (Date.now() - Date.parse(String(ventaPerp.created_at ?? Date.now()))) / 3_600_000,
+    );
+    const periodos = Math.floor(horas / 8);
+    cuotas = (estado.mediaCuotasPct / 100) * periodos;
   }
 
   const pnl = calcularPnlCobertura({
