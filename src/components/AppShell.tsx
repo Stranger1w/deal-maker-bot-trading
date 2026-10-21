@@ -24,6 +24,7 @@ import { useEffect, useState } from "react";
 import { useGuardianDeSesion } from "@/hooks/useGuardianDeSesion";
 
 import { KillSwitchButton } from "@/components/KillSwitchButton";
+import { SwitchModoCuenta } from "@/components/SwitchModoCuenta";
 import { Button } from "@/components/ui/button";
 import {
   CommandDialog,
@@ -262,6 +263,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Menu className="size-5" />
             </Button>
             <div className="ml-auto flex items-center gap-2">
+              <SwitchModoCuenta />
               <Button
                 variant="outline"
                 size="sm"

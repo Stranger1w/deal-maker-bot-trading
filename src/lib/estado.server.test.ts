@@ -55,11 +55,11 @@ function clienteFalso(existen: Set<string>) {
 }
 
 describe("comprobarMigraciones", () => {
-  test("detecta las nueve migraciones y dice cuales faltan", async () => {
+  test("detecta las diez migraciones y dice cuales faltan", async () => {
     // Estado real de la base del dueno: solo existe app_settings.
     const { cliente } = clienteFalso(new Set(["app_settings.value"]));
     const migraciones = await comprobarMigraciones(cliente);
-    expect(migraciones).toHaveLength(9);
+    expect(migraciones).toHaveLength(10);
     for (const m of migraciones) {
       expect(m.fichero.endsWith(".sql")).toBe(true);
       expect(m.titulo.length).toBeGreaterThan(0);
@@ -83,6 +83,7 @@ describe("comprobarMigraciones", () => {
         "mining_workers.hash_rate_max",
         "market_candles.*",
         "mining_workers.pool_fee_pct",
+        "bots.sort_order",
       ]),
     );
     const migraciones = await comprobarMigraciones(cliente);

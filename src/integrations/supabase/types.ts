@@ -534,6 +534,7 @@ export type Database = {
           exchange: string
           id: string
           last_tick_at: string | null
+          sort_order: number | null
           max_capital: number
           max_daily_loss: number
           max_drawdown_pct: number
@@ -568,6 +569,7 @@ export type Database = {
           exchange?: string
           id?: string
           last_tick_at?: string | null
+          sort_order?: number | null
           max_capital?: number
           max_daily_loss?: number
           max_drawdown_pct?: number
@@ -602,6 +604,7 @@ export type Database = {
           exchange?: string
           id?: string
           last_tick_at?: string | null
+          sort_order?: number | null
           max_capital?: number
           max_daily_loss?: number
           max_drawdown_pct?: number

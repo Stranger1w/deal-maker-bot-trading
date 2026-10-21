@@ -168,13 +168,14 @@ export const estadoMineria = createServerFn({ method: "POST" })
       });
     }
 
-    // El enjambre cuenta las GANANCIAS. La luz se informa aparte.
+    // El enjambre cuenta las GANANCIAS. La luz se informa aparte (no se
+    // descuenta: decision del dueno, la mineria es ingreso pasivo).
     const veredicto =
       activos === 0
         ? "No hay ningun equipo minando: enciende uno y se medira el hash rate real de esta maquina."
         : `El enjambre gana ${brutoTotal.toFixed(8)} USD al dia.` +
           (luzTotal > 0
-            ? ` La luz de los equipos se lleva ${luzTotal.toFixed(4)} USD al dia.`
+            ? ` La luz de tus equipos consume ${luzTotal.toFixed(4)} USD al dia (informacion: no se descuenta de la ganancia).`
             : "");
 
     return {

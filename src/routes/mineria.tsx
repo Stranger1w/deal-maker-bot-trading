@@ -698,8 +698,8 @@ function MiningPage() {
                     {money(estado.data.totales.luzUsd, "USD")}
                   </p>
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    A {estado.data.totales.precioKwh.toFixed(2)} USD el kWh (no se descuenta de la
-                    ganancia)
+                    A {estado.data.totales.precioKwh.toFixed(2)} USD el kWh. No se descuenta de la
+                    ganancia: la mineria se cuenta como ingreso pasivo.
                   </p>
                 </div>
                 <div className="row-subtle rounded-lg px-3 py-2">
@@ -811,8 +811,7 @@ function MiningPage() {
                       <th className="py-1.5 pr-3 font-medium">Moneda</th>
                       <th className="py-1.5 pr-3 font-medium">Ganancia/día</th>
                       <th className="py-1.5 pr-3 font-medium">Pool</th>
-                      <th className="py-1.5 pr-3 font-medium">Luz/día</th>
-                      <th className="py-1.5 pr-3 font-medium">Neto/día</th>
+                      <th className="py-1.5 pr-3 font-medium">Luz/día (info)</th>
                       <th className="py-1.5 font-medium">Nota</th>
                     </tr>
                   </thead>
@@ -824,15 +823,8 @@ function MiningPage() {
                         <td className="py-1.5 pr-3 tabular text-muted-foreground">
                           {f.comisionUsd > 0 ? `-${usdFino(f.comisionUsd)}` : "—"}
                         </td>
-                        <td className="py-1.5 pr-3 tabular text-destructive">
+                        <td className="py-1.5 pr-3 tabular text-muted-foreground">
                           {usdFino(f.luzUsd)}
-                        </td>
-                        <td
-                          className={`py-1.5 pr-3 tabular ${
-                            f.netoUsd > 0 ? "text-success" : "text-destructive"
-                          }`}
-                        >
-                          {usdFino(f.netoUsd)}
                         </td>
                         <td className="py-1.5 text-muted-foreground">{f.motivo ?? f.veredicto}</td>
                       </tr>

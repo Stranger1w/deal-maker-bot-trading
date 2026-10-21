@@ -37,8 +37,9 @@ describe("comparativa de monedas con tu equipo", () => {
     expect(r.filas[0]?.gananciaUsd).toBe(r.filas[0]?.brutoUsd);
     // Pero la luz se sigue calculando y se sigue informando.
     expect(r.filas[0]?.luzUsd).toBeGreaterThan(0);
-    expect(r.filas[0]?.netoUsd).toBeLessThan(0);
-    expect(r.ningunaSaleACuenta).toBe(true);
+    // Y no entra en el calculo: el neto es la ganancia.
+    expect(r.filas[0]?.netoUsd).toBe(r.filas[0]?.gananciaUsd);
+    expect(r.ningunaSaleACuenta).toBe(false);
     expect(r.veredicto).toContain("ganancia");
   });
 

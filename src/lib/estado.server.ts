@@ -78,6 +78,7 @@ export async function comprobarMigraciones(db: ClienteEsquema): Promise<Migracio
   const mineriaReal = await existeColumna(db, "mining_workers", "hash_rate_max");
   const cacheMercado = await existeTabla(db, "market_candles");
   const comisionPool = await existeColumna(db, "mining_workers", "pool_fee_pct");
+  const ordenBots = await existeColumna(db, "bots", "sort_order");
 
   return [
     {
@@ -151,6 +152,14 @@ export async function comprobarMigraciones(db: ClienteEsquema): Promise<Migracio
         "Descuenta la comisión que se lleva tu pool (0,5 % es lo normal) y guarda el hash rate sostenido (10 s), que es el que se gana minando horas. Sin ella, el pool se queda el 0 % y el cálculo usa el pico de 1,5 s.",
       aplicada: comisionPool,
       comprobacion: "columna pool_fee_pct en mining_workers",
+    },
+    {
+      fichero: "20261029000000_bots_orden.sql",
+      titulo: "Orden de los bots",
+      paraQueSirve:
+        "Guarda la posición de cada bot en el escuadrón para que puedas moverlos y ordenarlos como quieras. Sin ella, los botones de mover avisan de que falta aplicarla.",
+      aplicada: ordenBots,
+      comprobacion: "columna sort_order en bots",
     },
   ];
 }

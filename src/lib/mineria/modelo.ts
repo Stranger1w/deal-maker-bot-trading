@@ -133,9 +133,15 @@ export type Balance = {
   brutoUsd: number;
   /** Lo que se lleva el pool (comision). */
   comisionUsd: number;
-  /** Coste de luz al dia, en USD (se informa aparte, no se resta). */
+  /** Coste de luz al dia, en USD (INFORMACION: no entra en el calculo). */
   luzUsd: number;
-  /** Bruto menos luz (queda a mano, pero el enjambre no lo usa como titular). */
+  /**
+   * Lo que gana el enjambre: la red menos la comision del pool.
+   *
+   * ANTES era "bruto menos luz". A partir de 21-oct la luz NO se resta:
+   * es una decision del dueno (la mineria es ingreso pasivo). La luz se
+   * sigue calculando y se informa aparte, para que se vea lo que consume.
+   */
   netoUsd: number;
   /** Monedas al dia (antes de la luz). */
   monedasDia: number;
@@ -181,7 +187,9 @@ export function balanceDiario(
   const comisionUsd = bruto.usd * Math.max(0, Math.min(0.99, comisionPoolPct));
   const gananciaUsd = bruto.usd - comisionUsd;
   const luzUsd = costeLuzDiario(watts, precioKwhUsd);
-  const netoUsd = gananciaUsd - luzUsd;
+  // Decision del dueno (21-oct): la luz NO se descuenta. Lo que el enjambre
+  // gana es la ganancia; la luz se informa aparte como lo que consume.
+  const netoUsd = gananciaUsd;
   const laLuzSeLoCome = luzUsd > gananciaUsd;
 
   let veredicto: string;
@@ -197,10 +205,9 @@ export function balanceDiario(
       veredicto += " (el pool se lleva " + usdHonesto(comisionUsd) + ")";
     }
     veredicto += ".";
-    if (laLuzSeLoCome) {
-      // Dato, no sermoneo: la luz se informa aparte (no se resta de la cifra
-      // principal) y se dice cuanto se lleva.
-      veredicto += ` La luz de este equipo se lleva ${luzUsd.toFixed(4)} USD al dia.`;
+    if (luzUsd > 0) {
+      // La luz se INFORMA (no se resta): es lo que consume el equipo.
+      veredicto += ` La luz de este equipo son ${luzUsd.toFixed(4)} USD al dia (no se descuenta de la ganancia).`;
     }
   }
 

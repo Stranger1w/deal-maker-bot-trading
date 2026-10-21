@@ -4,6 +4,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+  ArrowDown,
+  ArrowUp,
   Bot,
   Brain,
   Database,
@@ -13,9 +15,11 @@ import {
   Settings2,
   ShieldAlert,
   Square,
+  Trash2,
   Users,
 } from "lucide-react";
 
+import { eliminarBot, moverBot } from "@/lib/bots-orden.functions";
 import { AlertsPanel } from "@/components/AlertsPanel";
 import { EmptyState } from "@/components/EmptyState";
 import { Explicar } from "@/components/Explicar";
@@ -164,6 +168,34 @@ function SquadTab() {
 
   const [view, setView] = useState<"cards" | "table">("cards");
   const [search, setSearch] = useState("");
+
+  // Mover y borrar bots: acciones del dueno sobre su propio escuadron.
+  const moverFn = useServerFn(moverBot);
+  const eliminarFn = useServerFn(eliminarBot);
+  const mover = async (bot: { id: string; name: string }, direccion: "arriba" | "abajo") => {
+    try {
+      const r = await moverFn({ data: { botId: bot.id, direccion } });
+      if (r.aviso) toast.warning(r.aviso);
+      void qc.invalidateQueries();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo mover el bot");
+    }
+  };
+  const borrar = async (bot: { id: string; name: string }) => {
+    const ok = window.confirm(
+      `Borrar el bot "${bot.name}"?
+
+Se borran tambien sus logs, ejecuciones y configuracion. No se puede deshacer.`,
+    );
+    if (!ok) return;
+    try {
+      await eliminarFn({ data: { botId: bot.id } });
+      toast.success(`Bot "${bot.name}" borrado.`);
+      void qc.invalidateQueries();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo borrar el bot");
+    }
+  };
   const [riskFor, setRiskFor] = useState<BotRow | null>(null);
   const [check, setCheck] = useState<PromotionCheck | null>(null);
   const [squadForm, setSquadForm] = useState<Record<string, string> | null>(null);
@@ -770,6 +802,34 @@ function SquadTab() {
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => setLogsFor(bot)}>
                           <ScrollText className="size-3.5" /> Logs
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => void mover(bot, "arriba")}
+                          aria-label={`Subir ${bot.name}`}
+                          title="Subir en la lista"
+                        >
+                          <ArrowUp className="size-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => void mover(bot, "abajo")}
+                          aria-label={`Bajar ${bot.name}`}
+                          title="Bajar en la lista"
+                        >
+                          <ArrowDown className="size-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => void borrar(bot)}
+                          aria-label={`Borrar ${bot.name}`}
+                          title="Borrar este bot"
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="size-3.5" />
                         </Button>
                       </div>
                     </CardContent>

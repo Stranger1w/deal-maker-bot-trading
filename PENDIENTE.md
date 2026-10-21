@@ -10,10 +10,10 @@ la 3 son extras.
 > devuelve 401; con la sesión de otro usuario, 403 (y `app_settings` le da 0
 > filas por no ser admin).
 
-> 🆕 **Hay una migración nueva sin aplicar** (la 9, la de la comisión del
-> pool): `supabase/migrations/20261028000000_mineria_comision_pool.sql`.
-> La app **funciona sin ella** (usa 0 % de comisión y avisa), pero sin ella tu
-> pool no descuenta su parte del cálculo.
+> 🆕 **Hay una migración nueva sin aplicar** (la 10, la del orden de los bots):
+> bots): `supabase/migrations/20261029000000_bots_orden.sql`.
+> La app **funciona sin ella** (los botones de mover avisan de que falta), pero sin
+> ella no puedes ordenar el escuadrón a tu gusto.
 
 ---
 
@@ -133,6 +133,7 @@ orden**:
 | 7   | `20261026000000_mineria_real.sql`                  | La minería va con cifras básicas: **no guarda** el hash rate real, el neto, la luz ni el entrenamiento |
 | 8   | `20261027000000_cache_mercado.sql`                 | El sandbox **vuelve a descargar** los datos cada vez (funciona igual, pero sin cache)                  |
 | 9   | `20261028000000_mineria_comision_pool.sql` 🆕      | Tu pool **no descuenta su comisión** (0 % por defecto) ni se guarda el hash rate sostenido             |
+| 10  | `20261029000000_bots_orden.sql` 🆕             | No puedes **ordenar los bots** (moverlos arriba/abajo); el resto funciona igual            |
 
 **Cómo saber si están**: _Ajustes → Automatización → "Estado de la base de
 datos"_ → la app comprueba el esquema real y te marca cada una. Cuando
@@ -174,16 +175,18 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
 > 2** (Precio de cierre, o Precio + RSI). El campo de entrenamiento te dice
 > cuántos dio cada uno por separado.
 
-### 2.3 El dinero
+### 2.3 El dinero (decidido el 21-oct)
 
-- **Real trading**: `allow_real_trading` y `allow_live_orders` están
-  **apagados** y el entorno es **testnet**. Encenderlos es irreversible y
-  **no lo hago sin que me lo digas**.
+- **Real trading**: **te quedas en DEMO** (decidido el 21-oct). `allow_real_trading`
+  y `allow_live_orders` siguen **apagados** y el entorno es **testnet**. El
+  interruptor de arriba existe, pero pasará a REAL pide que enciendas esas dos
+  banderas.
 - **Fase 7** (re-cifrar las credenciales con la clave nueva y apagar flags
   definitivos): necesita tu autorización.
-- **¿Minamos?** El enjambre está encendido: te dice la verdad,
-  **−0,70 USD/día** (la luz se come lo que se gana). Si no lo quieres
-  corriendo: _Minería → Detener enjambre_.
+- **¿Minamos?** El enjambre sigue encendido (decidido el 21-oct): la luz **ya no
+  se resta** (es ingreso pasivo), pero la ganancia real es de **0,00000004 USD/día**
+  con 5 equipos: la verdad es que en un PC de casa no sale. Para pararlo:
+  _Minería → Detener enjambre_.
 
 ---
 
@@ -247,6 +250,17 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
   está ocupado (una compilación, el antivirus) la medición baja y ya no
   envenena el cáche 10 minutos. Antes pasaba: 36 KH/s en vez de 1,6 MH/s, y
   las ganancias salían 45 veces más bajas de lo real.
+- **El interruptor DEMO/REAL está arriba**, en la barra superior: verde en
+  demo (testnet), rojo en real, con animación y confirmación. **El interruptor
+  NO enciende el trading real**: hace falta que las dos banderas
+  (`allow_real_trading` y `allow_live_orders`) estén puestas; si faltan, el
+  servidor lo rechaza con un mensaje claro. Ahora mismo seguimos en **demo**.
+- **Cada bot se puede mover (arriba/abajo) y borrar** desde su tarjeta. Borrarlo
+  borra también sus logs, ejecuciones y configuración; si tiene una posición
+  abierta en Binance, **no se borra** (se quedaría sin TP/SL).
+- **La minería ya no descuenta la luz**: la ganancia es lo que da la red menos la
+  comisión del pool, y la luz se informa aparte como lo que consume el equipo
+  (decisión tuya: es ingreso pasivo).
 - **La comparativa de minería acepta cualquier moneda**: en _Mínería →
   «Compara monedas con TU equipo» puedes elegir la que quieras (las
   listas reales, leídas en vivo de los pools y de Binance) y ver la cuenta con

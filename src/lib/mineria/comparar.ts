@@ -45,7 +45,7 @@ export type ResultadoComparativa = {
   mejor: FilaComparativa | null;
   /** Conclusion general. */
   veredicto: string;
-  /** true si ninguna moneda cubre el coste de la luz. */
+  /** true si NINGUNA moneda da ganancia (la luz ya no se resta). */
   ningunaSaleACuenta: boolean;
 };
 
@@ -95,14 +95,15 @@ export function compararMonedas(
   const mejor = conDatos.length
     ? conDatos.reduce((a, b) => (b.gananciaUsd > a.gananciaUsd ? b : a))
     : null;
-  const ningunaSaleACuenta = conDatos.length > 0 && conDatos.every((f) => f.netoUsd <= 0);
+  // La luz ya no se resta: esto dice si alguna moneda da ALGO de ganancia.
+  const ningunaSaleACuenta = conDatos.length > 0 && conDatos.every((f) => f.gananciaUsd <= 0);
 
   let veredicto: string;
   if (!conDatos.length) {
     veredicto =
       "No hay datos de red de ninguna de las monedas: no se puede comparar nada. Pide en el pool los numeros (hash rate de la red, recompensa por bloque y tiempo de bloque) y metelos en el equipo.";
   } else if (mejor) {
-    veredicto = `La mejor es ${mejor.coin} (${mejor.gananciaUsd.toFixed(8)} USD/dia de ganancia).`;
+    veredicto = `La mejor es ${mejor.coin}: ${mejor.gananciaUsd.toFixed(8)} USD al dia de ganancia (la luz no se resta).`;
   } else {
     veredicto = "Sin comparacion posible con los datos disponibles.";
   }

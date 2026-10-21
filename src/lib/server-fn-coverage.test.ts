@@ -41,6 +41,10 @@ const USUARIO = [
   // posicionamiento de traders, flujo de ordenes). No toca la base de datos
   // ni devuelve nada del usuario: cualquiera con sesion puede pedirlo.
   "medirCopyTrading",
+  // Borrar y mover un bot: cada usuario puede hacerlo SOLO con los suyos
+  // (exigirBotPropio comprueba la fila antes de tocar nada).
+  "eliminarBot",
+  "moverBot",
 ].sort();
 
 /**

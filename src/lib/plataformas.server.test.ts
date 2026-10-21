@@ -50,7 +50,8 @@ describe("mineria: unidades y balance (regresion)", () => {
       65,
       0.15,
     );
-    expect(b.netoUsd).toBeLessThan(0);
+    // La luz se informa pero no se resta (decision del dueno).
+    expect(b.netoUsd).toBe(b.gananciaUsd);
     expect(b.laLuzSeLoCome).toBe(true);
   });
 });

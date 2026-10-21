@@ -107,7 +107,8 @@ describe("balance diario (lo que cuenta el enjambre son las GANANCIAS)", () => {
     expect(balance.gananciaUsd).toBe(balance.brutoUsd);
     // Pero la luz se sigue calculando y se sigue informando.
     expect(balance.luzUsd).toBeCloseTo(0.234, 6);
-    expect(balance.netoUsd).toBeLessThan(0);
+    // Y NO entra en el calculo (decision del dueno: ingreso pasivo).
+    expect(balance.netoUsd).toBe(balance.gananciaUsd);
     expect(balance.laLuzSeLoCome).toBe(true);
     expect(balance.veredicto).toContain("Ganas");
     expect(balance.veredicto).toContain("luz");
@@ -137,8 +138,8 @@ describe("balance diario (lo que cuenta el enjambre son las GANANCIAS)", () => {
     expect(conComision.brutoUsd).toBe(sinComision.brutoUsd);
     // La luz sigue sin descontarse de la ganancia.
     expect(conComision.luzUsd).toBe(sinComision.luzUsd);
-    // Y el neto es la ganancia menos la luz.
-    expect(conComision.netoUsd).toBeCloseTo(conComision.gananciaUsd - conComision.luzUsd, 12);
+    // Y el neto es la ganancia: la luz no se resta (decision del dueno).
+    expect(conComision.netoUsd).toBeCloseTo(conComision.gananciaUsd, 12);
     expect(conComision.veredicto).toContain("pool");
   });
 
