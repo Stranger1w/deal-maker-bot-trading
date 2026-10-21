@@ -11,6 +11,7 @@ import { bollinger } from "./bollinger";
 import { closePrice } from "./close-price";
 import { cci } from "./cci";
 import { macd } from "./macd";
+import { precioJusto } from "./precio-justo";
 import { rsi } from "./rsi";
 import { stochastic } from "./stochastic";
 import { takerFlow, topTraders } from "./traders";
@@ -20,6 +21,7 @@ export const INDICADORES: IndicatorDef[] = [
   aiIndicator,
   topTraders,
   takerFlow,
+  precioJusto,
   macd,
   stochastic,
   bollinger,
@@ -94,10 +96,22 @@ export function senalDe(
 }
 
 export type { IndicatorDef, IndicatorTipo, PriceSeries, SignalDirection };
-export { aiIndicator, bollinger, cci, closePrice, macd, rsi, stochastic, takerFlow, topTraders };
+export {
+  aiIndicator,
+  bollinger,
+  cci,
+  closePrice,
+  macd,
+  precioJusto,
+  rsi,
+  stochastic,
+  takerFlow,
+  topTraders,
+};
 export { cerradas, desviacionPoblacional, ema, media, sma, ultimos } from "./helpers";
 export {
   AUX_TRADERS_GLOBAL,
+  AUX_PRECIO_FAIR,
   AUX_TRADERS_TAKER,
   AUX_TRADERS_TOP,
   alinearSerie,

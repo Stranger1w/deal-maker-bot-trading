@@ -39,6 +39,12 @@ export const PLATAFORMAS: FuentePlataforma[] = [
   { id: "hyperliquid", mercado: "futuros", nombre: "Hyperliquid", tieneTraders: false },
   { id: "kraken", mercado: "spot", nombre: "Kraken", tieneTraders: false },
   { id: "coinbase", mercado: "spot", nombre: "Coinbase", tieneTraders: false },
+  { id: "bitstamp", mercado: "spot", nombre: "Bitstamp", tieneTraders: false },
+  { id: "kucoin", mercado: "spot", nombre: "KuCoin", tieneTraders: false },
+  { id: "gate", mercado: "spot", nombre: "Gate.io", tieneTraders: false },
+  { id: "bitfinex", mercado: "spot", nombre: "Bitfinex", tieneTraders: false },
+  { id: "cryptocom", mercado: "spot", nombre: "Crypto.com", tieneTraders: false },
+  { id: "bitget", mercado: "spot", nombre: "Bitget", tieneTraders: false },
 ];
 
 /** Intervalos de cada plataforma (en minutos). */
@@ -331,6 +337,262 @@ async function hyperliquid(simbolo: string, intervalo: string, limite: number, h
   return velas.length ? velas.slice(-limite) : null;
 }
 
+/* ------------------------------ BITSTAMP ------------------------------- */
+
+/** Bitstamp usa pares con barra (BTC/USD) y su propio formato de velas. */
+function simboloBitstamp(simbolo: string): string {
+  // El endpoint de velas de Bitstamp usa el par pegado: "btcusdt".
+  return simbolo.toUpperCase().replace("USDT", "USDT").replace("USDC", "USDC");
+}
+
+async function bitstamp(simbolo: string, intervalo: string, limite: number, hasta: number) {
+  const paso = Math.max(60, Math.round(ms(intervalo) / 1000));
+  const par = simboloBitstamp(simbolo).toLowerCase();
+  const url =
+    "https://www.bitstamp.net/api/v2/ohlc/" +
+    par +
+    "/?step=" +
+    paso +
+    "&limit=" +
+    Math.min(1000, limite);
+  const cuerpo = (await getJson(url, {
+    // Bitstamp rechaza las peticiones sin user-agent.
+    headers: { "user-agent": "DealMaker/1.0" },
+  })) as {
+    data?: {
+      ohlc?: Array<{
+        timestamp?: number;
+        open?: number;
+        high?: number;
+        low?: number;
+        close?: number;
+        volume?: number;
+      }>;
+    };
+  } | null;
+  const lista = cuerpo?.data?.ohlc;
+  if (!Array.isArray(lista)) return null;
+  const velas: Vela[] = [];
+  for (const fila of lista) {
+    if (!fila || typeof fila !== "object") continue;
+    // Bitstamp devuelve objetos: { timestamp, open, high, low, close, volume }.
+    const time = Number(fila.timestamp) * 1000;
+    const open = Number(fila.open);
+    const high = Number(fila.high);
+    const low = Number(fila.low);
+    const close = Number(fila.close);
+    const volume = Number(fila.volume);
+    if (![time, open, high, low, close].every(Number.isFinite)) continue;
+    velas.push({ time, open, high, low, close, volume: Number.isFinite(volume) ? volume : 0 });
+  }
+  velas.sort((a, b) => a.time - b.time);
+  return velas.length ? velas : null;
+}
+
+/* ------------------------------- KUCOIN -------------------------------- */
+
+function simboloKuCoin(simbolo: string): string {
+  return simbolo.toUpperCase().replace("USDT", "-USDT").replace("USDC", "-USDC");
+}
+
+const INTERVALOS_KUCOIN: Record<string, string> = {
+  "1m": "1min",
+  "3m": "3min",
+  "5m": "5min",
+  "15m": "15min",
+  "30m": "30min",
+  "1h": "1hour",
+  "2h": "2hour",
+  "4h": "4hour",
+  "6h": "6hour",
+  "12h": "12hour",
+  "1d": "1day",
+};
+
+async function kucoin(simbolo: string, intervalo: string, limite: number, hasta: number) {
+  const tipo = INTERVALOS_KUCOIN[intervalo] ?? "1hour";
+  const url =
+    "https://api.kucoin.com/api/v1/market/candles?type=" +
+    tipo +
+    "&symbol=" +
+    simboloKuCoin(simbolo) +
+    "&startAt=" +
+    Math.floor((hasta - limite * ms(intervalo)) / 1000) +
+    "&endAt=" +
+    Math.floor(hasta / 1000);
+  const cuerpo = (await getJson(url)) as { data?: unknown[][] } | null;
+  const lista = cuerpo?.data;
+  if (!Array.isArray(lista)) return null;
+  const velas: Vela[] = [];
+  for (const fila of lista) {
+    if (!Array.isArray(fila)) continue;
+    const time = Number(fila[0]) * 1000;
+    const open = Number(fila[1]);
+    const close = Number(fila[2]);
+    const high = Number(fila[3]);
+    const low = Number(fila[4]);
+    const volume = Number(fila[5]);
+    if (![time, open, high, low, close].every(Number.isFinite)) continue;
+    velas.push({ time, open, high, low, close, volume: Number.isFinite(volume) ? volume : 0 });
+  }
+  velas.sort((a, b) => a.time - b.time);
+  return velas.length ? velas : null;
+}
+
+/* ------------------------------- GATE.IO ------------------------------- */
+
+async function gate(simbolo: string, intervalo: string, limite: number, hasta: number) {
+  const par = simbolo.toUpperCase().replace("USDT", "_USDT");
+  const url =
+    "https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=" +
+    par +
+    "&interval=" +
+    intervalo +
+    "&limit=" +
+    Math.min(1000, limite);
+  const cuerpo = await getJson(url);
+  if (!Array.isArray(cuerpo)) return null;
+  const velas: Vela[] = [];
+  for (const fila of cuerpo) {
+    if (!Array.isArray(fila)) continue;
+    // Gate.io: [timestamp en segundos, quote volume, close, high, low, open, base volume]
+    const time = Number(fila[0]) * 1000;
+    const close = Number(fila[2]);
+    const high = Number(fila[3]);
+    const low = Number(fila[4]);
+    const open = Number(fila[5]);
+    const volume = Number(fila[6]);
+    if (![time, open, high, low, close].every(Number.isFinite)) continue;
+    velas.push({ time, open, high, low, close, volume: Number.isFinite(volume) ? volume : 0 });
+  }
+  velas.sort((a, b) => a.time - b.time);
+  return velas.length ? velas : null;
+}
+
+/* ------------------------------ BITFINEX ------------------------------- */
+
+const INTERVALOS_BITFINEX: Record<string, string> = {
+  "1m": "1m",
+  "3m": "3m",
+  "5m": "5m",
+  "15m": "15m",
+  "30m": "30m",
+  "1h": "1h",
+  "2h": "2h",
+  "4h": "4h",
+  "6h": "6h",
+  "12h": "12h",
+  "1d": "1D",
+};
+
+async function bitfinex(simbolo: string, intervalo: string, limite: number, hasta: number) {
+  const granularidad = INTERVALOS_BITFINEX[intervalo] ?? "1h";
+  const par = "t" + simbolo.toUpperCase().replace("USDT", "USD");
+  // Sin "end": con el, Bitfinex devuelve vacio. Sin el, da las ultimas velas.
+  const url =
+    "https://api-pub.bitfinex.com/v2/candles/trade:" +
+    granularidad +
+    ":" +
+    par +
+    "/hist?limit=" +
+    Math.min(1000, limite);
+  const cuerpo = await getJson(url);
+  if (!Array.isArray(cuerpo)) return null;
+  const velas: Vela[] = [];
+  for (const fila of cuerpo) {
+    if (!Array.isArray(fila)) continue;
+    // Bitfinex: [MTS, OPEN, CLOSE, HIGH, LOW, VOLUME]
+    const time = Number(fila[0]);
+    const open = Number(fila[1]);
+    const close = Number(fila[2]);
+    const high = Number(fila[3]);
+    const low = Number(fila[4]);
+    const volume = Number(fila[5]);
+    if (![time, open, high, low, close].every(Number.isFinite)) continue;
+    velas.push({ time, open, high, low, close, volume: Number.isFinite(volume) ? volume : 0 });
+  }
+  velas.sort((a, b) => a.time - b.time);
+  return velas.length ? velas : null;
+}
+
+/* ----------------------------- CRYPTO.COM ------------------------------ */
+
+async function cryptocom(simbolo: string, intervalo: string, limite: number, hasta: number) {
+  const par = simbolo.toUpperCase().replace("USDT", "_USDT");
+  const url =
+    "https://api.crypto.com/exchange/v1/public/get-candlestick?instrument_name=" +
+    par +
+    "&timeframe=" +
+    intervalo +
+    "&limit=" +
+    Math.min(1500, limite);
+  const cuerpo = (await getJson(url)) as {
+    result?: {
+      data?: Array<{ t?: number; o?: number; h?: number; l?: number; c?: number; v?: number }>;
+    };
+  } | null;
+  const lista = cuerpo?.result?.data;
+  if (!Array.isArray(lista)) return null;
+  const velas: Vela[] = [];
+  for (const fila of lista) {
+    if (!fila || typeof fila !== "object") continue;
+    // Crypto.com devuelve objetos: { t, o, h, l, c, v }.
+    const time = Number(fila.t);
+    const open = Number(fila.o);
+    const high = Number(fila.h);
+    const low = Number(fila.l);
+    const close = Number(fila.c);
+    const volume = Number(fila.v);
+    if (![time, open, high, low, close].every(Number.isFinite)) continue;
+    velas.push({ time, open, high, low, close, volume: Number.isFinite(volume) ? volume : 0 });
+  }
+  velas.sort((a, b) => a.time - b.time);
+  return velas.length ? velas : null;
+}
+
+/* ------------------------------- BITGET -------------------------------- */
+
+async function bitget(simbolo: string, intervalo: string, limite: number, hasta: number) {
+  const granularidad = String(intervalo)
+    .replace("1m", "1min")
+    .replace("3m", "3min")
+    .replace("5m", "5min")
+    .replace("15m", "15min")
+    .replace("30m", "30min")
+    .replace("1h", "1h")
+    .replace("4h", "4h")
+    .replace("6h", "6h")
+    .replace("12h", "12h")
+    .replace("1d", "1day")
+    .replace("3d", "3day")
+    .replace("1w", "1week");
+  const url =
+    "https://api.bitget.com/api/v2/spot/market/candles?symbol=" +
+    simbolo.toUpperCase() +
+    "&granularity=" +
+    granularidad +
+    "&limit=" +
+    Math.min(1000, limite);
+  const cuerpo = (await getJson(url)) as { data?: unknown[][] } | null;
+  const lista = cuerpo?.data;
+  if (!Array.isArray(lista)) return null;
+  const velas: Vela[] = [];
+  for (const fila of lista) {
+    if (!Array.isArray(fila)) continue;
+    // Bitget: [timestamp en ms, open, high, low, close, base volume, quote volume]
+    const time = Number(fila[0]);
+    const open = Number(fila[1]);
+    const high = Number(fila[2]);
+    const low = Number(fila[3]);
+    const close = Number(fila[4]);
+    const volume = Number(fila[5]);
+    if (![time, open, high, low, close].every(Number.isFinite)) continue;
+    velas.push({ time, open, high, low, close, volume: Number.isFinite(volume) ? volume : 0 });
+  }
+  velas.sort((a, b) => a.time - b.time);
+  return velas.length ? velas : null;
+}
+
 /* ----------------------------- DESCARGAS ----------------------------- */
 
 /** Descarga velas de UNA plataforma concreta. */
@@ -355,6 +617,13 @@ export async function descargarDePlataforma(
     else if (plataforma.id === "coinbase") velas = await coinbase(simbolo, intervalo, limite, fin);
     else if (plataforma.id === "hyperliquid")
       velas = await hyperliquid(simbolo, intervalo, limite, fin);
+    else if (plataforma.id === "bitstamp") velas = await bitstamp(simbolo, intervalo, limite, fin);
+    else if (plataforma.id === "kucoin") velas = await kucoin(simbolo, intervalo, limite, fin);
+    else if (plataforma.id === "gate") velas = await gate(simbolo, intervalo, limite, fin);
+    else if (plataforma.id === "bitfinex") velas = await bitfinex(simbolo, intervalo, limite, fin);
+    else if (plataforma.id === "cryptocom")
+      velas = await cryptocom(simbolo, intervalo, limite, fin);
+    else if (plataforma.id === "bitget") velas = await bitget(simbolo, intervalo, limite, fin);
   } catch {
     velas = null;
   }

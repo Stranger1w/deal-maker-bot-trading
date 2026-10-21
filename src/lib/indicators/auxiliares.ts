@@ -15,6 +15,8 @@
 export const AUX_TRADERS_TOP = "traders_top_long_short";
 export const AUX_TRADERS_TAKER = "traders_taker_buy_sell";
 export const AUX_TRADERS_GLOBAL = "traders_global_long_short";
+/** Desviacion del precio frente a la mediana de los otros mercados (%). */
+export const AUX_PRECIO_FAIR = "precio_desviacion_pct";
 
 /** Un dato de traders con su marca de tiempo. */
 export type DatoTraders = {

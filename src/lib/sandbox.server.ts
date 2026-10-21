@@ -202,6 +202,7 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
   let velas: Awaited<ReturnType<typeof velasDeBinance>> = [];
   let motivo: string | null = null;
   const conTraders = args.indicadores.some((id) => id === "top_traders" || id === "taker_flow");
+  const conPrecioJusto = args.indicadores.includes("precio_justo");
   try {
     // Las velas salen de la cache local si estan; si no, de las plataformas.
     // Asi no hay que volver a descargarlo todo en cada medicion.
@@ -254,6 +255,54 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
   let aux: Record<string, number[]> | undefined;
   const avisosPrevios: string[] = [];
   let indicadoresMedidos = indicadores;
+  // Precio justo: el precio de este mercado frente a la mediana de los
+  // demas (13 mercados en total). Solo si el indicador esta pedido: descargar
+  // de 12 mercados cuesta tiempo.
+  if (conPrecioJusto) {
+    try {
+      const { descargarDePlataforma, PLATAFORMAS } = await import("./plataformas.server");
+      const { alinearPreciosMultiples, aAux } = await import("./precio-justo.server");
+      const series = new Map<string, Array<{ time: number; close: number }>>();
+      const resultados = await Promise.all(
+        PLATAFORMAS.map(async (p) => {
+          const d = await descargarDePlataforma(
+            p,
+            simbolo,
+            args.intervalo,
+            args.limite,
+            args.hasta ?? Date.now(),
+          );
+          return d
+            ? ([p.id, d.velas.map((v) => ({ time: v.time, close: v.close }))] as const)
+            : null;
+        }),
+      );
+      for (const r of resultados) if (r) series.set(r[0], r[1]);
+      if (series.size >= 2) {
+        const serie = alinearPreciosMultiples(velas, series, "binance");
+        const conDatos = serie.desviacion.filter((v) => Number.isFinite(v)).length;
+        if (conDatos > velas.length * 0.5) {
+          aux = { ...(aux ?? {}), ...aAux(serie) };
+        } else {
+          avisosPrevios.push(
+            `El precio justo necesita las velas de otros mercados y no hay suficientes datos para este periodo (con datos: ${conDatos} de ${velas.length}). Se mide sin ese indicador.`,
+          );
+          indicadoresMedidos = indicadoresMedidos.filter((id) => id !== "precio_justo");
+        }
+      } else {
+        avisosPrevios.push(
+          "Solo ha respondido un mercado: no se puede comparar el precio con los demas. Se mide sin el precio justo.",
+        );
+        indicadoresMedidos = indicadoresMedidos.filter((id) => id !== "precio_justo");
+      }
+    } catch {
+      avisosPrevios.push(
+        "No se pudieron descargar las velas de otros mercados: se mide sin el precio justo.",
+      );
+      indicadoresMedidos = indicadoresMedidos.filter((id) => id !== "precio_justo");
+    }
+  }
+
   if (conTraders) {
     try {
       const { obtenerSeriesTraders, alinearTradersConVelas } = await import("./traders.server");
