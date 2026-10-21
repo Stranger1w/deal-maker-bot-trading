@@ -289,27 +289,32 @@ La has autorizado y ya esta hecha. Lo que se hizo:
 2. Descifra y vuelve a cifrar las filas de `binance_credentials` con la
    nueva (el texto plano no sale del servidor).
 3. Verifica la conexion contra testnet antes de borrar la vieja.
-## 10. Correo (lo unico que te queda)
+## 10. Correo — HECHO (21-oct)
 
-Todo el correo esta **hecho** salvo el proveedor:
+Ya esta todo:
 
 - El interruptor esta en _Seguridad > Notificaciones por correo_: activas y
   desactivas los avisos cuando quieras.
-- Por defecto van al **correo con el que creaste la cuenta**
-  (`andrew.paulino.reyes@gmail.com`). Ya esta activado en la base.
-- Para que los correos **salgan de verdad** hace falta la clave del
-  proveedor (Resend, gratis: <https://resend.com>):
+- Van al **correo con el que creaste la cuenta**
+  (`andrew.paulino.reyes@gmail.com`). Ya esta activado.
+- El proveedor (Resend) esta configurado con tu clave: los limites de
+  riesgo, las ordenes rechazadas y los reportes **llegan a tu Gmail**.
+  Probado con un correo real y con un aviso de prueba.
+
+La clave esta en `C:\Users\Usuario\secrets\deal-maker.env` (
+`RESEND_API_KEY=...`) y dentro del `.exe` compilado.
+
+> **El `.exe` lleva las claves dentro** (Supabase, la de cifrado y la del
+> correo): no lo compartas con nadie que no seas tu.
+
+### Si algun dia hay que cambiar el proveedor o la clave
 
 ```powershell
-# 1) Crear la cuenta en resend.com y copiar la clave (re_...)
-# 2) Ponerla en el fichero de secretos:
-Add-Content -Path "C:\Users\Usuario\secrets\deal-maker.env" -Value "RESEND_API_KEY=re_TU_CLAVE"
-# 3) Reiniciar la app (el servidor lee el entorno al arrancar)
+# Cambiar la clave en el fichero de secretos y reiniciar la app
+(Get-Content "C:\Users\Usuario\secrets\deal-maker.env") -replace
+  "RESEND_API_KEY=.*", "RESEND_API_KEY=re_NUEVA" |
+  Set-Content "C:\Users\Usuario\secrets\deal-maker.env"
 ```
-
-Sin la clave, el interruptor se guarda pero no sale ningun correo: la app lo
-avisa en la propia pantalla (no se simula ninguna entrega).
-
 ## 9. Lo que NO tienes que hacer
 
 - No tocar `binance_trading_env` a `production` sin un motivo claro.

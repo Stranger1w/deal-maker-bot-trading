@@ -199,12 +199,13 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
 - **Telegram**: pásame `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID` (en el
   entorno del servidor, nunca en el repo) y te aviso por Telegram de los
   límites y errores críticos del motor.
-- **Correo**: **hecho (21-oct)**. En _Seguridad > Notificaciones por correo_
-  hay un interruptor para activarlo y desactivarlo; por defecto los avisos van
+- **Correo**: **HECHO Y FUNCIONANDO (21-oct)**. En _Seguridad > Notificaciones
+  por correo_ hay un interruptor para activarlo y desactivarlo; los avisos van
   al **correo con el que creaste la cuenta** (`andrew.paulino.reyes@gmail.com`),
-  que ya esta activated en la base. Lo que falta es el **proveedor de correo**
-  en el servidor: `RESEND_API_KEY` (resend.com, gratis). Sin el, el interruptor
-  se guarda pero no sale ningun correo (la app lo avisa).
+  que ya esta activado. El proveedor (Resend) esta configurado con tu clave:
+  los limites de riesgo, las ordenes rechazadas y los reportes diario y
+  semanal **llegan a tu Gmail** (probado con un correo real y con un aviso de
+  prueba).
 - **Minería, moneda KAS**: **hecho (21-oct)**. La app lee los datos de la red
   de la página del pool (2miners) en vivo: red 359,3 PH/s, 2,06 KAS por bloque,
   1 s de bloque y el precio real (CoinGecko). Ya no tienes que pegar nada;
@@ -258,6 +259,10 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
   está ocupado (una compilación, el antivirus) la medición baja y ya no
   envenena el cáche 10 minutos. Antes pasaba: 36 KH/s en vez de 1,6 MH/s, y
   las ganancias salían 45 veces más bajas de lo real.
+- **Las notificaciones por correo ya se mandan de verdad**: el interruptor de
+  _Seguridad_ activa y desactiva los avisos (limites de riesgo, ordenes
+  rechazadas, reportes diario y semanal) y van al correo de tu cuenta. El
+  proveedor (Resend) esta configurado y probado: te llega a tu Gmail.
 - **Las notificaciones por correo ya se mandan de verdad**: el interruptor de
   _Seguridad_ activa y desactiva los avisos (límites de riesgo, órdenes
   rechazadas, reportes diario y semanal) y van al correo de tu cuenta. Falta
