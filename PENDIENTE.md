@@ -258,6 +258,7 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
 - **El sandbox no mide de cero**: usa la cache local (migración 8) y las
   velas vienen de 7 plataformas (Binance, Bybit, OKX, Hyperliquid, Kraken,
   Coinbase, 2miners/nanopool para los datos de traders).
+- El botón del sandbox ya no dice «simulación acelerada»: mide con velas reales.
 - **El sandbox mide el periodo que eliges** (antes medía los últimos minutos
   mientras decía medir el rango pedido: era un fallo real, ya corregido). Además
   compara con **20 estrategias con la señal al azar** y te dice el percentil:
@@ -266,6 +267,10 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
   mientras decía medir el rango pedido: era un fallo real, ya corregido). Además
   compara con **20 estrategias con la señal al azar** y te dice el percentil:
   «¿gana al 60 % de las aleatorias o no se distingue del azar?».
+- **La comparativa de minería acepta cualquier moneda**: en _Mínería →
+  «Compara monedas con TU equipo» puedes elegir la que quieras (las
+  listas reales, leídas en vivo de los pools y de Binance) y ver la cuenta con
+  TU hash rate: lo que da, lo que se lleva el pool y lo que cuesta la luz.
 - **El sandbox dice por qué no hay resultado**: si con tus indicadores no se
   abre ni una operación, mide cada uno por separado y te lo enseña. Antes
   solo decía «no hay resultado que mostrar» y te dejabas sin saber.
