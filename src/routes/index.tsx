@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { generateReports } from "@/lib/risk.functions";
+import { informeCarry } from "@/lib/carry.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { ArrowUpRight, Bot, ChartNoAxesColumn, Gauge, KeyRound, Mail, Wrench } from "lucide-react";
@@ -58,6 +59,16 @@ export const Route = createFileRoute("/")({
 function Dashboard() {
   const qc = useQueryClient();
   const [generandoReporte, setGenerandoReporte] = useState(false);
+
+  // El carry: la unica estrategia medida que no depende de la direccion
+  // del precio (cuotas de financiacion reales de Binance).
+  const carryFn = useServerFn(informeCarry);
+  const carry = useQuery({
+    queryKey: ["carry"],
+    queryFn: () => carryFn({ data: { simbolo: "BTCUSDT" } }),
+    staleTime: 30 * 60 * 1000,
+    refetchInterval: 60 * 60 * 1000,
+  });
   // El resumen diario: con el 24/7 descartado no hay cron que lo cree.
   const generarReportsFn = useServerFn(generateReports);
 
@@ -345,6 +356,36 @@ function Dashboard() {
             />
           </div>
         </section>
+      )}
+
+      {/* La cobertura: la unica estrategia medida que no depende de la
+          direccion del precio. Con los numeros a la vista, no prometidos. */}
+      {carry.data && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-success/40 bg-success/10 px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-success">
+              Cobertura (carry): comprar spot y vender perpetuo
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Medido con las cuotas de financiación reales de Binance:
+              {(carry.data.total * 100).toFixed(2)} % en {carry.data.dias} días (
+              {carry.data.anualizado.toFixed(1)} %/año), positivo todos los años. No depende de que
+              el precio suba o baje: es cobertura, no adivinar.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <p className="tabular text-2xl font-semibold text-success">
+              {carry.data.pnlAnualizado.toFixed(1)} %/año
+            </p>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => (window.location.href = "/mercados")}
+            >
+              Ver el detalle
+            </Button>
+          </div>
+        </div>
       )}
 
       {/* Gráfica + actividad lado a lado: todo lo importante en la primera pantalla. */}

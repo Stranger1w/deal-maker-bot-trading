@@ -41,62 +41,55 @@ Comprobado después de aplicarlas:
 - La **seguridad** aguanta: con la clave pública sin sesión, todo devuelve
   401; con la sesión de otro usuario, 403.
 
-### B. Los indicadores del motor — HECHO y AJUSTADO (21-oct)
+### B. Los indicadores del motor — HECHO y medido (21-oct)
 
-**Configuracion aplicada**: `close_price` + `rsi` (periodo 14, 30/70),
-estrategia `fixed`, horizonte 5 min, importe 20 USDT, stop 1,5 % y take 3 %
-en los 4 bots.
+**Configuracion aplicada**: `rsi` (periodo 14, 30/70), estrategia `fixed`,
+horizonte 5 min, importe 20 USDT, stop 1,5 % y take 3 % en los 4 bots.
 
-**Como se eligio** (todo medido con el backtest real: walk-forward de 4
-bloques y 30 estrategias aleatorias de referencia, en 5 ventanas de 3.000 a
-9.000 velas):
+#### OJO: el horizonte decide el intervalo con el que se opera
 
-| Ventana | rsi solo | **close_price + rsi** | Comprar y mantener |
-| --- | --- | --- | --- |
-| 3.000 velas | +0,20 % (34 ops) | +0,16 % (3 ops) | +34,29 % |
-| 4.000 velas | −0,28 % (61 ops) | **+0,11 %** (7 ops) | +5,90 % |
-| 5.000 velas | −0,22 % (66 ops) | **+0,11 %** (7 ops) | +26,56 % |
-| 6.000 velas | −0,65 % (89 ops) | **−0,06 %** (12 ops) | +22,14 % |
-| 9.000 velas | −2,02 % (176 ops) | **−0,23 %** (22 ops) | −24,81 % |
+El motor calcula las senales en velas de 1, 5 o 15 minutos (segun el
+horizonte). El sandbox ahora mide **en ese mismo intervalo** (antes media en
+1 h y los numeros no eran comparables con lo que hace el bot).
 
-Gana en 4 de 5 ventanas y **nunca pierde mas de 0,23 %** (la otra perdió hasta
-un 2 %). El percentil contra las aleatorias se mantiene alto (87-100 %).
+#### Medido en los intervalos reales (10.000 velas, walk-forward de 4 bloques,
+30 referencias aleatorias, stop 1,5 % / take 3 %)
 
-#### Lo que se proboó y NO ayudo (21-oct)
+| Intervalo | rsi | close_price + rsi | macd | close_price | Comprar y mantener |
+| --- | --- | --- | --- | --- | --- |
+| 5 min (35 días) | **−0,06 %** (40 ops) | −0,06 % (6 ops) | −2,27 % | −4,76 % | +10,79 % |
+| 15 min (104 días) | −0,29 % (57 ops) | **+0,05 %** (14 ops) | −2,02 % | −4,85 % | +34,26 % |
+| 1 h (4 meses) | +0,20 % (34 ops) | +0,16 % (3 ops) | −1,38 % | −3,32 % | +34,29 % |
 
-Se añADIERON al backtest (y al CLI: `--stop-atr`, `--trailing`,
-`--break-even`) tres piezas que el motor en vivo ya tenía partially:
+**Se aplica `rsi` solo** porque es el unico con suficientes operaciones en
+los tres intervalos (34-57 operaciones: se puede sacar una conclusion).
+`close_price + rsi` sale igual o algo mejor, pero con 3-14 operaciones: eso
+es ruido, no una estrategia. Los indicadores de tendencia (macd,
+close_price) son **muy peores** en todas las ventanas.
 
-| Mejora | Resultado en 6.000 velas |
+#### Lo que se proboó y NO ayudo
+
+| Mejora | 6.000 velas (stop fijo 1,5/3 = −0,65 %) |
 | --- | --- |
-| base (stop fijo 1,5 / take 3) | **−0,65 %** (89 ops) |
 | stop por ATR x1,0 | −1,39 % (149 ops) |
 | stop por ATR x1,5 | −1,15 % (117 ops) |
 | stop por ATR x2,0 | −0,77 % (100 ops) |
 | stop trazado 2 % | −1,06 % (95 ops) |
 | break-even 1 % | −0,92 % (95 ops) |
+| filtro de régimen (macd) | −1,38 % (igual que sin filtro) |
 
-**Ninguna mejora**: todas hacen mas operaciones, mas costes y peor resultado
-absoluto (aunque ganen a mas estrategias aleatorias: el percentil sube, el
-dinero baja). Por eso se queda el stop fijo.
+Todas hacen **más operaciones, más costes y peor resultado**. Se quedan
+en el codigo para poder medirlas (`--stop-atr`, `--trailing`, `--break-even`,
+`--filtro-regimen`), pero no se aplican.
 
-#### La verdad (importante)
+#### La verdad
 
 - El **percentil NO es la tasa de acierto**: es "gana a 26-30 de las 30
   estrategias aleatorias". La tasa de acierto real es del **26-33 %**.
 - **Ninguna configuracion de este motor supera a comprar y mantener** en una
-  ventana al alza: el bot hace +0,11 % mientras el mercado hace +26,56 %.
-  Los indicadores de tendencia medidos (close_price, macd) son aun peores en
-  absoluto (−1,38 % a −5,37 %).
-- Lo que mejor funciona es **operar menos**: la combinacion de dos
-  indicadores (que exigen que coincidan) hace 3-22 operaciones en 8-12 meses
-  en vez de 89-176, y con eso se pierde muchisimo menos. Es una estrategia
-  **defensiva**, no una mina de oro.
-- **El margen de verdad vendra de una senal que capture las tendencias**, no
-  de afinar las salidas. Con los indicadores que hay, el mejor margen medido es
-  dejar de perder. Medir una estrategia de tendencia de verdad (un MACD con
-  filtro de regimen, por ejemplo) es el siguiente paso, y se mide con el
-  mismo protocolo.
+  ventana al alza: el bot hace +0,05 % mientras el mercado hace +34,26 %.
+- El margen de verdad no sale de afinar el motor: sale de una estrategia que
+  no dependa de la direccion del precio. Esa es la cobertura (abajo).
 ### B3. El carry: la unica estrategia que SUBE el margen (21-oct)
 
 **Que es**: comprar el **spot** y vender el **perpetuo**. El perpetuo cotiza

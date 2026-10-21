@@ -129,6 +129,12 @@ type Args = {
    * vez del tramo que eligio el dueno.
    */
   hasta?: number;
+  /**
+   * El horizonte del motor en MINUTOS (1, 5 o 15). El motor calcula las
+   * senales en ese intervalo, asi que el sandbox tiene que medir en el
+   * mismo: si no, los numeros no son comparables con lo que hace el bot.
+   */
+  horizonteMinutos?: number;
 };
 
 /**
@@ -187,6 +193,18 @@ export function medirIndicadoresPorSeparado(
 }
 export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> {
   const simbolo = args.simbolo.toUpperCase();
+  // El intervalo real del motor: el horizonte decide de que velas calcula las
+  // senales (1, 5 o 15 minutos). Medir en 1 h cuando el bot opera en 5 m
+  // es medir otra cosa.
+  const intervaloReal =
+    args.intervalo ||
+    (args.horizonteMinutos
+      ? args.horizonteMinutos <= 1
+        ? "1m"
+        : args.horizonteMinutos <= 5
+          ? "5m"
+          : "15m"
+      : "1h");
   const indicadores = args.indicadores.length ? args.indicadores : ["close_price"];
   const usado = {
     indicadores: [] as string[],
@@ -194,7 +212,7 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
     stopLossPct: args.stopLossPct,
     takeProfitPct: args.takeProfitPct,
     capital: args.capital,
-    intervalo: args.intervalo,
+    intervalo: intervaloReal,
     comisionPct: 0.1,
     slippagePct: 0.05,
   };
@@ -208,7 +226,7 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
     // Asi no hay que volver a descargarlo todo en cada medicion.
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { velasConCache } = await import("./cache-mercado.server");
-    const cache = await velasConCache(supabaseAdmin, simbolo, args.intervalo, args.limite, {
+    const cache = await velasConCache(supabaseAdmin, simbolo, intervaloReal, args.limite, {
       // Con datos de traders, el precio es de FUTUROS: si no, se mezclarian
       // precios de spot con flujo de futuros.
       mercado: conTraders ? "futuros" : "spot",
@@ -219,7 +237,7 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
     if (!velas.length) {
       motivo =
         cache.aviso ??
-        `No hay velas de ${simbolo} en ${args.intervalo}. Sin datos no hay resultado: no se inventa ninguno.`;
+        `No hay velas de ${simbolo} en ${intervaloReal}. Sin datos no hay resultado: no se inventa ninguno.`;
     }
   } catch (e) {
     motivo = e instanceof Error ? e.message : "No se pudieron descargar las velas.";
@@ -343,7 +361,7 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
     takeProfitPct: args.takeProfitPct > 0 ? args.takeProfitPct : 4,
     costes: { comision: 0.001, slippage: 0.0005, descuentoBnb: 0 },
     indicadores: indicadoresMedidos,
-    etiqueta: `${simbolo} ${args.intervalo} ${indicadoresMedidos.join("+")}`,
+    etiqueta: `${simbolo} ${intervaloReal} ${indicadoresMedidos.join("+")}`,
   };
   const estrategia = buscarEstrategia(args.estrategiaId);
   if (estrategia) config.estrategia = estrategia;

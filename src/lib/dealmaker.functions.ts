@@ -563,9 +563,14 @@ export const runSandbox = createServerFn({ method: "POST" })
       const estrategiaId = (cfgBot?.[0]?.strategy_id as string | undefined) ?? "fixed";
       const idsBot = (cfgBot?.[0]?.indicator_ids as string[] | undefined) ?? [];
       const indicadoresUsados = idsBot.length ? idsBot : indicadoresPlataforma;
+      // El horizonte del motor: el sandbox mide en el mismo intervalo que
+      // el bot usa para calcular las senales (si no, mide otra cosa).
+      const { intervaloDesdeMinutos } = await import("./senal-motor.server");
+      const horizonteMinutos = Number(cfgPlataforma?.horizonMinutos ?? 15);
       const evaluacion = await evaluarEstrategia({
         simbolo,
-        intervalo: "1h",
+        intervalo: intervaloDesdeMinutos(horizonteMinutos),
+        horizonteMinutos,
         limite: limiteVelas,
         // El periodo que eligio el dueno en el sandbox: sin esto se
         // medirian los ultimos minutos, no el rango pedido.
