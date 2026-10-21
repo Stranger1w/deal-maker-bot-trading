@@ -254,25 +254,41 @@ registro no aporta nada y te obliga a vigilar la tabla de usuarios.
 
 ---
 
-## 8. Fase 7 (solo cuando D y E den resultados y tú lo autorices)
+## 8. Fase 7 — HECHO (21-oct)
 
-Re-cifrar las credenciales reales de Binance con la clave vigente
-(`CREDENTIALS_ENCRYPTION_KEY`):
+La has autorizado y ya esta hecha. Lo que se hizo:
 
-1. La fila de producción de `binance_credentials` está **huérfana** (cifrada
-   con la clave vieja de Lovable, irrecuperable): hay que volver a guardar
-   las API keys desde la UI (la app las cifra con la clave nueva).
-2. Comprobar con **Probar** en `/binance` → `connection_status = ok`.
-3. Decidir qué hacer con `binance_credentials_backup_qa` (contiene claves
-   cifradas con la clave vieja) y con los bots QA.
-4. **Apagar flags** de envío al terminar: `allow_real_trading`,
-   `allow_live_orders`, `engine_enabled`.
+1. **Clave de cifrado rotada**: las credenciales de Binance se descifraron con
+   la clave vieja y se volvieron a cifrar con una **clave nueva** (32 bytes
+   aleatorios). La nueva esta en `C:\Users\Usuario\secrets\deal-maker.env`
+   (`CREDENTIALS_ENCRYPTION_KEY`) y dentro del `.exe` recien compilado.
+   **Comprobado**: la conexion contra Binance **testnet** responde HTTP 200 con
+   las credenciales cifradas con la clave nueva.
+2. **Llave de dos claves** en el codigo: `CREDENTIALS_ENCRYPTION_KEY` (la que
+   cifra) y `CREDENTIALS_ENCRYPTION_KEY_PREVIOUS` (la vieja, que solo sirve
+   para descifrar). Si alguna vez hay que volver atras, se pone la clave
+   vieja en esa variable y la app sigue leyendo lo que habia.
+3. **Apagado lo que sobra**:
+   - `app_settings.cron_secret` **borrado**: el endpoint publico del motor
+     (`/api/public/automation-tick`) ahora rechaza TODAS las llamadas. Con el
+     24/7 descartado no hace falta y era una puerta abierta.
+   - `allow_real_trading` = **false**, `allow_live_orders` = **false**,
+     `binance_trading_env` = **testnet**, `public_signup_enabled` = **false**.
+   - El motor sigue con `engine_enabled` = true, pero **sin sesion no abre
+     posiciones**: por eso el panel te avisa.
 
-El procedimiento ya está probado con credenciales de testnet (SQL → base de
-datos → UI → `binancePing` → `connection_status='ok'`).
+> **Reinstala el `.exe`**: el instalador lleva la clave nueva dentro. Si usas
+> el `.exe` viejo, no podra descifrar las credenciales (y la pagina de
+> Binance te dira que no hay clave guardada).
 
----
+### Si algun dia hay que rotar la clave otra vez
 
+1. Genera una clave nueva (32 bytes en base64) y ponla en
+   `CREDENTIALS_ENCRYPTION_KEY` del entorno; deja la vieja en
+   `CREDENTIALS_ENCRYPTION_KEY_PREVIOUS`.
+2. Descifra y vuelve a cifrar las filas de `binance_credentials` con la
+   nueva (el texto plano no sale del servidor).
+3. Verifica la conexion contra testnet antes de borrar la vieja.
 ## 9. Lo que NO tienes que hacer
 
 - No tocar `binance_trading_env` a `production` sin un motivo claro.

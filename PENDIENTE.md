@@ -181,8 +181,12 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
   y `allow_live_orders` siguen **apagados** y el entorno es **testnet**. El
   interruptor de arriba existe, pero pasará a REAL pide que enciendas esas dos
   banderas.
-- **Fase 7** (re-cifrar las credenciales con la clave nueva y apagar flags
-  definitivos): necesita tu autorización.
+- **Fase 7**: **HECHO (21-oct)**. La clave de cifrado de las credenciales se
+  rotó (la nueva está en el fichero de secretos y dentro del `.exe` nuevo) y se
+  apagó lo que sobraba: `cron_secret` borrado, `allow_real_trading` y
+  `allow_live_orders` en false, entorno testnet. Comprobado: Binance testnet
+  responde 200 con la clave nueva. **Reinstala el `.exe`**. Detalle en
+  `PARA-TI.md` §8.
 - **¿Minamos?** El enjambre sigue encendido (decidido el 21-oct): la luz **ya no
   se resta** (es ingreso pasivo), pero la ganancia real es de **0,00000004 USD/día**
   con 5 equipos: la verdad es que en un PC de casa no sale. Para pararlo:
@@ -250,6 +254,11 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
   está ocupado (una compilación, el antivirus) la medición baja y ya no
   envenena el cáche 10 minutos. Antes pasaba: 36 KH/s en vez de 1,6 MH/s, y
   las ganancias salían 45 veces más bajas de lo real.
+- **La clave de cifrado de tus credenciales se rotó** (Fase 7): la nueva está
+  en el fichero de secretos y en el `.exe` recién compilado. La vieja se
+  borró. Si al abrir el `.exe` viejo la página de Binance dijera que no hay
+  clave guardada, es eso: **reinstala el `.exe`**. El secreto del cron (que
+  abría el endpoint del motor a cualquiera) también está borrado.
 - **El interruptor DEMO/REAL está arriba**, en la barra superior: verde en
   demo (testnet), rojo en real, con animación y confirmación. **El interruptor
   NO enciende el trading real**: hace falta que las dos banderas
