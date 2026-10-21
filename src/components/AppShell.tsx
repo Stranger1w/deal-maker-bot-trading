@@ -84,7 +84,7 @@ export const NAV_GRUPOS: GrupoNav[] = [
         icon: Bot,
         detalle: "Crear, configurar y promover bots",
       },
-      { to: "/motor", label: "Motor", icon: Gauge, detalle: "Sesiones 24/7 y configuración" },
+      { to: "/motor", label: "Motor", icon: Gauge, detalle: "Indicadores, estrategia y sesión" },
       {
         to: "/mercados",
         label: "Mercados",
@@ -106,7 +106,7 @@ export const NAV_GRUPOS: GrupoNav[] = [
         to: "/automatizacion",
         label: "Riesgo global",
         icon: Cpu,
-        detalle: "Límites del escuadrón y estado del worker",
+        detalle: "Límites del escuadrón, ciclos y órdenes",
       },
       { to: "/mineria", label: "Minería", icon: Pickaxe, detalle: "Equipos de SHA-256" },
       { to: "/acceso", label: "Seguridad", icon: ShieldCheck, detalle: "Sesión y segundo factor" },

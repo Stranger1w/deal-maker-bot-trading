@@ -69,52 +69,30 @@ Comprobado después de aplicarlas:
 > bot → Iniciar_. El motor solo opera los que estén `running` y con
 > automatización activada.
 
-### C. El motor 24/7 (3 opciones, todas montadas)
+### C. El motor 24/7 — DESCARTADO por ahora (20-oct)
 
-| Opción                        | Qué haces                                                                                                               | Cuándo                                         |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| **A. Tu PC**                  | Nada. Ya corre (tarea de Windows, cada minuto, con watchdog).                                                           | Si el PC está siempre encendido                |
-| **B. Tu PC sin sesión**       | Ejecuta **como administrador**: `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\instalar-cron-local.ps1` | Si quieres que arranque solo al encender el PC |
-| **C. En la nube (24/7 real)** | Ver abajo                                                                                                               | Si quieres que no dependa de tu PC             |
+**Decisión tuya**: el 24/7 automático se queda fuera (no tienes cuenta de
+nube). Ya está hecho:
 
-**Opción C, paso a paso** (la que de verdad no depende de tu PC):
+- La tarea programada de Windows "DealMaker Motor" está **desinstalada**.
+- El workflow `.github/workflows/tick.yml` está **eliminado**.
+- La app no muestra la tarjeta del cron 24/7 ni la pestaña 24/7: el motor
+  se abre con un **temporizador** desde _Motor → Control de la sesión_.
 
-1. Publica la app. Ya está preparado: `wrangler.toml` está en el repo.
-   ```powershell
-   cd C:\Users\Usuario\.copilot\repos\deal-maker-bot-trading
-   $env:PATH = "C:\Users\Usuario\.bun\bin;" + $env:PATH
-   bunx wrangler login          # abres el navegador y entras en tu cuenta
-   bun run deploy:cloud         # compila y publica
-   ```
-   Te dará una URL tipo `https://deal-maker.<tu-usuario>.workers.dev`.
-2. Mete las variables de entorno **como secretos** (nunca en el repo):
-   ```powershell
-   bunx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-   bunx wrangler secret put CREDENTIALS_ENCRYPTION_KEY
-   bunx wrangler secret put SUPABASE_PUBLISHABLE_KEY
-   bunx wrangler secret put LOVABLE_CRON_SECRET
-   ```
-   (y las que falten: `SUPABASE_URL`, `SUPABASE_PROJECT_ID`,
-   `VITE_SUPABASE_URL`, `VITE_SUPABASE_PROJECT_ID`,
-   `VITE_SUPABASE_PUBLISHABLE_KEY`).
-3. El cron que llama al motor cada minuto: en el VPS/Railway, un cron del
-   sistema; en Cloudflare, hace falta un handler `scheduled` (esta app no lo
-   exporta todavía: lo digo en `wrangler.toml`).
-4. Copia el secreto en _Ajustes → Automatización → Motor 24/7_ (botón
-   **Generar secreto**) y pégalo en el cron.
+El motor, el backtest y la minería siguen vivos: el motor opera mientras
+la app esté abierta y haya una sesión con temporizador.
 
-**Límites verificados** (docs oficiales, oct-2026):
+**Para volver a activarlo** (cuando tengas cuenta de nube):
 
-- **Cloudflare Workers gratis**: 100.000 peticiones/día, **10 ms de CPU por
-  cron trigger**, 5 cron triggers por cuenta. El motor de trading cabe
-  (es casi todo llamadas de red, que no cuentan como CPU); el **benchmark de
-  minería no** (es CPU pura). Plan de pago (5 $/mes): 30 s de CPU por cron →
-  ya cabe todo.
-- **GitHub Actions**: el intervalo mínimo es **5 minutos**, y el workflow
-  "can be delayed... some queued jobs may be dropped". Es un **respaldo**,
-  no un motor de minuto. En repos públicos se desactiva solo si hay 60 días
-  sin actividad.
+```powershell
+cd C:\Users\Usuario\.copilot\repos\deal-maker-bot-trading
+# El cron local de tu PC (vuelve a instalarlo)
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\instalar-cron-local.ps1
+```
 
+Y para el 24/7 de verdad, desplegar la app y poner un cron en la nube que
+llame a `POST /api/public/automation-tick` con `Authorization: Bearer
+<secreto>`. El endpoint sigue vivo; solo falta quién lo llama.
 ### D. El dinero (solo cuando lo tengas claro)
 
 - **Real trading**: `allow_real_trading` y `allow_live_orders` están
@@ -173,22 +151,16 @@ apliques la 7 y la 8, la minería y el sandbox cambiarán de behave.
 
 ### 2.1 ¿Dónde vive el motor?
 
-Ahora mismo el motor **ya corre en tu PC**: la tarea programada de Windows
-"DealMaker Motor" lo llama cada minuto (con watchdog: si la app se cae, la
-levanta). Funciona mientras el PC esté encendido.
+Ahora mismo el motor **vive dentro de la app**: abre y cierra posiciones
+mientras la app esté abierta y haya una **sesión con temporizador** iniciada
+desde _Motor → Control de la sesión_. Nada corre solo.
 
-- **PC tal cual**: nada más que hacer. Límite: si apagas el PC, el motor
-  calla.
-- **Como SYSTEM** (para que corra con el PC encendido sin sesión iniciada):
-  ejecuta el instalador **como administrador**:
-  ```powershell
-  cd C:\Users\Usuario\.copilot\repos\deal-maker-bot-trading
-  powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\instalar-cron-local.ps1
-  ```
+- **Manual (lo de ahora)**: abres la app, inicias una sesión de 15 min / 1 h /
+  6 h y el motor opera mientras dure. Al cerrarla, deja de abrir posiciones.
+- **Volver al 24/7 automático**: está todo en el repo (tarea de Windows,
+  scripts y endpoint). Ver la sección C.
 - **En la nube (24/7 de verdad)**: hace falta tu cuenta (Lovable Cloud,
-  Cloudflare o un VPS). Yo dejo listos el workflow de GitHub Actions
-  (`.github/workflows/tick.yml`, llama a los dos motores) y el resto es
-  desplegar.
+  Cloudflare o un VPS). Es el único 24/7 que no depende de tu PC.
 
 ### 2.2 Los indicadores del motor
 
@@ -196,8 +168,10 @@ levanta). Funciona mientras el PC esté encendido.
 posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
 (indicadores, estrategia, horizonte, importe) → _Guardar configuración_.
 
-> El backtest con la configuración por defecto da **−1,42 %** y solo gana al
-> 13 % de las estrategias aleatorias: mídelo antes de arriesgar nada.
+> ⚠ Con los **6 indicadores** que tienes ahora el motor **no abre nada**: el
+> motor exige que **todos** coincidan a la vez y eso no pasa. Empieza con **1 o
+> 2** (Precio de cierre, o Precio + RSI). El campo de entrenamiento te dice
+> cuántos dio cada uno por separado.
 
 ### 2.3 El dinero
 

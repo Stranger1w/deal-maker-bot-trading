@@ -1,6 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { generateReports } from "@/lib/risk.functions";
 import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import { ArrowUpRight, Bot, ChartNoAxesColumn, Gauge, KeyRound, Wrench } from "lucide-react";
 
 import { ActividadPanel } from "@/components/ActividadPanel";
@@ -17,6 +20,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { SkeletonCifras } from "@/components/Skeleton";
 import { StatusPill, statusTone } from "@/components/StatusPill";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { estadoApp } from "@/lib/estado.functions";
 import { leerCredencialesBinance } from "@/lib/dealmaker.functions";
 import { dateTime, money } from "@/lib/format";
@@ -52,6 +56,11 @@ export const Route = createFileRoute("/")({
 });
 
 function Dashboard() {
+  const qc = useQueryClient();
+  const [generandoReporte, setGenerandoReporte] = useState(false);
+  // El resumen diario: con el 24/7 descartado no hay cron que lo cree.
+  const generarReportsFn = useServerFn(generateReports);
+
   const funds = useQuery(fundsQuery);
   const bots = useQuery(botsQuery);
   const workers = useQuery(workersQuery);
@@ -117,7 +126,7 @@ function Dashboard() {
         : kill
           ? "detenido por el kill switch"
           : antiguedadSeg === null
-            ? "sin señal de vida"
+            ? "sin sesión abierta"
             : antiguedadSeg > intervaloSeg * 3
               ? `sin ticks hace ${antiguedadSeg} s`
               : "operando",
@@ -126,7 +135,7 @@ function Dashboard() {
         : kill
           ? "Revisa el motivo del kill switch y reactívalo cuando quieras."
           : antiguedadSeg !== null && antiguedadSeg > intervaloSeg * 3
-            ? "El cron no está llamando al motor: revisa que esté configurado."
+            ? "No hay sesión abierta: el motor solo opera con un temporizador iniciado desde la pestaña Motor."
             : undefined,
     },
     {
@@ -280,12 +289,12 @@ function Dashboard() {
             <Cifra
               etiqueta="Estado del motor"
               valor={
-                motorVivo ? "Operando" : kill ? "Detenido" : engineOn ? "Sin ticks" : "Apagado"
+                motorVivo ? "Operando" : kill ? "Detenido" : engineOn ? "En espera" : "Apagado"
               }
               pie={
                 ultimoTick
                   ? `Último tick ${dateTime(ultimoTick)}`
-                  : "Todavía no ha dado señales de vida"
+                  : "Sin sesión abierta: el motor no abre posiciones"
               }
               tono={motorVivo ? "positivo" : "aviso"}
             />
@@ -357,12 +366,34 @@ function Dashboard() {
         <AlertsPanel title="Avisos importantes" limit={6} />
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Resúmenes de resultados</CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle className="text-base">Resúmenes de resultados</CardTitle>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={generandoReporte}
+                onClick={async () => {
+                  try {
+                    setGenerandoReporte(true);
+                    await generarReportsFn({ data: { period: "daily" } });
+                    toast.success("Reporte diario generado con los datos reales");
+                    void qc.invalidateQueries();
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "No se pudo generar el reporte");
+                  } finally {
+                    setGenerandoReporte(false);
+                  }
+                }}
+              >
+                {generandoReporte ? "Generando…" : "Generar diario"}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-2">
             {(reports.data ?? []).length === 0 && (
               <p className="text-sm text-muted-foreground">
-                Aún no hay reportes generados. El cron diario y semanal los crea automáticamente.
+                Aún no hay reportes. El 24/7 automático está descartado, así que el resumen se
+                genera a mano con el botón de arriba (sale con los datos reales).
               </p>
             )}
             {(reports.data ?? []).slice(0, 5).map((r) => (

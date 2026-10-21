@@ -173,118 +173,45 @@ Remove-Item ".\.env"
 
 ---
 
-## 5. Poner el motor a correr 24/7 (el cron)
+## 5. El motor 24/7: DESCARTADO por ahora
 
-El motor es un endpoint HTTP: `POST /api/public/automation-tick` con la
-cabecera `Authorization: Bearer <secreto>`. Ya está hecho y **probado de
-extremo a extremo** (llamada real → 200; llamada con secreto equivocado →
-401). Solo falta quién lo llama cada minuto.
-
-### Opción A: en tu PC (ya montada, funciona ya)
-
-Como tu PC **ya tiene internet**, el motor puede correr aquí mismo: la app
-de escritorio levanta el servidor en `127.0.0.1:3127` y una tarea programada
-de Windows lo llama cada minuto.
-
-```powershell
-cd C:\Users\Usuario\.copilot\repos\deal-maker-bot-trading
-
-# Instalar la tarea (llama al motor cada minuto)
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\instalar-cron-local.ps1
-
-# Probar un ciclo a mano
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\cron-local.ps1
-
-# Quitarla (si la quieres en la nube)
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\instalar-cron-local.ps1 -Desinstalar
-```
-
-**Ya la he instalado y probado en tu PC**: la tarea "DealMaker Motor" corre
-cada minuto (`LastTaskResult 0`) y el motor avanza.
-
-Además **es un watchdog**: si la app se cae (la cierras, se cuelga), el ciclo
-siguiente la vuelve a levantar sola. Lo probé matando el servidor: la tarea
-lo detectó ("el motor no estaba vivo; lo arranco"), lo levantó y Following cycle ✔
-
-Todo queda anotado en un diario, porque la tarea corre en segundo plano:
-
-```
-C:\Users\Usuario\secrets\deal-maker-cron.log
-```
-
-> **Límite honesto de esta opción**: el motor depende de **tu PC encendido**.
-> Con la sesión iniciada funciona también con la pantalla bloqueada; si
-> reinicias el PC y no entras con tu usuario, la tarea no corre hasta que
-> entres. Para que corra con el PC encendido y sin sesión iniciada, ejecuta
-> el instalador **como administrador** (PowerShell → "Ejecutar como
-> administrador"): la tarea queda como SYSTEM y no depende de la sesión.
+> **Decisión tuya (20-oct): el motor 24/7 automático se queda fuera por
+> ahora.** No tienes cuenta de nube, así que no hay 24/7 real. Ya no hay
+> nada corriendo solo:
 >
-> Y para 24/7 de verdad, sin depender de tu PC, mira la **opción B**.
+> - La tarea programada de Windows "DealMaker Motor" está **desinstalada**
+>   (antes llamaba al motor cada minuto).
+> - El workflow `.github/workflows/tick.yml` (el reloj de GitHub Actions)
+>   está **eliminado**.
+> - La app ya no enseña la tarjeta "Motor 24/7 (cron en la nube)" ni la
+>   pestaña 24/7: el motor solo se abre con un **temporizador** desde
+>   _Motor → Control de la sesión_.
+>
+> **Lo que sigue vivo**: el motor, el backtest, la minería y todo lo demás.
+> El motor funciona **mientras la app esté abierta** y hayas iniciado una
+> sesión con temporizador (15 min, 1 h, 6 h o los minutos que quieras).
+>
+> **Para volver a activarlo** (cuando tengas cuenta de nube), todo sigue
+> en el repo:
+>
+> ```powershell
+> # El cron local de tu PC (vuelve a instalarlo)
+> powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\instalar-cron-local.ps1
+> ```
+>
+> Y para el 24/7 de verdad: desplegar la app (Lovable Cloud, Cloudflare o
+> un VPS) y poner un cron allí que llame a
+> `POST /api/public/automation-tick` con la cabecera
+> `Authorization: Bearer <secreto>`. El endpoint sigue funcionando; lo que
+> falta es quién lo llama.
 
-### Opción B: en la nube (lo único que es 24/7 de verdad)
+### El secreto del cron
 
-Despliega la app en un servidor con URL pública (Lovable Cloud, Cloudflare
-Workers o un VPS) y pon el cron allí:
-
-| Opción                                 | Coste                                                                  | Nota                                                                                                                                                                                                                                              |
-| -------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **GitHub Actions** (workflow del repo) | Gratis para repos públicos; 2.000 min/mes en privados                  | **Ya montado**: `.github/workflows/tick.yml`. Cada 5 minutos llama al motor con el secreto. Ojo: en el plan gratuito GitHub **aplasta los workflows programados a una ejecución por hora**, asi que úsalo como respaldo, no como motor principal. |
-| **Cloudflare Workers + Cron Triggers** | Gratis (10 ejecuciones/día en el plan gratuito, 1/min en Workers Paid) | Es lo natural para un endpoint HTTP y ya lo conocías por Lovable. **Da minuto de verdad**, que es lo que necesita el motor.                                                                                                                       |
-| **Un VPS barato** (Hetzner/Contabo)    | ~4 €/mes                                                               | Control total, sin límites de frecuencia.                                                                                                                                                                                                         |
-| **Railway / Render / Fly.io**          | Plan gratuito muy limitado o de pago                                   | Con un proceso Node siempre vivo.                                                                                                                                                                                                                 |
-
-> **No he podido verificar los límites actuales de los planes gratuitos**: en
-> este entorno no hay acceso al buscador web, y no quiero darte cifras de
-> memoria. Cuando tengas internet, confirmamos el límite exacto del servicio
-> que elijas antes de montarlo.
-
-### El secreto del cron (ya lo puedes hacer desde la app)
-
-**Ajustes → Automatización → "Motor 24/7 (cron en la nube)" → "Generar
-secreto"**. Sale un valor que **solo se muestra una vez**: cópialo y pégalo en
-el cron.
-
-El secreto se guarda en `app_settings` (clave `cron_secret`), que solo lee el
-administrador. Si prefieres el entorno del servidor, también vale
-`LOVABLE_CRON_SECRET` (tiene prioridad).
-
-> Ya hay uno configurado en la base (lo generé al probar el motor). Puedes
-> generar otro desde la app cuando quieras: el anterior deja de valer.
-
-### El workflow de GitHub Actions ya está en el repo
-
-`.github/workflows/tick.yml` llama a `POST /api/public/automation-tick` con el
-secreto. Para activarlo:
-
-1. En GitHub: **Settings → Secrets and variables → Actions → New repository secret**
-   - `DEAL_MAKER_URL` = `https://tu-dominio/api/public/automation-tick`
-   - `DEAL_MAKER_CRON_KEY` = el secreto que copiaste en el paso 1
-2. Pestaña **Actions → Motor Deal Maker → Run workflow** para probarlo a mano.
-
-Si el workflow falla, te lo dice en el log de la ejecución (no se traga el
-error: responde con el código HTTP y el cuerpo).
-
-**Lo que hay que tener listo** (sea cual sea la opción):
-
-- El secreto en el entorno del cron (nunca en el repo).
-- La URL pública de tu app (el `.exe` sirve en local, pero el cron en la nube
-  necesita una URL accesible desde internet).
-- Un aviso si el motor deja de hablar: el propio motor escribe logs
-  estructurados (JSON) y, si configuras `TELEGRAM_BOT_TOKEN` y
-  `TELEGRAM_CHAT_ID` en el entorno, te avisa por Telegram de los límites y
-  errores críticos.
-
-### Antes de esperar 24/7: el motor necesita indicadores
-
-Ahora mismo **`engine_config` está vacío**: sin indicadores configurados el
-motor **no abre posiciones** (a propósito). Configúralos en **Motor →
-Configuración** y comprueba que el bot genera señales. El backtest
-(`BACKTEST.md`) dice si esa estrategia tiene ventaja: con la configuración
-por defecto **no la tiene**, así que úsala para investigar, no para arriesgar
-dinero real.
-
----
-
+El endpoint sigue vivo, así que el secreto se puede volver a generar:
+está en `app_settings` con la clave `cron_secret` (o en el entorno del
+servidor como `LOVABLE_CRON_SECRET`). Se genera con
+`scripts/cron-local.ps1` o desde el servidor; la app ya no lo muestra
+porque el 24/7 está descartado.
 ## 6. Prueba de aislamiento con dos usuarios (Fase A.6)
 
 Crea un segundo usuario en Supabase (Authentication → Users → Add user) que

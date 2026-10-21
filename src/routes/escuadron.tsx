@@ -1015,7 +1015,7 @@ function SquadTab() {
                 </div>
               ))}
               <div className="flex items-center justify-between rounded-md border border-border px-3 py-2 sm:col-span-2">
-                <span className="text-sm">Automatización 24/7 para este bot</span>
+                <span className="text-sm">Automatización para este bot</span>
                 <Switch
                   checked={riskFor.automation_enabled}
                   onCheckedChange={(v) => setRiskFor({ ...riskFor, automation_enabled: v })}

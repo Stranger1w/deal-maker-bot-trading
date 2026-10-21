@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/PageHeader";
-import { SortableTable, type Column } from "@/components/SortableTable";
 import { StatusPill } from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { INDICADORES } from "@/lib/indicators";
 import type { EngineSession } from "@/lib/engine-sessions.server";
 import {
@@ -43,7 +41,7 @@ export const Route = createFileRoute("/motor")({
       {
         name: "description",
         content:
-          "Sesiones del motor con Temporizador o 24/7: iniciar, detener, cuenta regresiva, último tick e historial.",
+          "Sesiones del motor con temporizador: iniciar, detener, cuenta regresiva y último tick. El 24/7 automático está descartado por ahora.",
       },
       { property: "og:title", content: "Motor — Deal Maker" },
     ],
@@ -79,78 +77,6 @@ function haceTexto(segundos: number): string {
   return segundos < 60 ? `hace ${segundos} s` : `hace ${Math.floor(segundos / 60)} min`;
 }
 
-const SESION_COLUMNAS: Column<EngineSession>[] = [
-  {
-    key: "session_started_at",
-    label: "Inicio",
-    value: (x) => x.session_started_at,
-    render: (x) => <span className="tabular text-xs">{dateTime(x.session_started_at)}</span>,
-  },
-  {
-    key: "mode",
-    label: "Modo",
-    value: (x) => x.mode,
-    render: (x) => (x.mode === "timer" ? "Temporizador" : "24/7"),
-  },
-  {
-    key: "status",
-    label: "Estado",
-    value: (x) => x.status,
-    render: (x) => (
-      <StatusPill
-        tone={x.status === "active" ? "success" : x.status === "closing" ? "warning" : "neutral"}
-      >
-        {x.status}
-      </StatusPill>
-    ),
-  },
-  {
-    key: "session_stopped_at",
-    label: "Fin",
-    value: (x) => x.session_stopped_at ?? x.session_ends_at ?? "",
-    render: (x) => (
-      <span className="tabular text-xs">
-        {x.session_stopped_at
-          ? dateTime(x.session_stopped_at)
-          : x.session_ends_at
-            ? `programado ${dateTime(x.session_ends_at)}`
-            : "—"}
-      </span>
-    ),
-  },
-  {
-    key: "close_reason",
-    label: "Motivo",
-    value: (x) => x.close_reason ?? "",
-    render: (x) => (x.close_reason ? (MOTIVOS[x.close_reason] ?? x.close_reason) : "—"),
-  },
-  {
-    key: "pnl_total",
-    label: "P&L",
-    align: "right",
-    value: (x) => Number(x.pnl_total),
-    render: (x) => (
-      <span className={Number(x.pnl_total) >= 0 ? "text-success" : "text-destructive"}>
-        {money(Number(x.pnl_total))}
-      </span>
-    ),
-  },
-  {
-    key: "runs_count",
-    label: "Ticks",
-    align: "right",
-    value: (x) => x.runs_count,
-    render: (x) => x.runs_count,
-  },
-  {
-    key: "orders_count",
-    label: "Órdenes",
-    align: "right",
-    value: (x) => x.orders_count,
-    render: (x) => x.orders_count,
-  },
-];
-
 function MotorPage() {
   const qc = useQueryClient();
   const settings = useQuery(automationQuery);
@@ -184,7 +110,6 @@ function MotorPage() {
     return () => clearInterval(id);
   }, []);
 
-  const [modo, setModo] = useState<"timer" | "24x7">("timer");
   const [preset, setPreset] = useState<number | null>(15);
   const [libre, setLibre] = useState("");
 
@@ -194,23 +119,17 @@ function MotorPage() {
 
   const iniciar = useMutation({
     mutationFn: async () => {
-      let durationMinutes: number | undefined;
-      if (modo === "timer") {
-        const crudo = libre.trim() !== "" ? Number(libre) : preset;
-        if (typeof crudo !== "number" || !Number.isInteger(crudo) || crudo < 1) {
-          throw new Error("Duración no válida: usa 15 min, 1 h, 6 h o escribe minutos enteros.");
-        }
-        durationMinutes = crudo;
+      const crudo = libre.trim() !== "" ? Number(libre) : preset;
+      if (typeof crudo !== "number" || !Number.isInteger(crudo) || crudo < 1) {
+        throw new Error("Duración no válida: usa 15 min, 1 h, 6 h o escribe minutos enteros.");
       }
-      return iniciarFn({
-        data: { mode: modo, ...(durationMinutes !== undefined ? { durationMinutes } : {}) },
-      });
+      return iniciarFn({ data: { mode: "timer", durationMinutes: crudo } });
     },
     onSuccess: (sesion) => {
       toast.success(
-        sesion.mode === "timer" && sesion.session_ends_at
+        sesion.session_ends_at
           ? `Sesión iniciada. Fin del temporizador: ${dateTime(sesion.session_ends_at)}.`
-          : "Sesión 24/7 iniciada.",
+          : "Sesión iniciada.",
       );
       invalidate();
     },
@@ -303,8 +222,7 @@ function MotorPage() {
 
   const minutosCrudos = libre.trim() !== "" ? Number(libre) : preset;
   const duracionValida =
-    modo === "24x7" ||
-    (typeof minutosCrudos === "number" && Number.isInteger(minutosCrudos) && minutosCrudos >= 1);
+    typeof minutosCrudos === "number" && Number.isInteger(minutosCrudos) && minutosCrudos >= 1;
 
   const estado = kill
     ? { texto: "kill switch", tone: "danger" as const }
@@ -321,7 +239,7 @@ function MotorPage() {
       <PageHeader
         eyebrow="Motor"
         title="Motor"
-        subtitle="Sesiones con Temporizador o 24/7: el motor solo opera dentro de una sesión iniciada desde esta pestaña."
+        subtitle="El motor solo opera mientras haya una sesión con temporizador abierta en esta pestaña. Sin sesión, no se abre ninguna posición."
       />
 
       {conSinGestion?.unmanaged_positions && conSinGestion.unmanaged_positions.length > 0 && (
@@ -400,28 +318,22 @@ function MotorPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              {activa?.mode === "timer" ? "Tiempo restante" : "Modo"}
-            </CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">Tiempo restante</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1">
-            {activa?.mode === "timer" && activa.session_ends_at ? (
+            {activa?.session_ends_at ? (
               restanteMs !== null && restanteMs > 0 ? (
                 <p className="tabular text-3xl font-semibold">{cuentaAtras(restanteMs)}</p>
               ) : (
                 <p className="text-2xl font-semibold text-warning">temporizador vencido</p>
               )
-            ) : activa ? (
-              <p className="text-2xl font-semibold">24/7</p>
             ) : (
               <p className="text-2xl font-semibold text-muted-foreground">—</p>
             )}
             <p className="text-xs text-muted-foreground">
-              {activa?.mode === "timer" && activa.session_ends_at
+              {activa?.session_ends_at
                 ? `Fin programado: ${dateTime(activa.session_ends_at)}`
-                : activa
-                  ? "Sin límite de duración"
-                  : "Sin sesión (no se abren posiciones)"}
+                : "Sin sesión (no se abren posiciones)"}
             </p>
           </CardContent>
         </Card>
@@ -456,10 +368,10 @@ function MotorPage() {
       </div>
 
       {sinTicks && (
-        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
           Sin ticks {edadSeg === null ? "" : haceTexto(edadSeg)}: han pasado más de 2 intervalos (
-          {umbralSeg}s) sin heartbeat. El motor 24/7 no está corriendo aunque esta app esté abierta
-          — revisa el cron <span className="font-mono">POST /api/public/automation-tick</span>.
+          {umbralSeg}s) sin heartbeat. El motor solo opera con una sesión con temporizador abierta
+          en esta pestaña (el 24/7 automático está descartado por ahora).
         </p>
       )}
 
@@ -648,44 +560,35 @@ function MotorPage() {
           <CardTitle>Control de la sesión</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Tabs value={modo} onValueChange={(v) => setModo(v as "timer" | "24x7")}>
-            <TabsList>
-              <TabsTrigger value="timer">Temporizador</TabsTrigger>
-              <TabsTrigger value="24x7">24/7</TabsTrigger>
-            </TabsList>
-          </Tabs>
-
-          {modo === "timer" && (
-            <div className="space-y-2">
-              <Label>Duración</Label>
-              <div className="flex flex-wrap items-center gap-2">
-                {PRESETS.map((p) => (
-                  <Button
-                    key={p.minutos}
-                    type="button"
-                    variant={preset === p.minutos && libre.trim() === "" ? "default" : "outline"}
-                    onClick={() => {
-                      setPreset(p.minutos);
-                      setLibre("");
-                    }}
-                  >
-                    {p.etiqueta}
-                  </Button>
-                ))}
-                <Input
-                  type="number"
-                  min={1}
-                  step={1}
-                  placeholder="minutos"
-                  aria-label="Duración libre en minutos"
-                  className="w-28"
-                  value={libre}
-                  onChange={(e) => setLibre(e.target.value)}
-                />
-                <span className="text-xs text-muted-foreground">duración libre (minutos)</span>
-              </div>
+          <div className="space-y-2">
+            <Label>Duración de la sesión</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              {PRESETS.map((p) => (
+                <Button
+                  key={p.minutos}
+                  type="button"
+                  variant={preset === p.minutos && libre.trim() === "" ? "default" : "outline"}
+                  onClick={() => {
+                    setPreset(p.minutos);
+                    setLibre("");
+                  }}
+                >
+                  {p.etiqueta}
+                </Button>
+              ))}
+              <Input
+                type="number"
+                min={1}
+                step={1}
+                placeholder="minutos"
+                aria-label="Duración libre en minutos"
+                className="w-28"
+                value={libre}
+                onChange={(e) => setLibre(e.target.value)}
+              />
+              <span className="text-xs text-muted-foreground">duración libre (minutos)</span>
             </div>
-          )}
+          </div>
 
           <div className="flex flex-wrap gap-2">
             <Button
@@ -707,9 +610,11 @@ function MotorPage() {
 
           <p className="text-xs text-muted-foreground">
             Iniciar y Detener son los únicos controles que encienden o apagan el motor
-            (engine_enabled). Al vencer el Temporizador la sesión deja de abrir posiciones y se
+            (engine_enabled). Al vencer el temporizador la sesión deja de abrir posiciones y se
             cierra con motivo «temporizador» cuando no queden abiertas; Detener hace lo mismo con
-            motivo «manual»; el Kill Switch siempre tiene prioridad («kill switch»).
+            motivo «manual»; el Kill Switch siempre tiene prioridad («kill switch»). El 24/7
+            automático está descartado por ahora: el motor solo funciona mientras esta pestaña esté
+            abierta.
           </p>
 
           {kill && (
@@ -730,26 +635,6 @@ function MotorPage() {
               TP/SL hasta que se pongan planas.
             </p>
           )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Historial de sesiones</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {sesiones.isError && (
-            <p className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {(sesiones.error as Error).message}
-            </p>
-          )}
-          <SortableTable
-            rows={sesiones.data ?? []}
-            columns={SESION_COLUMNAS}
-            rowKey={(x) => x.id}
-            initialSort={{ key: "session_started_at", dir: "desc" }}
-            empty="Todavía no hay sesiones: pulsa Iniciar para crear la primera."
-          />
         </CardContent>
       </Card>
     </div>
