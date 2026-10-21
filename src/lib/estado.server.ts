@@ -77,6 +77,7 @@ export async function comprobarMigraciones(db: ClienteEsquema): Promise<Migracio
   const diario = await existeTabla(db, "engine_cycles");
   const mineriaReal = await existeColumna(db, "mining_workers", "hash_rate_max");
   const cacheMercado = await existeTabla(db, "market_candles");
+  const comisionPool = await existeColumna(db, "mining_workers", "pool_fee_pct");
 
   return [
     {
@@ -142,6 +143,14 @@ export async function comprobarMigraciones(db: ClienteEsquema): Promise<Migracio
         "Guarda las velas y los datos de traders en la base: el sandbox mide con lo que ya hay y solo descarga lo que falta. Sin ella, se descarga cada vez.",
       aplicada: cacheMercado,
       comprobacion: "tabla market_candles",
+    },
+    {
+      fichero: "20261028000000_mineria_comision_pool.sql",
+      titulo: "Comisión del pool y hash rate sostenido",
+      paraQueSirve:
+        "Descuenta la comisión que se lleva tu pool (0,5 % es lo normal) y guarda el hash rate sostenido (10 s), que es el que se gana minando horas. Sin ella, el pool se queda el 0 % y el cálculo usa el pico de 1,5 s.",
+      aplicada: comisionPool,
+      comprobacion: "columna pool_fee_pct en mining_workers",
     },
   ];
 }

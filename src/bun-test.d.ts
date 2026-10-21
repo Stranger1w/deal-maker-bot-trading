@@ -47,6 +47,5 @@ declare module "bun:test" {
 }
 
 declare module "bun:test" {
-  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   export type Mock = ReturnType<typeof mock>;
 }

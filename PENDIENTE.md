@@ -10,6 +10,11 @@ la 3 son extras.
 > devuelve 401; con la sesión de otro usuario, 403 (y `app_settings` le da 0
 > filas por no ser admin).
 
+> 🆕 **Hay una migración nueva sin aplicar** (la 9, la de la comisión del
+> pool): `supabase/migrations/20261028000000_mineria_comision_pool.sql`.
+> La app **funciona sin ella** (usa 0 % de comisión y avisa), pero sin ella tu
+> pool no descuenta su parte del cálculo.
+
 ---
 
 ## 0. CÓMO RESOLVER CADA PENDIENTE (paso a paso)
@@ -139,6 +144,7 @@ orden**:
 | 6   | `20261025000000_engine_cycles.sql`                 | No hay diario del motor (lo demás va igual)                                                            |
 | 7   | `20261026000000_mineria_real.sql`                  | La minería va con cifras básicas: **no guarda** el hash rate real, el neto, la luz ni el entrenamiento |
 | 8   | `20261027000000_cache_mercado.sql`                 | El sandbox **vuelve a descargar** los datos cada vez (funciona igual, pero sin cache)                  |
+| 9   | `20261028000000_mineria_comision_pool.sql` 🆕      | Tu pool **no descuenta su comisión** (0 % por defecto) ni se guarda el hash rate sostenido             |
 
 **Cómo saber si están**: _Ajustes → Automatización → "Estado de la base de
 datos"_ → la app comprueba el esquema real y te marca cada una. Cuando
@@ -148,6 +154,9 @@ apliques la 7 y la 8, la minería y el sandbox cambiarán de behave.
 > `estimated_daily_earnings` de `numeric(12,2)` a `numeric(24,10)`. Con 2
 > decimales la ganancia real de un PC de casa (0,0000000066 USD/día) se
 > guardaba como 0,00.
+
+> La 9 es la más pequeña de todas (dos columnas). **Si te da miedo aplicarla,
+> no la apliques**: la app funciona igual, solo que tu pool se queda el 0 %.
 
 ---
 
@@ -226,7 +235,7 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
 | El hash rate               | **Real**: SHA-256 de verdad. Medido: 1 hilo 284 KH/s → 4 hilos 673 KH/s (x2,37) |
 | Las monedas y los pools    | Listas reales leídas en vivo (2miners, nanopool, Binance)                       |
 | Los datos simulados        | **Cero tablas con datos de ejemplo** (auditoría de `is_demo` completa)          |
-| La app                     | `tsc` 0, **362 tests** en verde, eslint sin errores, `.exe` compilado           |
+| La app                     | `tsc` 0, **372 tests** en verde, eslint sin errores, `.exe` compilado           |
 
 ### Lo que Changed y hay que saber
 
@@ -240,6 +249,13 @@ posiciones** (a propósito). Se eligen en _Motor → Configuración del motor_
 - **El sandbox no mide de cero**: usa la cache local (migración 8) y las
   velas vienen de 7 plataformas (Binance, Bybit, OKX, Hyperliquid, Kraken,
   Coinbase, 2miners/nanopool para los datos de traders).
+- **El sandbox mide el periodo que eliges** (antes medía los últimos minutos
+  mientras decía medir el rango pedido: era un fallo real, ya corregido). Además
+  compara con **20 estrategias con la señal al azar** y te dice el percentil:
+  «¿gana al 60 % de las aleatorias o no se distingue del azar?».
+- **La minería ya descuenta la comisión de tu pool** (la puedes poner en
+  _Minería → el botón de engranaje de cada equipo_) y usa el hash rate
+  **sostenido** (10 s, no el pico de 1,5 s): minar es de horas, y el PC se calienta.
 - **El copy trading** (seguir a los traders grandes) está medido con datos
   reales: −0,22 % (percentil 10 % de la referencia aleatoria). No hay
   ventaja demostrada, y la app lo dice.
