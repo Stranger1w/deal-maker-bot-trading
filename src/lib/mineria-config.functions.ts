@@ -11,6 +11,11 @@ import type { Json } from "@/integrations/supabase/types";
  *  - la comision que se lleva su pool (0,5 % es lo habitual),
  *  - la potencia que consume (watts),
  *  - y los datos de la red, si los has copiado de la web del pool.
+ *
+ * Se guarda en DOS pasos a proposito: los datos de red y la potencia existen
+ * desde la migracion 20261026000000, pero la comision del pool necesita la
+ * 20261028000000. Si esa no esta aplicada, los datos de red (que son los que
+ * necesitas para minar KAS) se guardan igual y solo se avisa de la comision.
  */
 export const guardarConfigMineria = createServerFn({ method: "POST" })
   .middleware([requireAdmin])
@@ -41,11 +46,9 @@ export const guardarConfigMineria = createServerFn({ method: "POST" })
 
     const patch: {
       updated_at: string;
-      pool_fee_pct?: number;
       power_watts?: number;
       network_config?: Json;
     } = { updated_at: new Date().toISOString() };
-    if (data.poolFeePct !== undefined) patch.pool_fee_pct = data.poolFeePct;
     if (data.powerWatts !== undefined) patch.power_watts = data.powerWatts;
 
     // Los datos de red del pool, si los hay.
@@ -72,18 +75,37 @@ export const guardarConfigMineria = createServerFn({ method: "POST" })
       } as Json;
     }
 
-    const { error } = await supabaseAdmin
-      .from("mining_workers")
-      .update(patch)
-      .eq("id", data.workerId)
-      .eq("user_id", context.userId);
-    if (error) {
-      if (/42703|does not exist/i.test(`${error.code ?? ""} ${error.message}`)) {
-        throw new Error(
-          "Falta la migracion 20261026000000_mineria_real.sql (columnas pool_fee_pct y power_watts): aplicala en el SQL Editor de Supabase.",
-        );
-      }
-      throw new Error(error.message);
+    if (Object.keys(patch).length > 1) {
+      const { error } = await supabaseAdmin
+        .from("mining_workers")
+        .update(patch)
+        .eq("id", data.workerId)
+        .eq("user_id", context.userId);
+      if (error) throw new Error(error.message);
     }
-    return { ok: true };
+
+    // La comision del pool: necesita la migracion 20261028000000. Si no esta,
+    // lo que hay guardado (potencia y datos de red) ya esta a salvo.
+    let aviso: string | null = null;
+    if (data.poolFeePct !== undefined) {
+      const { error } = await supabaseAdmin
+        .from("mining_workers")
+        .update({ pool_fee_pct: data.poolFeePct })
+        .eq("id", data.workerId)
+        .eq("user_id", context.userId);
+      if (error) {
+        // La columna no existe todavia. El error de PostgREST es PGRST204
+        // ("Could not find the ... column ... in the schema cache"); el 42703
+        // es el de Postgres. Los dos son "falta la migracion".
+        const texto = `${error.code ?? ""} ${error.message ?? ""}`;
+        if (/PGRST204|42703|does not exist|could not find the/i.test(texto)) {
+          aviso =
+            "Se guardo todo menos la comision del pool: falta la migracion 20261028000000_mineria_comision_pool.sql (aplicala en el SQL Editor de Supabase).";
+        } else {
+          throw new Error(error.message);
+        }
+      }
+    }
+
+    return { ok: true, ...(aviso ? { aviso } : {}) };
   });

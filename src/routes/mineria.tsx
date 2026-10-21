@@ -138,7 +138,7 @@ function MiningPage() {
   });
   const guardarCfg = async (workerId: string) => {
     try {
-      await guardarConfigMineria({
+      const r = await guardarConfigMineria({
         data: {
           workerId,
           ...(cfg.poolFeePct !== "" ? { poolFeePct: Number(cfg.poolFeePct) } : {}),
@@ -150,7 +150,8 @@ function MiningPage() {
             : {}),
         },
       });
-      toast.success("Configuracion del equipo guardada");
+      if (r.aviso) toast.warning(r.aviso);
+      else toast.success("Configuracion del equipo guardada");
       setConfigAbierto(null);
       void qc.invalidateQueries();
     } catch (e) {
