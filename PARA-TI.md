@@ -45,6 +45,15 @@ en el repo (para que no se pierdan y para que el código y la base encajen):
 Cada fichero lleva su propia **consulta de verificación** al final: pégala
 después de aplicarlo y comprueba que sale lo que dice.
 
+### Migración 12 (21-oct) — la que falta ahora
+
+| Fichero | Qué hace | ¿Imprescindible? |
+| --- | --- | --- |
+| `20261031000000_recon_hallazgos_medidos.sql` | El escuadrón de reconocimiento guarda el precio de referencia de cada hallazgo y lo **evalúa** después (¿acertó o fallo?) | Sí, para que el escuadrón pueda decir si acierta más que el azar |
+
+**Te la he dejado en el portapapeles**: pégala en el SQL Editor y dale a Run.
+Sin ella, la página *Oportunidades* lo dice en pantalla (no se rompe nada).
+
 > **La app te dice qué falta**: en **Ajustes → Automatización → "Estado de la
 > base de datos"** hay una comprobación real del esquema (no una lista fija):
 > te marca cada migración como "aplicada" o "falta". Cuando las apliques,
@@ -368,3 +377,9 @@ en `binance.com`). Con ella no se puede tocar dinero real ni operar futuros.
 - No tocar el `.env` a mano: va fuera del repo (`C:\Users\Usuario\secrets`).
 - No hacer `git push --force` ni reescribir commits ya subidos (Lovable se
   sincroniza desde `main`).
+- **No operar con dinero real esperando que los bots del RSI den dinero**: no
+  lo dan. Está medido (3 pares × 3 intervalos × 4 ventanas, 20 referencias
+  aleatorias): ninguna configuración del RSI gana dinero; el percentil alto
+  significa "pierde menos que el azar", no "gana". La cobertura (carry) es la
+  única con ventaja medida (+41 % en 5,5 años). Los bots del RSI se quedan en
+  demo, con la medición a la vista. Los números están en `PENDIENTE.md` §B4.
