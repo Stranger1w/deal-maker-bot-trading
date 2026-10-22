@@ -39,9 +39,18 @@ if (-not (Test-Path $Script)) {
   exit 1
 }
 
-$accion = New-ScheduledTaskAction -Execute "powershell.exe" -Argument (
-  "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$Script`""
-)
+# ── SIN VENTANA ───────────────────────────────────────────────────────────
+# La tarea NO lanza powershell.exe directamente: lo lanza a traves de
+# wscript.exe (que es de GUI y no crea ventana de consola). Con
+# powershell.exe -WindowStyle Hidden la ventana SE CREA y se OCULTA, lo que en
+# el escritorio del usuario es un parpadeo de ventanita cada minuto.
+$lanzador = Join-Path $PSScriptRoot "cron-local.vbs"
+if (-not (Test-Path $lanzador)) {
+  Write-Output "No encuentro el lanzador $lanzador"
+  exit 1
+}
+
+$accion = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$lanzador`""
 $disparador = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1)
 $ajustes = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
 
@@ -61,6 +70,9 @@ try {
   Write-Output "Tarea '$NombreTarea' creada: cada minuto llama al motor."
 }
 Write-Output "Diario: C:\Users\Usuario\secrets\deal-maker-cron.log"
+Write-Output ""
+Write-Output "Sin ventanas: la tarea usa wscript.exe (GUI), asi que no aparece"
+Write-Output "ninguna consola en el escritorio (ni al arrancar ni cada minuto)."
 Write-Output ""
 Write-Output "Para probarla ahora mismo:"
 Write-Output "  powershell -NoProfile -ExecutionPolicy Bypass -File `"$Script`""

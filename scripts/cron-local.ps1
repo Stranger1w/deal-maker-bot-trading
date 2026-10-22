@@ -208,3 +208,20 @@ try {
   # La mineria no es critica: si falla, el trading sigue.
   Escribir "cron-local: el tick de mineria fallo ($($_.Exception.Message))"
 }
+
+# ── 5) Y el escuadron de reconocimiento (mira el mercado y mide su acierto) ─
+# El endpoint respeta el ritmo de cada bot (su interval_seconds), asi que
+# llamarlo cada minuto no gastan mas API de la que toca.
+$urlRecon = $Url -replace "/automation-tick$", "/recon-tick"
+try {
+  $recon = Invoke-RestMethod -Uri $urlRecon -Method Post -Headers @{ Authorization = "Bearer $secreto" } -TimeoutSec 180
+  if ($recon.status -ne "skipped") {
+    Escribir "cron-local: reconocimiento bots=$($recon.bots) senales=$($recon.findings) evaluados=$($recon.evaluated) estado=$($recon.status)"
+    if ($recon.errors -and $recon.errors.Count -gt 0) {
+      Escribir "cron-local: errores del reconocimiento: $($recon.errors -join ' | ')"
+    }
+  }
+} catch {
+  # El reconocimiento no es critico: si falla, el trading sigue.
+  Escribir "cron-local: el tick de reconocimiento fallo ($($_.Exception.Message))"
+}
