@@ -408,6 +408,118 @@ export const leerConfigMotor = createServerFn({ method: "POST" })
   });
 
 /** Guarda la configuracion del motor (indicadores, estrategia, horizonte). */
+/**
+ * AJUSTES DE RIESGO DEL MOTOR (los que no se podian tocar desde la app).
+ *
+ * `stop_por_atr` existia en la base de datos desde la migracion de
+ * "realismo de ejecucion", pero no habia ninguna pantalla para cambiarlo y
+ * el motor en vivo solo lo usaba para el TAMAÑO de la posicion: cerraba con
+ * el stop fijo. Ahora el motor cierra con la distancia efectiva y esta
+ * pantalla la enciende.
+ *
+ * QUE SE HA MEDIDO (velas reales de Binance, 2 pares x 2 intervalos x 4
+ * ventanas, 20 referencias aleatorias por corrida):
+ *
+ *   configuracion              ops   retorno   percentil vs azar
+ *   rsi14 sl1.5 tp3 (BASE)     119    -0,00 %        73
+ *   rsi14 + ATR x1.5           189    -0,06 %        88
+ *   rsi14 + ATR x2             164    -0,02 %        83
+ *
+ * El stop por volatilidad NO da una ventaja para ganar (ninguna
+ * configuracion del RSI gana dinero): lo que mejora es el RIESGO, el bot
+ * aguanta mejor el ruido del mercado. La unica estrategia con ventaja
+ * medida es la cobertura (carry).
+ */
+export const leerAjustesRiesgoMotor = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
+  .handler(async ({ context }) => {
+    const db = await admin();
+    const { leerAjustesPlataforma } = await import("./propietario.server");
+    const plataforma = await leerAjustesPlataforma(db);
+    const adminId = plataforma?.adminId ?? context.userId;
+    const { data, error } = await db
+      .from("automation_settings")
+      .select(
+        "stop_por_atr, riesgo_por_operacion, filtro_regimen, cooldown_minutes_after_losses, cooldown_losses",
+      )
+      .eq("user_id", adminId)
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    const fila = (data ?? {}) as {
+      stop_por_atr?: number | null;
+      riesgo_por_operacion?: number | null;
+      filtro_regimen?: boolean | null;
+      cooldown_minutes_after_losses?: number | null;
+      cooldown_losses?: number | null;
+    };
+    return {
+      stopPorAtr: fila.stop_por_atr ?? null,
+      riesgoPorOperacion: Number(fila.riesgo_por_operacion ?? 0),
+      filtroRegimen: fila.filtro_regimen === true,
+      cooldownMinutos: Number(fila.cooldown_minutes_after_losses ?? 0),
+      cooldownPerdidas: Number(fila.cooldown_losses ?? 0),
+    };
+  });
+
+/** Guarda los ajustes de riesgo del motor. */
+export const guardarAjustesRiesgoMotor = createServerFn({ method: "POST" })
+  .middleware([requireAdmin])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        /** Multiplicador del ATR para el stop (0 = stop fijo). */
+        stopPorAtr: z.number().min(0).max(10),
+        /** % del capital que se arriesga por operacion (0 = tamaño fijo). */
+        riesgoPorOperacion: z.number().min(0).max(20),
+        filtroRegimen: z.boolean(),
+        cooldownMinutos: z.number().int().min(0).max(1440),
+        cooldownPerdidas: z.number().int().min(0).max(20),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const db = await admin();
+    const { leerAjustesPlataforma } = await import("./propietario.server");
+    const plataforma = await leerAjustesPlataforma(db);
+    const adminId = plataforma?.adminId ?? context.userId;
+
+    const { data: actual } = await db
+      .from("automation_settings")
+      .select("id")
+      .eq("user_id", adminId)
+      .limit(1)
+      .maybeSingle();
+    const fila = (actual ?? {}) as { id?: string } | null;
+    if (!fila?.id) throw new Error("No hay una fila de ajustes del motor: no se puede guardar.");
+
+    const { error } = await db
+      .from("automation_settings")
+      .update({
+        stop_por_atr: data.stopPorAtr > 0 ? data.stopPorAtr : null,
+        riesgo_por_operacion: data.riesgoPorOperacion,
+        filtro_regimen: data.filtroRegimen,
+        cooldown_minutes_after_losses: data.cooldownMinutos,
+        cooldown_losses: data.cooldownPerdidas,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", fila.id);
+    if (error) throw new Error(error.message);
+
+    await audit(
+      "engine.risk_settings_updated",
+      {
+        stop_por_atr: data.stopPorAtr,
+        riesgo_por_operacion: data.riesgoPorOperacion,
+        filtro_regimen: data.filtroRegimen,
+        cooldown_minutes_after_losses: data.cooldownMinutos,
+        cooldown_losses: data.cooldownPerdidas,
+      },
+      context.userId,
+    );
+    return { ok: true };
+  });
+
 export const guardarConfigMotor = createServerFn({ method: "POST" })
   .middleware([requireAdmin])
   .inputValidator((input: unknown) =>

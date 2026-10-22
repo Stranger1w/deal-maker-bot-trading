@@ -1127,6 +1127,29 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           }
         }
 
+        // ── STOP Y TAKE EFECTIVOS ──────────────────────────────────────────
+        // Con el stop por volatilidad encendido (ajuste "stop_por_atr"), la
+        // distancia la manda el ATR del par y no un porcentaje fijo. Antes el
+        // motor usaba el ATR solo para el TAMAÑO y cerraba con el stop fijo:
+        // el riesgo real no era el que se habia calculado.
+        const { stopYTakeDinamicos } = await import("./stop-dinamico");
+        const stopTake = stopYTakeDinamicos({
+          stopFijoPct: Number(bot.stop_loss_pct),
+          takeFijoPct: Number(bot.take_profit_pct),
+          atrPct: atrRelativo,
+          stopPorAtr: settings.stop_por_atr ?? null,
+        });
+        const stopEfectivoPct = stopTake.stopPct;
+        const takeEfectivoPct = stopTake.takePct;
+        if (stopTake.modo === "atr") {
+          await log(
+            db,
+            bot.id,
+            "info",
+            `Distancia por volatilidad: stop ${stopEfectivoPct.toFixed(2)} % y take ${takeEfectivoPct.toFixed(2)} % (ATR ${stopTake.atrUsadoPct.toFixed(2)} %).`,
+          );
+        }
+
         // Stop-loss y take-profit son obligatorios para operar en Real.
         if (
           bot.mode === "real" &&
@@ -1143,12 +1166,12 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         // El take-profit tiene que cubrir el coste de ida y vuelta
         // (comisiones + slippage) con margen. Si no lo cubre, cualquier
         // operacion sale en perdida: se para el bot en lugar de quemarlo.
-        if (Number(bot.take_profit_pct) > 0) {
+        if (takeEfectivoPct > 0) {
           const { tpCubreCostes } = await import("./costes");
-          const veredicto = tpCubreCostes(Number(bot.take_profit_pct));
+          const veredicto = tpCubreCostes(takeEfectivoPct);
           if (!veredicto.ok) {
             await stopBot(db, bot.id, bot.name, "take_profit_no_cubre_costes", {
-              take_profit_pct: Number(bot.take_profit_pct),
+              take_profit_pct: takeEfectivoPct,
               coste_minimo_pct: veredicto.minimoPct,
               motivo: veredicto.motivo,
             });
@@ -1340,12 +1363,12 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         // que evita que un 2 % de stop en un par tranquilo sea un 5 % en uno
         // volatil.
         const riesgoPorOperacion = Number(settings.riesgo_por_operacion ?? 0);
-        if (riesgoPorOperacion > 0 && Number(bot.stop_loss_pct) > 0) {
+        if (riesgoPorOperacion > 0 && stopEfectivoPct > 0) {
           const { tamanoPorRiesgo } = await import("./riesgo-tamano");
           const porRiesgo = tamanoPorRiesgo({
             capital: Number(bot.capital),
             riesgoPorOperacion,
-            stopLossPct: Number(bot.stop_loss_pct),
+            stopLossPct: stopEfectivoPct,
             topeFraccionCapital: defEstrategia?.topeFraccionCapital ?? 0.1,
             atrPct: atrRelativo,
             stopPorAtr: settings.stop_por_atr ?? null,
@@ -1367,7 +1390,14 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
         if (bot.mode === "real") {
           // Orden MARKET real en Binance (testnet primero): el P&L sale del precio
           // real de ejecución, nunca de un número aleatorio.
-          const outcome = await realCycleOrder(db, bot, size, minuteKey, settings, senal);
+          const outcome = await realCycleOrder(
+            db,
+            { ...bot, stop_loss_pct: stopEfectivoPct, take_profit_pct: takeEfectivoPct },
+            size,
+            minuteKey,
+            settings,
+            senal,
+          );
           if (!outcome) continue;
           side = outcome.side;
           quantity = outcome.quantity;
@@ -1407,10 +1437,8 @@ export async function runEngineTick(trigger: "cron" | "manual"): Promise<TickRes
           const abierta = await posicionAbierta(db, bot);
           if (abierta) {
             const movimiento = ((precio - abierta.precio) / abierta.precio) * 100;
-            const hitStop =
-              Number(bot.stop_loss_pct) > 0 && movimiento <= -Number(bot.stop_loss_pct);
-            const hitTake =
-              Number(bot.take_profit_pct) > 0 && movimiento >= Number(bot.take_profit_pct);
+            const hitStop = stopEfectivoPct > 0 && movimiento <= -stopEfectivoPct;
+            const hitTake = takeEfectivoPct > 0 && movimiento >= takeEfectivoPct;
             if (!hitStop && !hitTake && senal !== "sell") {
               await log(
                 db,

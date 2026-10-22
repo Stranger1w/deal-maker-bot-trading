@@ -23,7 +23,9 @@ import { INDICADORES } from "@/lib/indicators";
 import type { EngineSession } from "@/lib/engine-sessions.server";
 import {
   detenerMotor,
+  guardarAjustesRiesgoMotor,
   guardarConfigMotor,
+  leerAjustesRiesgoMotor,
   iniciarMotor,
   leerConfigMotor,
   listarSesionesMotor,
@@ -158,6 +160,51 @@ function MotorPage() {
     queryKey: ["engine_config"],
     queryFn: () => leerConfigFn({}),
   });
+
+  // ── Ajustes de riesgo (distancia de salida y tamano) ───────────────────
+  const leerRiesgoFn = useServerFn(leerAjustesRiesgoMotor);
+  const guardarRiesgoFn = useServerFn(guardarAjustesRiesgoMotor);
+  const ajustesRiesgo = useQuery({
+    queryKey: ["ajustes_riesgo_motor"],
+    queryFn: () => leerRiesgoFn({}),
+  });
+  const [stopPorAtr, setStopPorAtr] = useState(0);
+  const [riesgoPorOperacion, setRiesgoPorOperacion] = useState(0);
+  const [filtroRegimen, setFiltroRegimen] = useState(false);
+  const [cooldownMinutos, setCooldownMinutos] = useState(0);
+  const [cooldownPerdidas, setCooldownPerdidas] = useState(0);
+  const [guardandoRiesgo, setGuardandoRiesgo] = useState(false);
+
+  useEffect(() => {
+    const a = ajustesRiesgo.data;
+    if (!a) return;
+    setStopPorAtr(Number(a.stopPorAtr ?? 0));
+    setRiesgoPorOperacion(Number(a.riesgoPorOperacion ?? 0));
+    setFiltroRegimen(a.filtroRegimen === true);
+    setCooldownMinutos(Number(a.cooldownMinutos ?? 0));
+    setCooldownPerdidas(Number(a.cooldownPerdidas ?? 0));
+  }, [ajustesRiesgo.data]);
+
+  const guardarRiesgo = async () => {
+    setGuardandoRiesgo(true);
+    try {
+      await guardarRiesgoFn({
+        data: {
+          stopPorAtr: Number(stopPorAtr) || 0,
+          riesgoPorOperacion: Number(riesgoPorOperacion) || 0,
+          filtroRegimen: Boolean(filtroRegimen),
+          cooldownMinutos: Number(cooldownMinutos) || 0,
+          cooldownPerdidas: Number(cooldownPerdidas) || 0,
+        },
+      });
+      toast.success("Ajustes de riesgo guardados. Se aplican desde el próximo ciclo.");
+      void ajustesRiesgo.refetch();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudieron guardar los ajustes");
+    } finally {
+      setGuardandoRiesgo(false);
+    }
+  };
 
   const [selIndicadores, setSelIndicadores] = useState<string[]>([]);
   const [estrategiaId, setEstrategiaId] = useState<
@@ -455,6 +502,107 @@ function MotorPage() {
               )}
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Riesgo y distancia de salida</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Estos ajustes estaban en la base de datos pero{" "}
+            <strong>no se podian cambiar desde la app</strong>, y el motor cerraba las posiciones
+            con un porcentaje fijo aunque el tamaño se calculase con la volatilidad real. Ahora el
+            stop y el take usan la misma distancia que el cálculo de riesgo.
+          </p>
+
+          <div className="space-y-2">
+            <Label htmlFor="stop-atr">Stop por volatilidad (ATR)</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={String(stopPorAtr)} onValueChange={(v) => setStopPorAtr(Number(v))}>
+                <SelectTrigger id="stop-atr" className="w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">Apagado (fijo)</SelectItem>
+                  <SelectItem value="1">1 x ATR</SelectItem>
+                  <SelectItem value="1.5">1,5 x ATR</SelectItem>
+                  <SelectItem value="2">2 x ATR (recomendado)</SelectItem>
+                  <SelectItem value="2.5">2,5 x ATR</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                La distancia la marca la volatilidad del par. Nunca se acorta por debajo de tu stop
+                fijo.
+              </p>
+            </div>
+            <p className="rounded-md border border-border bg-secondary/40 px-3 py-2 text-xs text-muted-foreground">
+              <strong>Medido</strong> (velas reales, 2 pares × 2 intervalos × 4 ventanas, 20
+              referencias aleatorias por corrida): con stop fijo el percentil frente al azar es 73 y
+              el retorno −0,00 %; con 1,5 × ATR es 88 y −0,06 %; con 2 × ATR es 83 y −0,02 %. O sea:{" "}
+              <strong>no da una ventaja para ganar</strong> (ninguna configuración del RSI gana
+              dinero), lo que mejora es el <strong>riesgo</strong>: el bot aguanta mejor el ruido
+              del mercado. La única estrategia con ventaja medida es la cobertura (carry).
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="riesgo-op">Riesgo por operación (% del capital)</Label>
+            <Input
+              id="riesgo-op"
+              type="number"
+              min={0}
+              max={20}
+              step={0.1}
+              value={riesgoPorOperacion}
+              onChange={(e) => setRiesgoPorOperacion(Number(e.target.value))}
+            />
+            <p className="text-xs text-muted-foreground">
+              Con 0 el tamaño es un porcentaje fijo del capital. Con un número, el tamaño sale de la
+              distancia del stop: el riesgo por operación es siempre el mismo.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="cooldown-min">Enfriamiento tras pérdidas (minutos)</Label>
+              <Input
+                id="cooldown-min"
+                type="number"
+                min={0}
+                max={1440}
+                value={cooldownMinutos}
+                onChange={(e) => setCooldownMinutos(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cooldown-perd">Pérdidas seguidas que lo activan</Label>
+              <Input
+                id="cooldown-perd"
+                type="number"
+                min={0}
+                max={20}
+                value={cooldownPerdidas}
+                onChange={(e) => setCooldownPerdidas(Number(e.target.value))}
+              />
+            </div>
+          </div>
+
+          <label className="flex items-start gap-2 text-xs">
+            <Checkbox
+              checked={filtroRegimen}
+              onCheckedChange={(v) => setFiltroRegimen(v === true)}
+            />
+            <span>
+              No operar en regímenes que no levan a la estrategia (tendencia fuerte con una
+              estrategia de reversión, o volatilidad extrema).
+            </span>
+          </label>
+
+          <Button onClick={() => void guardarRiesgo()} disabled={guardandoRiesgo}>
+            {guardandoRiesgo ? "Guardando…" : "Guardar ajustes de riesgo"}
+          </Button>
         </CardContent>
       </Card>
 

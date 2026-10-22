@@ -20,6 +20,7 @@
 
 import { buscarIndicador, senalDe } from "../indicators";
 import { atrPct } from "../riesgo-tamano";
+import { stopYTakeDinamicos } from "../stop-dinamico";
 import { detectarRegimen, operarEnRegimen, tipoDeIndicadores } from "../regimen";
 import type { PriceSeries } from "../indicators/types";
 import { decidir, estadoInicial, type StrategyDef, type StrategyState } from "../strategies/types";
@@ -149,12 +150,19 @@ export function ejecutarBacktest(
       // ajustada (la que esta mas cerca del precio).
       const multAtr = Number(config.stopAtrMult ?? 0);
       const atrRelativo = multAtr > 0 ? atrPct(velas.slice(Math.max(0, i - 60), i + 1), 14) : null;
+      // La MISMA funcion que usa el motor en vivo (src/lib/stop-dinamico.ts).
+      const stopTake = stopYTakeDinamicos({
+        stopFijoPct: config.stopLossPct,
+        takeFijoPct: config.takeProfitPct,
+        atrPct: atrRelativo,
+        stopPorAtr: multAtr > 0 ? multAtr : null,
+      });
       const stopFijo =
-        config.stopLossPct > 0
-          ? posicion.precioEntrada * (1 - config.stopLossPct / 100)
+        stopTake.stopPct > 0
+          ? posicion.precioEntrada * (1 - stopTake.stopPct / 100)
           : Number.NEGATIVE_INFINITY;
       const stopAtr =
-        atrRelativo !== null && atrRelativo > 0
+        atrRelativo !== null && atrRelativo > 0 && multAtr > 0
           ? posicion.precioEntrada * (1 - (multAtr * atrRelativo) / 100)
           : Number.NEGATIVE_INFINITY;
       const stopTrazado =
@@ -170,7 +178,7 @@ export function ejecutarBacktest(
           : Number.NEGATIVE_INFINITY;
       // El mas ajustado de todos: el que este mas cerca del precio actual.
       const stop = Math.max(stopFijo, stopAtr, stopTrazado, breakEven);
-      const take = posicion.precioEntrada * (1 + config.takeProfitPct / 100);
+      const take = posicion.precioEntrada * (1 + stopTake.takePct / 100);
       const tocaStop = Number.isFinite(stop) && vela.low <= stop;
       // De donde sale el stop que se ha tocado (para las estadisticas).
       const motivoStop =
@@ -181,7 +189,7 @@ export function ejecutarBacktest(
             : stop === stopAtr && stopAtr > stopFijo
               ? "stop_atr"
               : "stop_loss";
-      const tocaTake = config.takeProfitPct > 0 && vela.high >= take;
+      const tocaTake = stopTake.takePct > 0 && vela.high >= take;
 
       if (tocaStop || tocaTake) {
         // Peor caso primero: si la vela toca los dos, se asume el stop loss.

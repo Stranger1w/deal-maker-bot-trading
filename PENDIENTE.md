@@ -138,8 +138,57 @@ o baje**: es cobertura, no adivinar.
 > posicion larga en spot y una corta en el perpetuo a la vez, con el
 > mantenimiento de las dos). La app **ya lo muestra medido** en
 > _Mercados → Cobertura (carry)_, no prometido.
-### B2. Los 13 mercados y el precio justo (21-oct)
+### B4. La "IA" de los bots: lo que de verdad mejora (21-oct, medición nueva)
 
+Medido con el motor de backtest sobre **velas reales** de Binance, 3 pares
+(BTC, ETH, SOL) × 3 intervalos (5 m, 15 m, 1 h) × 4 ventanas = 36 ventanas,
+con **20 referencias aleatorias** por corrida (la misma estrategia con la
+entrada al azar). Script reproducible: `bun scripts/experimento-ia.ts`.
+
+| configuración                    | ops  | retorno | percentil vs azar |
+| -------------------------------- | ---- | ------- | ----------------- |
+| **BASE** rsi14 30/70 sl1,5 tp3   | 257  | −0,02 % | 69               |
+| rsi14 + **stop por ATR × 1,5**   | 431  | −0,05 % | **86**           |
+| rsi14 25/75 (menos señales)      | 135  | +0,00 % | 78               |
+| rsi21 30/70                      | 116  | −0,01 % | 77               |
+| rsi14 + filtro de régimen        | 113  | −0,01 % | 71               |
+| rsi7 30/70                       | 636  | −0,13 % | 46               |
+| macd                             | 1006 | −0,16 % | **39**           |
+| stochastic / cci / bollinger      | 517-843 | −0,09 a −0,19 % | 40-54 |
+
+**Lo que dice la medición (sin adornos):**
+
+1. **Ninguna configuración del RSI gana dinero.** El mejor retorno es +0,01 %
+   y con solo 47 operaciones. El percentil alto NO es ganar: es **perder
+   menos que el azar** (la mediana aleatoria era −0,10 %).
+2. **Más señales = peor.** MACD (1006 operaciones) es el peor de todos
+   (percentil 39). El motor no mejora operando más: mejora operando **menos y
+   mejor**.
+3. **El stop por volatilidad (ATR) es lo único que mejora de verdad**: 86-92
+   percentil frente al 73 del stop fijo, y pierde el 80 % de las operaciones.
+   No da una ventaja para ganar, **sí una mejora de riesgo**: el bot aguanta
+   el ruido del mercado sin que lo saquen de cada movimiento.
+
+**Lo que se ha implementado con esa medición:**
+
+- El motor en vivo ahora cierra con la **distancia efectiva** (ATR si está
+  encendido, fijo si no) y el **tamaño se calcula con esa misma distancia**
+  (antes se calculaba con el ATR pero se cerraba con el stop fijo: el riesgo
+  real no era el que se había medido).
+- La función es la **misma** en el backtest y en el motor en vivo
+  (`src/lib/stop-dinamico.ts`): si el backtest midiera otra cosa, la medición
+  no valdría.
+- En _Motor → Riesgo y distancia de salida_ hay una pantalla nueva (antes el
+  ajuste `stop_por_atr` existía en la base pero **no se podía tocar desde la
+  app**): stop por ATR, riesgo por operación, enfriamiento tras pérdidas y
+  filtro de régimen.
+
+> **La conclusión honesta**: el RSI es una moneda al aire con costes. La
+> única estrategia con ventaja medida es la **cobertura (carry)**: +41,28 % en
+> 5,5 años, positivo todos los años. Los bots de RSI se quedan en demo, con
+> la medición a la vista.
+
+### B2. Los 13 mercados y el precio justo (21-oct)
 Se añADIERON seis mercados con sus velas (probados uno a uno, cada uno con su
 formato): **Bitstamp, KuCoin, Gate.io, Bitfinex, Crypto.com y Bitget**. Con
 Binance (spot y futuros), Bybit, OKX, Hyperliquid, Kraken y Coinbase son **13**.
