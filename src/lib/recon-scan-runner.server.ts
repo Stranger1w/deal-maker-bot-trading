@@ -113,8 +113,19 @@ export async function runReconScanForBot(db: Db, botId: string): Promise<Resulta
   }
 
   // ── Guardar los hallazgos nuevos ─────────────────────────────────────────
+  // OJO: el cliente de Supabase NO lanza excepcion cuando la consulta falla
+  // (devuelve { data: null, error }). Sin mirar el error, el escaneo decia
+  // "N senales nuevas" sin haber guardado NADA.
+  let errorGuardado: string | null = null;
   if (nuevos.length) {
-    await db.from("recon_findings").insert(nuevos);
+    const r = await db.from("recon_findings").insert(nuevos);
+    const err = (r as { error?: { message?: string; code?: string } | null }).error;
+    if (err) {
+      const texto = `${err.code ?? ""} ${err.message ?? ""}`;
+      errorGuardado = /PGRST204|42703|does not exist|could not find/i.test(texto)
+        ? "Falta la migracion 20261031000000_recon_hallazgos_medidos.sql (aplicala en el SQL Editor de Supabase)."
+        : (err.message ?? "no se pudieron guardar los hallazgos");
+    }
   }
 
   // ── Observaciones (el dataset compartido) ────────────────────────────────
@@ -129,29 +140,46 @@ export async function runReconScanForBot(db: Db, botId: string): Promise<Resulta
     observed_at: new Date().toISOString(),
   }));
   if (liveRows.length) {
-    await db.from("recon_observations").insert(liveRows);
+    const r = await db.from("recon_observations").insert(liveRows);
+    const err = (r as { error?: { message?: string } | null }).error;
+    if (err && !errorGuardado)
+      errorGuardado = err.message ?? "no se pudieron guardar las observaciones";
   }
 
   const baseRateMedia = tasasBase.length
     ? Math.round((tasasBase.reduce((s, t) => s + t, 0) / tasasBase.length) * 10) / 10
     : null;
 
-  await db
-    .from("recon_bots")
-    .update({
-      last_run_at: new Date().toISOString(),
-      observations_count: Number(bot["observations_count"] ?? 0) + liveRows.length,
-      findings_count: Number(bot["findings_count"] ?? 0) + nuevos.length,
-      base_rate_pct: baseRateMedia,
-      last_error: errores.length ? errores.slice(0, 3).join(" · ") : null,
-    })
-    .eq("id", bot["id"]);
+  const mensajeError = [errorGuardado, ...errores].filter(Boolean).join(" · ") || null;
+  const guardados = !errorGuardado;
+  const campos = {
+    last_run_at: new Date().toISOString(),
+    observations_count: Number(bot["observations_count"] ?? 0) + (guardados ? liveRows.length : 0),
+    findings_count: Number(bot["findings_count"] ?? 0) + (guardados ? nuevos.length : 0),
+    base_rate_pct: baseRateMedia,
+    last_error: mensajeError,
+  };
+  let r = await db.from("recon_bots").update(campos).eq("id", bot["id"]);
+  let errUpdate = (r as { error?: { message?: string } | null }).error;
+  if (errUpdate) {
+    // Sin la migracion 12 la columna base_rate_pct no existe y el update
+    // ENTERO falla: el bot se quedaba con la ultima ejecucion congelada
+    // (del 20-oct) y sin error visible. Se reintenta sin la columna nueva,
+    // para que al menos la ejecucion y el error se guarden siempre.
+    const { base_rate_pct: _omitida, ...resto } = campos;
+    void _omitida;
+    r = await db.from("recon_bots").update(resto).eq("id", bot["id"]);
+    errUpdate = (r as { error?: { message?: string } | null }).error;
+  }
+  if (errUpdate && !errorGuardado)
+    errorGuardado = errUpdate.message ?? "no se pudo actualizar el bot";
 
   return {
-    findings: nuevos.length,
+    // Si no se han podido guardar, NO se cuentan como hallazgos nuevos.
+    findings: errorGuardado ? 0 : nuevos.length,
     evaluated: evaluados,
     observations: liveRows.length,
-    error: errores.length ? errores.slice(0, 3).join(" · ") : null,
+    error: mensajeError ?? errorGuardado,
   };
 }
 
