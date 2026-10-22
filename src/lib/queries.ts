@@ -575,15 +575,30 @@ export type MarketDataSource = {
 export const reconBotsQuery = queryOptions({
   queryKey: ["recon_bots"],
   refetchInterval: 30000,
-  queryFn: async () =>
-    unwrap<ReconBot[]>(
-      await supabase
-        .from("recon_bots")
-        .select(
-          "id,name,status,sources,symbols,focus,interval_seconds,last_run_at,observations_count,findings_count,last_error,intervalo,lookback_candles,horizon_candles,base_rate_pct",
-        )
-        .order("created_at", { ascending: true }),
-    ),
+  queryFn: async () => {
+    // Las columnas nuevas (migracion 12) se piden solo si existen: si la
+    // migracion no esta aplicada, la consulta entera falla y la pagina
+    // enseaba "no hay bots" (mentira: habia 4). Con el reintento se ven
+    // siempre, y lo que falta se explica en la pagina.
+    const completo = await supabase
+      .from("recon_bots")
+      .select(
+        "id,name,status,sources,symbols,focus,interval_seconds,last_run_at,observations_count,findings_count,last_error,intervalo,lookback_candles,horizon_candles,base_rate_pct",
+      )
+      .order("created_at", { ascending: true });
+    if (!completo.error) return (completo.data ?? []) as ReconBot[];
+    const simple = await supabase
+      .from("recon_bots")
+      .select(
+        "id,name,status,sources,symbols,focus,interval_seconds,last_run_at,observations_count,findings_count,last_error",
+      )
+      .order("created_at", { ascending: true });
+    if (simple.error) throw new Error(simple.error.message);
+    return ((simple.data ?? []) as ReconBot[]).map((b) => {
+      const copia: ReconBot = { ...b, base_rate_pct: null };
+      return copia;
+    });
+  },
 });
 
 export const reconFindingsQuery = queryOptions({
