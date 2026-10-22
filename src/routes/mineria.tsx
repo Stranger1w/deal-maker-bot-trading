@@ -3,7 +3,16 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Pickaxe, Play, RotateCcw, Square, Dumbbell, Database, Settings2 } from "lucide-react";
+import {
+  Pickaxe,
+  Play,
+  RotateCcw,
+  Square,
+  Dumbbell,
+  Database,
+  Settings2,
+  Trash2,
+} from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
@@ -22,7 +31,7 @@ import {
 import { AlertsPanel } from "@/components/AlertsPanel";
 import { SortableTable, type Column } from "@/components/SortableTable";
 import { createWorker, setWorkerStatus } from "@/lib/dealmaker.functions";
-import { guardarConfigMineria } from "@/lib/mineria-config.functions";
+import { guardarConfigMineria, deleteMiningWorker } from "@/lib/mineria-config.functions";
 import {
   avanzarMineria,
   compararMineria,
@@ -305,6 +314,18 @@ function MiningPage() {
     return acc;
   }, {});
 
+  const borrarWorkerFn = useServerFn(deleteMiningWorker);
+  const borrarWorker = async (w: { id: string; name: string }) => {
+    if (!confirm(`¿Borrar el equipo "${w.name}"? Perdera su configuracion.`)) return;
+    try {
+      await borrarWorkerFn({ data: { workerId: w.id } });
+      toast.success(`Equipo ${w.name} borrado`);
+      void qc.invalidateQueries({ queryKey: ["mining_workers"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo borrar el equipo");
+    }
+  };
+
   const act = async (action: "start" | "stop" | "restart", workerId?: string) => {
     try {
       await control({ data: { action, ...(workerId ? { workerId } : {}) } });
@@ -414,6 +435,15 @@ function MiningPage() {
             aria-label={`Reiniciar ${w.name}`}
           >
             <RotateCcw className="size-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => void borrarWorker(w)}
+            aria-label={`Borrar ${w.name}`}
+            title="Borrar este equipo"
+          >
+            <Trash2 className="size-3.5" />
           </Button>
         </div>
       ),

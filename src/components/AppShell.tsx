@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -129,6 +129,7 @@ export const NAV_GRUPOS: GrupoNav[] = [
  * paleta de comandos (Cmd+K).
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [paleta, setPaleta] = useState(false);
   // El panel de avisos: el boton del campanito abria el buscador (error).
   const [avisos, setAvisos] = useState(false);
@@ -144,9 +145,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const sesionActiva = useSesionActiva();
   const sinSesion = sesionActiva === false;
   const alertas = useQuery({ ...alertsQuery, enabled: sesionActiva === true });
-  const sinRevisar = (alertas.data ?? []).filter(
-    (a) => a.severity === "critical" && !a.acknowledged,
-  ).length;
+  // El numero del campanito cuenta TODO lo que falta por revisar (no solo las
+  // criticas): el dialogo muestra todas las severidades, asi que el numero
+  // tiene que cuadrar con lo que se ve al abrirlo.
+  const sinRevisar = (alertas.data ?? []).filter((a) => !a.acknowledged).length;
 
   // Atajo de teclado: Cmd/Ctrl + K abre la paleta (solo con sesion iniciada).
   useEffect(() => {
@@ -360,7 +362,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   key={item.to}
                   value={`${grupo.title} ${item.label} ${item.detalle}`}
                   onSelect={() => {
-                    window.location.href = item.to;
+                    setPaleta(false);
+                    void router.navigate({ to: item.to });
                   }}
                 >
                   <item.icon className="size-4" />
@@ -374,7 +377,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <CommandItem
               value="parada total detener bots"
               onSelect={() => {
-                window.location.href = "/automatizacion";
+                setPaleta(false);
+                void router.navigate({ to: "/automatizacion" });
               }}
             >
               <OctagonX className="size-4" />

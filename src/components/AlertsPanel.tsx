@@ -34,7 +34,14 @@ export function AlertsPanel({
 
   const acknowledge = async (alertId?: string) => {
     try {
-      await ack({ data: alertId ? { alertId, all: false } : { all: true } });
+      // Al marcar "todas" se marcan SOLO las de las categorias que se estan
+      // viendo: antes aceptaba alertas de trading desde la pagina de mineria.
+      const categoriasVisibles = Array.from(new Set(list.map((a) => a.category)));
+      await ack({
+        data: alertId
+          ? { alertId, all: false }
+          : { all: true, categories: category ? categoriasVisibles : undefined },
+      });
       void qc.invalidateQueries({ queryKey: ["alerts"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo marcar la alerta");

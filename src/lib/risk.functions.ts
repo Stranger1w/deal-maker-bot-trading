@@ -293,15 +293,30 @@ export const acknowledgeAlert = createServerFn({ method: "POST" })
   .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
     z
-      .object({ alertId: z.string().uuid().optional(), all: z.boolean().default(false) })
+      .object({
+        alertId: z.string().uuid().optional(),
+        all: z.boolean().default(false),
+        /** Categorias a marcar. Sin valor: todas. */
+        categories: z.array(z.string().max(40)).max(20).optional(),
+      })
       .parse(input),
   )
   .handler(async ({ data }) => {
     const db = await admin();
     const query = db.from("alerts").update({ acknowledged: true });
-    const { error } = data.alertId
-      ? await query.eq("id", data.alertId)
-      : await query.eq("acknowledged", false);
+    if (data.alertId) {
+      const { error } = await query.eq("id", data.alertId);
+      if (error) throw new Error(error.message);
+      return { ok: true };
+    }
+    // "Marcar todas" marcaba TODAS las alertas, incluso las de otras
+    // secciones que no se estaban viendo. Ahora se puede limitar a las
+    // categorias que se esta mostrando.
+    let filtrada = query.eq("acknowledged", false);
+    if (data.categories && data.categories.length > 0) {
+      filtrada = filtrada.in("category", data.categories);
+    }
+    const { error } = await filtrada;
     if (error) throw new Error(error.message);
     return { ok: true };
   });

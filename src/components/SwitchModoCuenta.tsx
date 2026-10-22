@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { useServerFn } from "@tanstack/react-start";
@@ -20,6 +20,7 @@ import { cambiarModoCuenta, leerModoCuenta } from "@/lib/modo-cuenta.functions";
  * con un mensaje claro en vez de dejar medio camino hecho.
  */
 export function SwitchModoCuenta({ className }: { className?: string }) {
+  const qc = useQueryClient();
   const cambiarFn = useServerFn(cambiarModoCuenta);
   const leerFn = useServerFn(leerModoCuenta);
   const [cambiando, setCambiando] = useState(false);
@@ -51,6 +52,10 @@ export function SwitchModoCuenta({ className }: { className?: string }) {
       );
       if (r?.avisos) toast.warning(r.avisos);
       void estado.refetch();
+      // El modo global cambia el modo de los bots: sin esto, las tarjetas
+      // seguian enseñando el modo viejo (dos fuentes de verdad desincronizadas).
+      void qc.invalidateQueries({ queryKey: ["bots"] });
+      void qc.invalidateQueries({ queryKey: ["escuadron"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo cambiar el modo");
     } finally {
@@ -58,6 +63,7 @@ export function SwitchModoCuenta({ className }: { className?: string }) {
     }
   };
 
+  const cargando = estado.isLoading;
   const modo = estado.data?.modo ?? "demo";
   const esReal = modo === "real";
 
@@ -82,9 +88,11 @@ export function SwitchModoCuenta({ className }: { className?: string }) {
           "transition-all duration-500 ease-out focus-visible:outline-none",
           "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
           "disabled:opacity-60",
-          esReal
-            ? "border-destructive/60 bg-destructive/15 shadow-[0_0_18px_-4px] shadow-destructive/60"
-            : "border-success/50 bg-success/10 shadow-[0_0_18px_-6px] shadow-success/60",
+          cargando
+            ? "border-border bg-secondary/30"
+            : esReal
+              ? "border-destructive/60 bg-destructive/15 shadow-[0_0_18px_-4px] shadow-destructive/60"
+              : "border-success/50 bg-success/10 shadow-[0_0_18px_-6px] shadow-success/60",
         ].join(" ")}
       >
         <span
@@ -104,7 +112,7 @@ export function SwitchModoCuenta({ className }: { className?: string }) {
             esReal ? "text-destructive" : "text-success",
           ].join(" ")}
         >
-          {cambiando ? "…" : esReal ? "Real" : "Demo"}
+          {cambiando || cargando ? "…" : esReal ? "Real" : "Demo"}
         </span>
         {/* Latido: solo en REAL, para que no pase desapercibido. */}
         {esReal && (

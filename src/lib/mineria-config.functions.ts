@@ -4,6 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireAdmin } from "@/integrations/supabase/admin-middleware";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Json } from "@/integrations/supabase/types";
 
 /**
@@ -108,4 +109,43 @@ export const guardarConfigMineria = createServerFn({ method: "POST" })
     }
 
     return { ok: true, ...(aviso ? { aviso } : {}) };
+  });
+
+/**
+ * BORRAR UN EQUIPO DE MINERIA.
+ *
+ * La tarjeta de alta decia "borra alguno para anadir otro" pero no habia
+ * ninguna forma de borrarlo: habia que vaciar la base a mano. Ahora existe.
+ * Solo se borra un equipo del propio usuario (se comprueba el dueno).
+ */
+export const deleteMiningWorker = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ workerId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: worker } = await supabaseAdmin
+      .from("mining_workers")
+      .select("id,name")
+      .eq("id", data.workerId)
+      .eq("user_id", context.userId)
+      .limit(1);
+    if (!worker || worker.length === 0) throw new Error("Ese equipo no es tuyo.");
+
+    const { error } = await supabaseAdmin
+      .from("mining_workers")
+      .delete()
+      .eq("id", data.workerId)
+      .eq("user_id", context.userId);
+    if (error) throw new Error(error.message);
+
+    await supabaseAdmin.from("audit_events").insert({
+      action: "mining.worker_deleted",
+      entity: "mining_worker",
+      entity_id: data.workerId,
+      details: { name: worker[0]?.name ?? "" },
+      actor: "operator",
+      user_id: context.userId,
+    } as never);
+
+    return { ok: true };
   });

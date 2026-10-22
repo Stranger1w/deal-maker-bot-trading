@@ -228,6 +228,9 @@ Se borran tambien sus logs, ejecuciones y configuracion. No se puede deshacer.`,
     "fixed" | "conservative" | "optimal" | "aggressive"
   >("fixed");
   const [motorGuardando, setMotorGuardando] = useState(false);
+  // Si la lectura de la configuracion falla, NO se puede guardar encima:
+  // se pisaria la config real del bot con los valores por defecto.
+  const [motorCargado, setMotorCargado] = useState(false);
   const [logsFor, setLogsFor] = useState<BotRow | null>(null);
   const [editing, setEditing] = useState<BotRow | null>(null);
   const [form, setForm] = useState({
@@ -298,12 +301,14 @@ Se borran tambien sus logs, ejecuciones y configuracion. No se puede deshacer.`,
   const abrirMotor = async (bot: BotRow) => {
     setMotorFor(bot);
     setMotorGuardando(false);
+    setMotorCargado(false);
     try {
       const cfg = await leerConfigBotFn({ data: { botId: bot.id } });
       setMotorIndicadores(cfg.indicatorIds ?? []);
       setMotorEstrategia(
         (cfg.strategyId as "fixed" | "conservative" | "optimal" | "aggressive") ?? "fixed",
       );
+      setMotorCargado(true);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo leer la configuración del bot");
     }
@@ -818,7 +823,7 @@ Se borran tambien sus logs, ejecuciones y configuracion. No se puede deshacer.`,
                         <Button size="sm" variant="ghost" onClick={() => setEditing(bot)}>
                           <Settings2 className="size-3.5" /> Estrategia
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setMotorFor(bot)}>
+                        <Button size="sm" variant="ghost" onClick={() => void abrirMotor(bot)}>
                           <Brain className="size-3.5" /> Motor
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => setLogsFor(bot)}>
@@ -992,6 +997,14 @@ Se borran tambien sus logs, ejecuciones y configuracion. No se puede deshacer.`,
             </DialogDescription>
           </DialogHeader>
 
+          {!motorCargado && (
+            <p className="rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-muted-foreground">
+              No se ha podido leer la configuración de este bot. Mientras no se lea, no se puede
+              guardar (si se guardara, se pisaría la configuración real con los valores por
+              defecto).
+            </p>
+          )}
+
           <div className="space-y-3">
             <div className="grid gap-2 sm:grid-cols-2">
               {INDICADORES.map((ind) => {
@@ -1051,7 +1064,7 @@ Se borran tambien sus logs, ejecuciones y configuracion. No se puede deshacer.`,
             </Button>
             <Button
               onClick={() => void guardarMotor()}
-              disabled={motorGuardando || motorIndicadores.length === 0}
+              disabled={motorGuardando || !motorCargado || motorIndicadores.length === 0}
             >
               {motorGuardando ? "Guardando…" : "Guardar"}
             </Button>

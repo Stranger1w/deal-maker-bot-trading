@@ -117,6 +117,20 @@ const COLUMNAS: Column<ParMercado>[] = [
       </span>
     ),
   },
+  {
+    key: "spread",
+    label: "Spread",
+    align: "right",
+    value: (x) => x.spread ?? -1,
+    render: (x) => (
+      <span
+        className="tabular"
+        title="Diferencia entre compra y venta. Un spread alto se come la ganancia: por eso el selector automático lo tiene en cuenta."
+      >
+        {x.spread === null ? "—" : `${(x.spread * 100).toFixed(3)} %`}
+      </span>
+    ),
+  },
 ];
 
 function MercadosPage() {
@@ -391,8 +405,23 @@ function MercadosPage() {
               {filtrados.length} de {rows.length} pares
             </span>
           </div>
+          {snapshot?.aviso && (
+            <p className="rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-muted-foreground">
+              {snapshot.aviso}
+            </p>
+          )}
           {mercados.isLoading ? (
             <SkeletonTabla filas={8} columnas={6} />
+          ) : mercados.isError ? (
+            <EmptyState
+              icono={CandlestickChart}
+              titulo="No se pudieron leer los mercados"
+              detalle={
+                "No es que no haya pares: la consulta a Binance fallo. " +
+                (mercados.error instanceof Error ? mercados.error.message : "") +
+                " Pulsa el boton de recargar de arriba."
+              }
+            />
           ) : filtrados.length === 0 ? (
             <EmptyState
               icono={CandlestickChart}

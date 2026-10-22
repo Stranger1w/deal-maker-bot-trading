@@ -41,7 +41,7 @@ export const Route = createFileRoute("/motor")({
       {
         name: "description",
         content:
-          "Sesiones del motor con temporizador: iniciar, detener, cuenta regresiva y último tick. El 24/7 automático está descartado por ahora.",
+          "Sesiones del motor con temporizador: iniciar, detener, cuenta regresiva y último tick. El motor avanza con el tick local (cada minuto, mientras el PC esté encendido); la sesión con temporizador es lo que le permite ABRIR posiciones nuevas.",
       },
       { property: "og:title", content: "Motor — Deal Maker" },
     ],
@@ -239,7 +239,7 @@ function MotorPage() {
       <PageHeader
         eyebrow="Motor"
         title="Motor"
-        subtitle="El motor solo opera mientras haya una sesión con temporizador abierta en esta pestaña. Sin sesión, no se abre ninguna posición."
+        subtitle="El motor avanza solo mientras el PC esté encendido (el tick local llama al motor cada minuto). Para ABRIR posiciones nuevas hace falta una sesión del motor activa: sin ella, el motor sigue gestionando las posiciones abiertas con sus take-profit y stop-loss, pero no abre ninguna nueva."
       />
 
       {conSinGestion?.unmanaged_positions && conSinGestion.unmanaged_positions.length > 0 && (
@@ -370,8 +370,8 @@ function MotorPage() {
       {sinTicks && (
         <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
           Sin ticks {edadSeg === null ? "" : haceTexto(edadSeg)}: han pasado más de 2 intervalos (
-          {umbralSeg}s) sin heartbeat. El motor solo opera con una sesión con temporizador abierta
-          en esta pestaña (el 24/7 automático está descartado por ahora).
+          {umbralSeg}s) sin heartbeat. Si el tick local está corriendo, esto significa que el
+          servidor no está levantado: mira el diario del cron local.
         </p>
       )}
 
@@ -612,9 +612,10 @@ function MotorPage() {
             Iniciar y Detener son los únicos controles que encienden o apagan el motor
             (engine_enabled). Al vencer el temporizador la sesión deja de abrir posiciones y se
             cierra con motivo «temporizador» cuando no queden abiertas; Detener hace lo mismo con
-            motivo «manual»; el Kill Switch siempre tiene prioridad («kill switch»). El 24/7
-            automático está descartado por ahora: el motor solo funciona mientras esta pestaña esté
-            abierta.
+            motivo «manual»; el Kill Switch siempre tiene prioridad («kill switch»). El motor avanza
+            solo con el tick local (cada minuto, mientras el PC esté encendido y el servidor
+            levantado); lo que necesita esta pestaña es una sesión con temporizador abierta para
+            poder abrir posiciones nuevas.
           </p>
 
           {kill && (

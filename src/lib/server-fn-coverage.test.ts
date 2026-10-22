@@ -51,6 +51,13 @@ const USUARIO = [
   // (exigirBotPropio comprueba la fila antes de tocar nada).
   "eliminarBot",
   "moverBot",
+  // Estadisticas del escuadron de reconocimiento: LECTURA de los hallazgos ya
+  // evaluados (cuanto acierta cada detector frente al azar). No devuelve
+  // nada privado ni toca la base de datos.
+  "leerEstadisticasRecon",
+  // Borrar un equipo de mineria: cada usuario borra SOLO los suyos (se
+  // comprueba el dueno antes de tocar nada).
+  "deleteMiningWorker",
 ].sort();
 
 /**
