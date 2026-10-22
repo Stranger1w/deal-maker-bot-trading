@@ -4,6 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireAdmin } from "@/integrations/supabase/admin-middleware";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 import { duenoDe } from "./tick-scope";
 
@@ -96,10 +97,92 @@ export const deleteReconBot = createServerFn({ method: "POST" })
   });
 
 /**
- * Escaneo de reconocimiento: ingesta normalizada de las fuentes conectadas,
- * guardado en el dataset compartido y generación de hallazgos legibles.
- * No abre ni cierra ninguna posición.
+ * Escaneo de reconocimiento: mira los activos de cada bot con velas REALES
+ * de Binance, genera hallazgos y EVALUA los antiguos para poder decir si el
+ * escuadron acierta mas que el azar.
+ * No abre ni cierra ninguna posicion.
  */
+/**
+ * ESTADISTICAS DEL ESCUADRON: cuanto acierta cada detector y si eso supera
+ * a lo que haria el azar.
+ *
+ * La referencia honesta es la TASA BASE: que tanto subio el mercado de
+ * verdad en el mismo periodo. Si un detector acierta el 55% pero el mercado
+ * subia el 60% de las veces, no vale nada: se dice.
+ */
+export const leerEstadisticasRecon = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const db = await admin();
+    const { resumenAcierto } = await import("@/lib/recon-deteccion");
+
+    const { data: hallazgos, error: errorHallazgos } = await db
+      .from("recon_findings")
+      .select("kind,direction,hit,outcome")
+      .not("hit", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(3000);
+
+    // Sin la migracion 12 las columnas nuevas no existen: se dice, en vez de
+    // dejar la pagina en blanco sin explicacion.
+    if (errorHallazgos) {
+      const texto = `${errorHallazgos.code ?? ""} ${errorHallazgos.message ?? ""}`;
+      if (/PGRST204|42703|does not exist|could not find/i.test(texto)) {
+        return {
+          resumen: [],
+          totalEvaluados: 0,
+          totalHallazgos: 0,
+          baseRatePct: null,
+          horizonteVelas: 6,
+          intervalo: "15m",
+          faltaMigracion: true,
+        };
+      }
+      throw new Error(errorHallazgos.message);
+    }
+
+    const { data: bots } = await db
+      .from("recon_bots")
+      .select("base_rate_pct,intervalo,horizon_candles,lookback_candles");
+
+    // El total REAL de hallazgos (no los 120 que trae la tabla).
+    const { count: totalHallazgos } = await db
+      .from("recon_findings")
+      .select("id", { count: "exact", head: true });
+
+    const tasas = (bots ?? [])
+      .map((b) => Number((b as { base_rate_pct?: number | null }).base_rate_pct))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    const baseRatePct = tasas.length
+      ? Math.round((tasas.reduce((s, t) => s + t, 0) / tasas.length) * 10) / 10
+      : null;
+
+    const lista = (hallazgos ?? []) as {
+      kind: string;
+      direction: string | null;
+      hit: boolean | null;
+      outcome: string | null;
+    }[];
+    const resumen = resumenAcierto(
+      lista.map((h) => ({
+        kind: h.kind,
+        direction: (h.direction as "alcista" | "bajista" | null) ?? null,
+        hit: h.hit,
+        outcome: h.outcome,
+      })),
+      baseRatePct,
+    );
+
+    return {
+      resumen,
+      totalEvaluados: lista.length,
+      totalHallazgos: totalHallazgos ?? 0,
+      baseRatePct,
+      horizonteVelas: Number((bots ?? [])[0]?.horizon_candles ?? 6),
+      intervalo: String((bots ?? [])[0]?.intervalo ?? "15m"),
+    };
+  });
+
 export const runReconScan = createServerFn({ method: "POST" })
   .middleware([requireAdmin])
   .inputValidator((input: unknown) =>
@@ -107,83 +190,129 @@ export const runReconScan = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const db = await admin();
-    const { buildMarketSnapshot, analyzeSymbol } = await import("@/lib/market-data.server");
     const { raiseAlert } = await import("@/lib/alerts.server");
+    const { analizarSimbolo, evaluarHallazgo, AJUSTES_POR_DEFECTO } =
+      await import("@/lib/recon-scan.server");
 
     let q = db.from("recon_bots").select("*").eq("status", "active");
     if (data.botId) q = q.eq("id", data.botId);
     const { data: bots } = await q;
     const list = bots ?? [];
-    if (!list.length) return { ok: true, scanned: 0, findings: 0 };
+    if (!list.length)
+      return {
+        ok: true,
+        scanned: 0,
+        findings: 0,
+        evaluated: 0,
+        mensaje: "No hay bots activos que escanear.",
+      };
 
     let observations = 0;
     let findings = 0;
+    let evaluated = 0;
 
     for (const bot of list) {
       // El dueño del bot de reconocimiento es el dueño de sus alertas.
       const duenoId = duenoDe(bot) ?? context.userId;
       try {
-        const snapshot = await buildMarketSnapshot(db, {
-          symbols: bot.symbols as string[],
-          liveIngest: true,
-        });
+        const ajustes = {
+          ...AJUSTES_POR_DEFECTO,
+          lookback: Number(
+            (bot as { lookback_candles?: number }).lookback_candles ?? AJUSTES_POR_DEFECTO.lookback,
+          ),
+          horizonte: Number(
+            (bot as { horizon_candles?: number }).horizon_candles ?? AJUSTES_POR_DEFECTO.horizonte,
+          ),
+          intervalo: String(
+            (bot as { intervalo?: string }).intervalo ?? AJUSTES_POR_DEFECTO.intervalo,
+          ),
+        };
+        const enfoque = String(bot.focus ?? "price");
+        const simbolos = (bot.symbols as string[]).map((s) => s.toUpperCase());
+        const nuevos: Record<string, unknown>[] = [];
+        const errores: string[] = [];
+        const tasasBase: number[] = [];
+        // Las velas se descargan UNA vez por activo y se reutilizan para
+        // detectar, para evaluar los hallazgos viejos y para las observaciones.
+        const { velasDeBinance } = await import("@/lib/velas.server");
+        const velasPorSimbolo = new Map<string, Awaited<ReturnType<typeof velasDeBinance>>>();
 
-        const liveRows = snapshot.points
-          .filter((p) => p.source === "Binance Spot Klines")
-          .slice(-120)
-          .map((p) => ({
-            recon_bot_id: bot.id,
-            source: p.source,
-            symbol: p.symbol,
-            metric: p.metric,
-            value: p.value,
-            meta: { normalized: snapshot.schema } as never,
-            is_demo: false,
-            observed_at: p.observedAt,
-          }));
-        if (liveRows.length) {
-          await db.from("recon_observations").insert(liveRows);
-          observations += liveRows.length;
-        }
-
-        const newFindings: Record<string, unknown>[] = [];
-        for (const symbol of bot.symbols as string[]) {
-          const a = analyzeSymbol(snapshot, symbol);
-          if (a.samples < 3) continue;
-          if (a.volumeRatio >= 1.8) {
-            newFindings.push({
+        for (const simbolo of simbolos) {
+          const r = await analizarSimbolo(simbolo, ajustes, enfoque);
+          if (r.error) {
+            errores.push(`${simbolo}: ${r.error}`);
+            continue;
+          }
+          tasasBase.push(r.baseRatePct);
+          const velas = await velasDeBinance({
+            simbolo,
+            intervalo: ajustes.intervalo,
+            limite: 200,
+            mercado: "spot",
+          });
+          velasPorSimbolo.set(simbolo, velas);
+          for (const d of r.detecciones) {
+            nuevos.push({
               recon_bot_id: bot.id,
               bot_name: bot.name,
-              symbol,
-              kind: "volume_spike",
-              severity: "warning",
-              headline: `Pico de volumen ${a.volumeRatio}x sobre la media en ${symbol}`,
-              detail: `El volumen más reciente multiplica por ${a.volumeRatio} la media del periodo, con una variación de precio de ${a.trendPct}% y volatilidad ${a.volatilityPct}%.`,
-              confidence: Math.min(0.95, 0.4 + a.volumeRatio / 10),
-              sources: snapshot.sources.filter((s) => s.points > 0).map((s) => s.source),
+              symbol: simbolo,
+              kind: d.kind,
+              severity: d.severity,
+              headline: `${d.headline} · ${simbolo}`,
+              detail: d.detail,
+              confidence: d.fuerza,
+              sources: ["Binance Spot Klines"],
               is_demo: false,
-            });
-          }
-          if (Math.abs(a.trendPct) >= 3) {
-            newFindings.push({
-              recon_bot_id: bot.id,
-              bot_name: bot.name,
-              symbol,
-              kind: "trend_change",
-              severity: Math.abs(a.trendPct) >= 6 ? "warning" : "info",
-              headline: `Tendencia ${a.trendPct > 0 ? "alcista" : "bajista"} de ${a.trendPct}% en ${symbol}`,
-              detail: `Movimiento acumulado de ${a.trendPct}% en ${a.samples} muestras normalizadas; volatilidad ${a.volatilityPct}%.`,
-              confidence: Math.min(0.9, 0.35 + Math.abs(a.trendPct) / 20),
-              sources: snapshot.sources.filter((s) => s.points > 0).map((s) => s.source),
-              is_demo: false,
+              reference_price: d.referencePrice,
+              direction: d.direction,
+              horizon_candles: ajustes.horizonte,
             });
           }
         }
 
-        if (newFindings.length) {
-          await db.from("recon_findings").insert(newFindings as never);
-          findings += newFindings.length;
-          for (const f of newFindings.filter((f) => f["severity"] === "warning")) {
+        // ── EVALUAR los hallazgos antiguos: aqui se aprende si sirve ───────
+        const { data: viejos } = await db
+          .from("recon_findings")
+          .select("id,symbol,direction,reference_price,horizon_candles,created_at")
+          .eq("recon_bot_id", bot.id)
+          .is("outcome", null)
+          .not("direction", "is", null)
+          .order("created_at", { ascending: true })
+          .limit(40);
+        let evaluados = 0;
+        for (const viejo of viejos ?? []) {
+          const simbolo = String(viejo.symbol ?? "").toUpperCase();
+          if (!simbolo) continue;
+          const velas = velasPorSimbolo.get(simbolo);
+          if (!velas || velas.length < 5) continue;
+          const ev = evaluarHallazgo(
+            {
+              direction: viejo.direction as string | null,
+              reference_price: viejo.reference_price as number | null,
+              horizon_candles: viejo.horizon_candles as number | null,
+            },
+            velas,
+            ajustes.minMovePct,
+          );
+          if (!ev) continue;
+          await db
+            .from("recon_findings")
+            .update({
+              outcome: ev.outcome,
+              outcome_pct: ev.outcomePct,
+              hit: ev.hit,
+              evaluated_at: new Date().toISOString(),
+            })
+            .eq("id", viejo.id);
+          evaluados++;
+        }
+        evaluated += evaluados;
+
+        // ── Guardar los hallazgos nuevos ────────────────────────────────────
+        if (nuevos.length) {
+          await db.from("recon_findings").insert(nuevos as never);
+          findings += nuevos.length;
+          for (const f of nuevos.filter((f) => f["severity"] === "warning")) {
             await raiseAlert(db, {
               category: "bot",
               severity: "warning",
@@ -196,19 +325,51 @@ export const runReconScan = createServerFn({ method: "POST" })
           }
         }
 
+        // Las observaciones se siguen guardando (el dataset compartido).
+        const liveRows = [];
+        const baseRateMedia = tasasBase.length
+          ? Math.round((tasasBase.reduce((s, t) => s + t, 0) / tasasBase.length) * 10) / 10
+          : null;
+        for (const simbolo of simbolos) {
+          if (!velasPorSimbolo.has(simbolo)) continue;
+          const r = await analizarSimbolo(simbolo, ajustes, enfoque);
+          if (r.error) continue;
+          liveRows.push(
+            ...r.detecciones.map((d) => ({
+              recon_bot_id: bot.id,
+              source: "Binance Spot Klines",
+              symbol: simbolo,
+              metric: d.kind,
+              value: d.referencePrice,
+              meta: { normalized: "recon-deteccion-v2" } as never,
+              is_demo: false,
+              observed_at: new Date().toISOString(),
+            })),
+          );
+        }
+        if (liveRows.length) {
+          await db.from("recon_observations").insert(liveRows);
+          observations += liveRows.length;
+        }
+
         await db
           .from("recon_bots")
           .update({
             last_run_at: new Date().toISOString(),
             observations_count: Number(bot.observations_count ?? 0) + liveRows.length,
-            findings_count: Number(bot.findings_count ?? 0) + newFindings.length,
-            last_error: liveRows.length
-              ? null
-              : "Sin datos nuevos de las fuentes conectadas en este escaneo.",
+            findings_count: Number(bot.findings_count ?? 0) + nuevos.length,
+            base_rate_pct: baseRateMedia,
+            last_error: errores.length ? errores.slice(0, 3).join(" · ") : null,
           })
           .eq("id", bot.id);
       } catch (e) {
-        const message = e instanceof Error ? e.message.slice(0, 300) : "Error de escaneo";
+        let message = e instanceof Error ? e.message.slice(0, 300) : "Error de escaneo";
+        // El error mas probable: la migracion 12 (columnas nuevas) no esta
+        // aplicada. Se dice con las palabras justas.
+        if (/PGRST204|42703|does not exist|could not find/i.test(message)) {
+          message =
+            "Falta la migracion 20261031000000_recon_hallazgos_medidos.sql (aplicala en el SQL Editor de Supabase).";
+        }
         await db.from("recon_bots").update({ last_error: message }).eq("id", bot.id);
         await raiseAlert(db, {
           category: "bot",
@@ -225,8 +386,17 @@ export const runReconScan = createServerFn({ method: "POST" })
     await audit(
       "recon.scan",
       data.botId ?? null,
-      { bots: list.length, observations, findings },
+      { bots: list.length, observations, findings, evaluated },
       context.userId,
     );
-    return { ok: true, scanned: list.length, findings };
+    return {
+      ok: true,
+      scanned: list.length,
+      findings,
+      evaluated,
+      mensaje:
+        findings === 0 && evaluated === 0
+          ? "Escaneo hecho: sin señales nuevas y sin hallazgos antiguos que evaluar."
+          : `${findings} señal(es) nueva(s) y ${evaluated} hallazgo(s) evaluado(s).`,
+    };
   });

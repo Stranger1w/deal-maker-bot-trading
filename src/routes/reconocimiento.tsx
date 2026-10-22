@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Eye, Pause, Play, RefreshCw, Trash2 } from "lucide-react";
+import { Eye, Pause, Play, RefreshCw, Target, Trash2 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { StatusPill } from "@/components/StatusPill";
@@ -15,6 +15,7 @@ import { SortableTable, type Column } from "@/components/SortableTable";
 import {
   createReconBot,
   deleteReconBot,
+  leerEstadisticasRecon,
   runReconScan,
   setReconStatus,
 } from "@/lib/recon.functions";
@@ -50,6 +51,17 @@ export const Route = createFileRoute("/reconocimiento")({
   component: ReconPage,
 });
 
+type ResumenDetectorRow = {
+  kind: string;
+  señales: number;
+  evaluadas: number;
+  aciertos: number;
+  porcentajeAcierto: number | null;
+  baseRatePct: number | null;
+  ventaja: number | null;
+  veredicto: string;
+};
+
 const severityTone = (s: string) =>
   s === "critical" ? "danger" : s === "warning" ? "warning" : "neutral";
 
@@ -64,6 +76,13 @@ function ReconPage() {
   const setStatus = useServerFn(setReconStatus);
   const remove = useServerFn(deleteReconBot);
   const scan = useServerFn(runReconScan);
+  // Cuanto acierta cada detector frente al azar: la utilidad real del escuadron.
+  const statsFn = useServerFn(leerEstadisticasRecon);
+  const stats = useQuery({
+    queryKey: ["recon_estadisticas"],
+    queryFn: () => statsFn({}),
+    refetchInterval: 60_000,
+  });
 
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
@@ -134,8 +153,12 @@ function ReconPage() {
       const res = (await scan({ data: botId ? { botId } : {} })) as {
         scanned: number;
         findings: number;
+        evaluated: number;
+        mensaje?: string;
       };
-      toast.success(`Escaneo completado: ${res.scanned} bot(s), ${res.findings} hallazgo(s)`);
+      toast.success(
+        res.mensaje ?? `Escaneo completado: ${res.scanned} bot(s), ${res.findings} hallazgo(s)`,
+      );
       refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "El escaneo falló");
@@ -188,7 +211,28 @@ function ReconPage() {
       key: "last",
       label: "Última actualización",
       value: (b) => b.last_run_at ?? "",
-      render: (b) => (b.last_run_at ? dateTime(b.last_run_at) : "—"),
+      render: (b) => (
+        <div>
+          <p className="text-xs">{b.last_run_at ? dateTime(b.last_run_at) : "nunca"}</p>
+          {b.last_error && (
+            <p className="text-xs text-destructive" title={b.last_error}>
+              {b.last_error}
+            </p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "azar",
+      label: "Azar de referencia",
+      align: "right",
+      value: (b) => Number(b.base_rate_pct ?? -1),
+      render: (b) =>
+        b.base_rate_pct === null || b.base_rate_pct === undefined ? (
+          "—"
+        ) : (
+          <span className="tabular text-xs">{b.base_rate_pct}%</span>
+        ),
     },
     {
       key: "obs",
@@ -242,6 +286,91 @@ function ReconPage() {
     },
   ];
 
+  const resumenColumns: Column<ResumenDetectorRow>[] = [
+    {
+      key: "kind",
+      label: "Detector",
+      value: (r) => r.kind,
+      render: (r) => <span className="font-medium">{r.kind}</span>,
+    },
+    {
+      key: "senales",
+      label: "Señales",
+      align: "right",
+      value: (r) => r.señales,
+      render: (r) => r.señales,
+    },
+    {
+      key: "evaluadas",
+      label: "Resueltas",
+      align: "right",
+      value: (r) => r.evaluadas,
+      render: (r) => r.evaluadas,
+    },
+    {
+      key: "acierto",
+      label: "Acierto",
+      align: "right",
+      value: (r) => r.porcentajeAcierto ?? -1,
+      render: (r) =>
+        r.porcentajeAcierto === null ? (
+          "—"
+        ) : (
+          <span className="tabular font-medium">{r.porcentajeAcierto}%</span>
+        ),
+    },
+    {
+      key: "azar",
+      label: "Azar",
+      align: "right",
+      value: (r) => r.baseRatePct ?? -1,
+      render: (r) => (r.baseRatePct === null ? "—" : `${r.baseRatePct}%`),
+    },
+    {
+      key: "ventaja",
+      label: "Ventaja",
+      align: "right",
+      value: (r) => r.ventaja ?? -99,
+      render: (r) =>
+        r.ventaja === null ? (
+          "—"
+        ) : (
+          <span
+            className={r.ventaja > 0 ? "text-success" : r.ventaja < 0 ? "text-destructive" : ""}
+          >
+            {r.ventaja > 0 ? "+" : ""}
+            {r.ventaja} pp
+          </span>
+        ),
+    },
+    {
+      key: "veredicto",
+      label: "Veredicto",
+      value: (r) => r.veredicto,
+      render: (r) => (
+        <StatusPill
+          tone={
+            r.veredicto === "gana-al-azar"
+              ? "success"
+              : r.veredicto === "pierde-al-azar"
+                ? "danger"
+                : r.veredicto === "indistinguible"
+                  ? "warning"
+                  : "neutral"
+          }
+        >
+          {r.veredicto === "gana-al-azar"
+            ? "gana al azar"
+            : r.veredicto === "pierde-al-azar"
+              ? "pierde al azar"
+              : r.veredicto === "indistinguible"
+                ? "indistinguible"
+                : "sin datos"}
+        </StatusPill>
+      ),
+    },
+  ];
+
   const findingColumns: Column<ReconFinding>[] = [
     {
       key: "created",
@@ -268,11 +397,49 @@ function ReconPage() {
       ),
     },
     {
-      key: "confidence",
-      label: "Confianza",
+      key: "confianza",
+      label: "Fuerza",
       align: "right",
       value: (f) => Number(f.confidence),
-      render: (f) => `${Math.round(Number(f.confidence) * 100)}%`,
+      render: (f) => (
+        <span title="Cuanto se sale la senal de lo normal. NO es la probabilidad de acertar.">
+          {Math.round(Number(f.confidence) * 100)}%
+        </span>
+      ),
+    },
+    {
+      key: "resultado",
+      label: "Resultado",
+      value: (f) => f.outcome ?? "",
+      render: (f) => {
+        if (!f.outcome) {
+          return (
+            <span className="text-xs text-muted-foreground">
+              pendiente (se mira en {f.horizon_candles ?? 6} velas)
+            </span>
+          );
+        }
+        const pct = Number(f.outcome_pct ?? 0);
+        const subio = f.outcome === "sube";
+        return (
+          <span className="text-xs">
+            <span
+              className={
+                subio
+                  ? "text-success"
+                  : f.outcome === "baja"
+                    ? "text-destructive"
+                    : "text-muted-foreground"
+              }
+            >
+              {subio ? "subió" : f.outcome === "baja" ? "bajó" : "plano"} {pct > 0 ? "+" : ""}
+              {pct.toFixed(2)}%
+            </span>
+            {f.hit === true && <span className="ml-1 text-success">(acertó)</span>}
+            {f.hit === false && <span className="ml-1 text-destructive">(falló)</span>}
+          </span>
+        );
+      },
     },
     {
       key: "bot",
@@ -376,7 +543,7 @@ function ReconPage() {
             <CardTitle className="text-sm text-muted-foreground">Hallazgos registrados</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">
-            {(findings.data ?? []).length}
+            {stats.data?.totalHallazgos ?? (findings.data ?? []).length}
           </CardContent>
         </Card>
       </div>
@@ -469,6 +636,67 @@ function ReconPage() {
               Añadir al escuadrón
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
+          <CardTitle className="flex items-center gap-2">
+            <Target className="size-4" /> ¿Sirve de algo el escuadrón?
+          </CardTitle>
+          <span className="text-xs text-muted-foreground">
+            Cada señal se comprueba {stats.data?.horizonteVelas ?? 6} velas después (
+            {stats.data?.intervalo ?? "15m"}). El azar de referencia es lo que subió el mercado en
+            ese mismo periodo.
+          </span>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!stats.data ? (
+            <p className="text-sm text-muted-foreground">Cargando el historial de aciertos…</p>
+          ) : stats.data.faltaMigracion ? (
+            <p className="rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-sm text-muted-foreground">
+              Falta aplicar la migración <strong>20261031000000_recon_hallazgos_medidos.sql</strong>{" "}
+              (SQL Editor de Supabase). Sin ella los hallazgos no se pueden guardar con su precio de
+              referencia ni evaluarse después.
+            </p>
+          ) : stats.data.resumen.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Todavía no hay señales evaluadas. En cuanto el escuadrón lleve un par de horas
+              escaneando, aquí verás si acierta más que el azar o si no se distingue de él.
+            </p>
+          ) : (
+            <>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border border-border bg-secondary/30 p-3">
+                  <p className="text-xs text-muted-foreground">Señales ya resueltas</p>
+                  <p className="tabular text-2xl font-semibold">{stats.data.totalEvaluados}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-secondary/30 p-3">
+                  <p className="text-xs text-muted-foreground">Acierto del azar (referencia)</p>
+                  <p className="tabular text-2xl font-semibold">
+                    {stats.data.baseRatePct === null ? "—" : `${stats.data.baseRatePct}%`}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-secondary/30 p-3">
+                  <p className="text-xs text-muted-foreground">Veredicto general</p>
+                  <p className="text-base font-semibold">
+                    {stats.data.resumen.some((r) => r.veredicto === "gana-al-azar")
+                      ? "Algún detector gana al azar"
+                      : stats.data.resumen.some((r) => r.veredicto === "indistinguible")
+                        ? "Indistinguible del azar"
+                        : "Todavía no hay datos suficientes"}
+                  </p>
+                </div>
+              </div>
+              <SortableTable
+                rows={stats.data.resumen}
+                columns={resumenColumns}
+                rowKey={(r) => r.kind}
+                initialSort={{ key: "acierto", dir: "desc" }}
+                empty="Sin datos de acierto todavía."
+              />
+            </>
+          )}
         </CardContent>
       </Card>
 

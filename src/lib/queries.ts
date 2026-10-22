@@ -522,6 +522,11 @@ export type ReconBot = {
   observations_count: number;
   findings_count: number;
   last_error: string | null;
+  /** Configuracion del escaneo (migracion 12). */
+  intervalo?: string;
+  lookback_candles?: number;
+  horizon_candles?: number;
+  base_rate_pct?: number | null;
 };
 
 export type ReconFinding = {
@@ -536,6 +541,14 @@ export type ReconFinding = {
   sources: string[];
   is_demo: boolean;
   created_at: string;
+  /** Evaluacion del acierto (migracion 12). */
+  direction?: string | null;
+  reference_price?: number | null;
+  horizon_candles?: number;
+  outcome?: string | null;
+  outcome_pct?: number | null;
+  hit?: boolean | null;
+  evaluated_at?: string | null;
 };
 
 export type ReconObservation = {
@@ -567,7 +580,7 @@ export const reconBotsQuery = queryOptions({
       await supabase
         .from("recon_bots")
         .select(
-          "id,name,status,sources,symbols,focus,interval_seconds,last_run_at,observations_count,findings_count,last_error",
+          "id,name,status,sources,symbols,focus,interval_seconds,last_run_at,observations_count,findings_count,last_error,intervalo,lookback_candles,horizon_candles,base_rate_pct",
         )
         .order("created_at", { ascending: true }),
     ),
@@ -581,10 +594,10 @@ export const reconFindingsQuery = queryOptions({
       await supabase
         .from("recon_findings")
         .select(
-          "id,bot_name,symbol,kind,severity,headline,detail,confidence,sources,is_demo,created_at",
+          "id,bot_name,symbol,kind,severity,headline,detail,confidence,sources,is_demo,created_at,direction,reference_price,horizon_candles,outcome,outcome_pct,hit,evaluated_at",
         )
         .order("created_at", { ascending: false })
-        .limit(40),
+        .limit(120),
     ),
 });
 

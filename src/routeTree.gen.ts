@@ -26,6 +26,7 @@ import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.
 import { Route as ApiPublicAutomationTickRouteImport } from './routes/api/public/automation-tick'
 import { Route as ApiPublicMaintenanceRouteImport } from './routes/api/public/maintenance'
 import { Route as ApiPublicMiningTickRouteImport } from './routes/api/public/mining-tick'
+import { Route as ApiPublicReconTickRouteImport } from './routes/api/public/recon-tick'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -113,6 +114,11 @@ const ApiPublicMiningTickRoute = ApiPublicMiningTickRouteImport.update({
   path: '/api/public/mining-tick',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicReconTickRoute = ApiPublicReconTickRouteImport.update({
+  id: '/api/public/recon-tick',
+  path: '/api/public/recon-tick',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -132,6 +138,7 @@ export interface FileRoutesByFullPath {
   '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
   '/api/public/maintenance': typeof ApiPublicMaintenanceRoute
   '/api/public/mining-tick': typeof ApiPublicMiningTickRoute
+  '/api/public/recon-tick': typeof ApiPublicReconTickRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -151,6 +158,7 @@ export interface FileRoutesByTo {
   '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
   '/api/public/maintenance': typeof ApiPublicMaintenanceRoute
   '/api/public/mining-tick': typeof ApiPublicMiningTickRoute
+  '/api/public/recon-tick': typeof ApiPublicReconTickRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -171,6 +179,7 @@ export interface FileRoutesById {
   '/api/public/automation-tick': typeof ApiPublicAutomationTickRoute
   '/api/public/maintenance': typeof ApiPublicMaintenanceRoute
   '/api/public/mining-tick': typeof ApiPublicMiningTickRoute
+  '/api/public/recon-tick': typeof ApiPublicReconTickRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -192,6 +201,7 @@ export interface FileRouteTypes {
     | '/api/public/automation-tick'
     | '/api/public/maintenance'
     | '/api/public/mining-tick'
+    | '/api/public/recon-tick'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -211,6 +221,7 @@ export interface FileRouteTypes {
     | '/api/public/automation-tick'
     | '/api/public/maintenance'
     | '/api/public/mining-tick'
+    | '/api/public/recon-tick'
   id:
     | '__root__'
     | '/'
@@ -230,6 +241,7 @@ export interface FileRouteTypes {
     | '/api/public/automation-tick'
     | '/api/public/maintenance'
     | '/api/public/mining-tick'
+    | '/api/public/recon-tick'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -250,6 +262,7 @@ export interface RootRouteChildren {
   ApiPublicAutomationTickRoute: typeof ApiPublicAutomationTickRoute
   ApiPublicMaintenanceRoute: typeof ApiPublicMaintenanceRoute
   ApiPublicMiningTickRoute: typeof ApiPublicMiningTickRoute
+  ApiPublicReconTickRoute: typeof ApiPublicReconTickRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -373,6 +386,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicMiningTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/recon-tick': {
+      id: '/api/public/recon-tick'
+      path: '/api/public/recon-tick'
+      fullPath: '/api/public/recon-tick'
+      preLoaderRoute: typeof ApiPublicReconTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -395,6 +415,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicAutomationTickRoute: ApiPublicAutomationTickRoute,
   ApiPublicMaintenanceRoute: ApiPublicMaintenanceRoute,
   ApiPublicMiningTickRoute: ApiPublicMiningTickRoute,
+  ApiPublicReconTickRoute: ApiPublicReconTickRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

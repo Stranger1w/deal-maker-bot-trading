@@ -1458,8 +1458,12 @@ export type Database = {
       }
       recon_bots: {
         Row: {
+          base_rate_pct: number | null
           created_at: string
           findings_count: number
+          horizon_candles: number
+          intervalo: string
+          lookback_candles: number
           focus: string
           id: string
           interval_seconds: number
@@ -1474,11 +1478,15 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          base_rate_pct?: number | null
           created_at?: string
           findings_count?: number
           focus?: string
+          horizon_candles?: number
           id?: string
+          intervalo?: string
           interval_seconds?: number
+          lookback_candles?: number
           last_error?: string | null
           last_run_at?: string | null
           name: string
@@ -1490,11 +1498,15 @@ export type Database = {
           user_id: string
         }
         Update: {
+          base_rate_pct?: number | null
           created_at?: string
           findings_count?: number
           focus?: string
+          horizon_candles?: number
           id?: string
+          intervalo?: string
           interval_seconds?: number
+          lookback_candles?: number
           last_error?: string | null
           last_run_at?: string | null
           name?: string
@@ -1513,11 +1525,18 @@ export type Database = {
           confidence: number
           created_at: string
           detail: string
+          direction: string | null
+          evaluated_at: string | null
           headline: string
+          horizon_candles: number
+          hit: boolean | null
           id: string
           is_demo: boolean
           kind: string
+          outcome: string | null
+          outcome_pct: number | null
           recon_bot_id: string | null
+          reference_price: number | null
           severity: string
           sources: string[]
           symbol: string
@@ -1527,11 +1546,18 @@ export type Database = {
           confidence?: number
           created_at?: string
           detail?: string
+          direction?: string | null
+          evaluated_at?: string | null
           headline: string
+          horizon_candles?: number
+          hit?: boolean | null
           id?: string
           is_demo?: boolean
           kind: string
+          outcome?: string | null
+          outcome_pct?: number | null
           recon_bot_id?: string | null
+          reference_price?: number | null
           severity?: string
           sources?: string[]
           symbol: string
@@ -1541,11 +1567,18 @@ export type Database = {
           confidence?: number
           created_at?: string
           detail?: string
+          direction?: string | null
+          evaluated_at?: string | null
           headline?: string
+          horizon_candles?: number
+          hit?: boolean | null
           id?: string
           is_demo?: boolean
           kind?: string
+          outcome?: string | null
+          outcome_pct?: number | null
           recon_bot_id?: string | null
+          reference_price?: number | null
           severity?: string
           sources?: string[]
           symbol?: string
