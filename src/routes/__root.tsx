@@ -26,6 +26,8 @@ import { AppShell } from "@/components/AppShell";
 import { Toaster } from "@/components/ui/sonner";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { PrimerUsoPage } from "@/routes/primer-uso";
+import { useSecuritySession } from "@/hooks/useSecuritySession";
 import { esErrorDeSesion } from "@/hooks/useGuardianDeSesion";
 
 function NotFoundComponent() {
@@ -153,6 +155,15 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  // Si no hay configuración de Supabase, mostrar pantalla de bienvenida
+  // para que el usuario configure su propia instancia
+  const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"];
+  const supabaseKey = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
+
+  if (!supabaseUrl || !supabaseKey) {
+    return <PrimerUsoPage />;
+  }
 
   return (
     <QueryClientProvider client={queryClient}>

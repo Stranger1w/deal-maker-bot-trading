@@ -20,6 +20,7 @@ import { Route as MercadosRouteImport } from './routes/mercados'
 import { Route as MetricasRouteImport } from './routes/metricas'
 import { Route as MineriaRouteImport } from './routes/mineria'
 import { Route as MotorRouteImport } from './routes/motor'
+import { Route as PrimerUsoRouteImport } from './routes/primer-uso'
 import { Route as ReconocimientoRouteImport } from './routes/reconocimiento'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
@@ -83,6 +84,11 @@ const MotorRoute = MotorRouteImport.update({
   path: '/motor',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrimerUsoRoute = PrimerUsoRouteImport.update({
+  id: '/primer-uso',
+  path: '/primer-uso',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ReconocimientoRoute = ReconocimientoRouteImport.update({
   id: '/reconocimiento',
   path: '/reconocimiento',
@@ -132,6 +138,7 @@ export interface FileRoutesByFullPath {
   '/metricas': typeof MetricasRoute
   '/mineria': typeof MineriaRoute
   '/motor': typeof MotorRoute
+  '/primer-uso': typeof PrimerUsoRoute
   '/reconocimiento': typeof ReconocimientoRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
@@ -152,6 +159,7 @@ export interface FileRoutesByTo {
   '/metricas': typeof MetricasRoute
   '/mineria': typeof MineriaRoute
   '/motor': typeof MotorRoute
+  '/primer-uso': typeof PrimerUsoRoute
   '/reconocimiento': typeof ReconocimientoRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
@@ -173,6 +181,7 @@ export interface FileRoutesById {
   '/metricas': typeof MetricasRoute
   '/mineria': typeof MineriaRoute
   '/motor': typeof MotorRoute
+  '/primer-uso': typeof PrimerUsoRoute
   '/reconocimiento': typeof ReconocimientoRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
@@ -195,6 +204,7 @@ export interface FileRouteTypes {
     | '/metricas'
     | '/mineria'
     | '/motor'
+    | '/primer-uso'
     | '/reconocimiento'
     | '/.well-known/oauth-protected-resource'
     | '/.lovable/oauth/consent'
@@ -215,6 +225,7 @@ export interface FileRouteTypes {
     | '/metricas'
     | '/mineria'
     | '/motor'
+    | '/primer-uso'
     | '/reconocimiento'
     | '/.well-known/oauth-protected-resource'
     | '/.lovable/oauth/consent'
@@ -235,6 +246,7 @@ export interface FileRouteTypes {
     | '/metricas'
     | '/mineria'
     | '/motor'
+    | '/primer-uso'
     | '/reconocimiento'
     | '/.well-known/oauth-protected-resource'
     | '/.lovable/oauth/consent'
@@ -256,6 +268,7 @@ export interface RootRouteChildren {
   MetricasRoute: typeof MetricasRoute
   MineriaRoute: typeof MineriaRoute
   MotorRoute: typeof MotorRoute
+  PrimerUsoRoute: typeof PrimerUsoRoute
   ReconocimientoRoute: typeof ReconocimientoRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
@@ -344,6 +357,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MotorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/primer-uso': {
+      id: '/primer-uso'
+      path: '/primer-uso'
+      fullPath: '/primer-uso'
+      preLoaderRoute: typeof PrimerUsoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reconocimiento': {
       id: '/reconocimiento'
       path: '/reconocimiento'
@@ -408,6 +428,7 @@ const rootRouteChildren: RootRouteChildren = {
   MetricasRoute: MetricasRoute,
   MineriaRoute: MineriaRoute,
   MotorRoute: MotorRoute,
+  PrimerUsoRoute: PrimerUsoRoute,
   ReconocimientoRoute: ReconocimientoRoute,
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
