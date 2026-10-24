@@ -15,18 +15,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { botPerformanceQuery, hashrateHistoryQuery, marketPricesQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
-/**
- * Una sola grafica con botones dentro.
- *
- * Antes habia tres graficas apiladas (hash rate, precios y progreso de los
- * bots) y habia que bajar mucho para verlas. Ahora hay un unico panel con un
- * selector de que se mira, el rango y las series: todo se cambia desde ahi,
- * sin salir de la grafica.
- *
- * Ademas, las dos primeras series eran datos de ejemplo (seed): por eso el
- * aviso, y por eso la de bots es la que se abre por defecto.
- */
-
 const RANGES = [7, 14, 30, 60] as const;
 
 const VISTAS = [
@@ -45,14 +33,6 @@ const METRICAS = [
 
 type Metrica = (typeof METRICAS)[number]["id"];
 
-/**
- * Colores de las series de datos: NARANJA y MENTA.
- *
- * No se usan los verdes y rojos de la app: en una linea de datos, un verde
- * significa "gana" y un rojo "pierde", y aqui solo son "esta serie". Con
- * dos series (la comparativa) el contraste es naranja contra menta: uno
- * calido, otro frio, y los dos se leen sobre el fondo oscuro.
- */
 const COLORES = [
   "hsl(var(--data-1))",
   "hsl(var(--data-2))",
@@ -62,7 +42,6 @@ const COLORES = [
 
 type Row = { recorded_on: string; [k: string]: string | number };
 
-/** Agrupa los puntos por día y suma los valores de las series elegidas. */
 function pivot(
   points: { recorded_on: string }[],
   nameOf: (p: never) => string,
@@ -84,7 +63,6 @@ function pivot(
   return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([, v]) => v);
 }
 
-/** Tooltip con forma de tarjeta. */
 function TooltipCard({
   active,
   label,
@@ -173,69 +151,66 @@ export function ComparisonCharts() {
 
   return (
     <Card className="overflow-hidden">
-      <CardHeader className="gap-3 pb-2">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <CardTitle className="text-base">Evolución en el tiempo</CardTitle>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {vistaActual.hint}
-              {esDemo ? " · datos de ejemplo, no reales" : ""}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <CardTitle className="text-base">Evolución en el tiempo</CardTitle>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {vistaActual.hint}
+            {esDemo ? " · datos de ejemplo, no reales" : ""}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <TabsPestanas
+            items={VISTAS.map((v) => ({ id: v.id, etiqueta: v.etiqueta }))}
+            valor={vista}
+            onChange={(v) => {
+              setVista(v as Vista);
+              setSel([]);
+            }}
+          />
+          {vista === "bots" && (
             <TabsPestanas
-              items={VISTAS.map((v) => ({ id: v.id, etiqueta: v.etiqueta }))}
-              valor={vista}
-              onChange={(v) => {
-                setVista(v as Vista);
-                setSel([]);
-              }}
-            />
-            {vista === "bots" && (
-              <TabsPestanas
-                items={METRICAS.map((m) => ({ id: m.id, etiqueta: m.etiqueta }))}
-                valor={metrica}
-                onChange={(v) => setMetrica(v as Metrica)}
-                compacta
-              />
-            )}
-            <TabsPestanas
-              items={RANGES.map((r) => ({ id: String(r), etiqueta: `${r}d` }))}
-              valor={String(dias)}
-              onChange={(v) => setDias(Number(v))}
+              items={METRICAS.map((m) => ({ id: m.id, etiqueta: m.etiqueta }))}
+              valor={metrica}
+              onChange={(v) => setMetrica(v as Metrica)}
               compacta
             />
-          </div>
+          )}
+          <TabsPestanas
+            items={RANGES.map((r) => ({ id: String(r), etiqueta: `${r}d` }))}
+            valor={String(dias)}
+            onChange={(v) => setDias(Number(v))}
+            compacta
+          />
         </div>
-
-        {/* Series: se eligen aquí mismo, sin salir de la gráfica. */}
-        {opciones.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            {opciones.map((o, i) => {
-              const activo = sel.length === 0 || sel.includes(o);
-              return (
-                <button
-                  key={o}
-                  type="button"
-                  onClick={() => alternar(o)}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors",
-                    activo
-                      ? "border-border bg-secondary/50 text-foreground"
-                      : "border-transparent text-muted-foreground/60 hover:text-muted-foreground",
-                  )}
-                >
-                  <span
-                    className="size-1.5 rounded-full"
-                    style={{ background: COLORES[i % COLORES.length] }}
-                  />
-                  {o}
-                </button>
-              );
-            })}
-          </div>
-        )}
       </CardHeader>
+
+      {opciones.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {opciones.map((o, i) => {
+            const activo = sel.length === 0 || sel.includes(o);
+            return (
+              <button
+                key={o}
+                type="button"
+                onClick={() => alternar(o)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors",
+                  activo
+                    ? "border-border bg-secondary/50 text-foreground"
+                    : "border-transparent text-muted-foreground/60 hover:text-muted-foreground",
+                )}
+              >
+                <span
+                  className="size-1.5 rounded-full"
+                  style={{ background: COLORES[i % COLORES.length] }}
+                />
+                {o}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <CardContent className="h-72 pt-0">
         {datos.length === 0 ? (
@@ -246,30 +221,6 @@ export function ComparisonCharts() {
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={datos} margin={{ top: 8, right: 8, bottom: 0, left: -8 }}>
-              <defs>
-                {series.map((s, i) => (
-                  <linearGradient key={s} id={`grad-${vista}-${s}`} x1="0" y1="0" x2="0" y2="1">
-                    {/* La estela: el MISMO color de la linea, difuminandose hacia abajo. */}
-                    <stop offset="0%" stopColor={COLORES[i % COLORES.length]} stopOpacity={0.5} />
-                    <stop offset="55%" stopColor={COLORES[i % COLORES.length]} stopOpacity={0.14} />
-                    <stop offset="100%" stopColor={COLORES[i % COLORES.length]} stopOpacity={0} />
-                  </linearGradient>
-                ))}
-                {series.map((s, i) => (
-                  <linearGradient
-                    key={`halo-${s}`}
-                    id={`halo-${vista}-${s}`}
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop offset="0%" stopColor={COLORES[i % COLORES.length]} stopOpacity={0.22} />
-                    <stop offset="100%" stopColor={COLORES[i % COLORES.length]} stopOpacity={0} />
-                  </linearGradient>
-                ))}
-              </defs>
-              {/* Todo el armazon de la grafica es neutro: el unico color son los datos. */}
               <CartesianGrid
                 stroke="hsl(var(--border))"
                 strokeDasharray="2 6"
@@ -302,36 +253,24 @@ export function ComparisonCharts() {
               />
               {series.map((s, i) => (
                 <Area
-                  key={`halo-${s}`}
-                  type="monotone"
-                  dataKey={s}
-                  stroke="none"
-                  strokeWidth={0}
-                  fill={`url(#halo-${vista}-${s})`}
-                  fillOpacity={1}
-                  dot={false}
-                  activeDot={false}
-                  connectNulls
-                  isAnimationActive={false}
-                />
-              ))}
-              {series.map((s, i) => (
-                <Area
                   key={s}
                   type="monotone"
                   dataKey={s}
                   stroke={COLORES[i % COLORES.length]}
                   strokeWidth={2}
-                  fill={`url(#grad-${vista}-${s})`}
+                  fill={COLORES[i % COLORES.length]}
+                  fillOpacity={0.15}
                   dot={false}
                   activeDot={{ r: 3.5, strokeWidth: 0 }}
                   connectNulls
+                  isAnimationActive={false}
                 />
               ))}
             </AreaChart>
           </ResponsiveContainer>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </div>
   );
 }

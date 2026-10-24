@@ -10,6 +10,7 @@ import { aiIndicator } from "./ai-indicator";
 import { bollinger } from "./bollinger";
 import { closePrice } from "./close-price";
 import { cci } from "./cci";
+import { emaCruzamiento } from "./ema-cruzamiento";
 import { macd } from "./macd";
 import { precioJusto } from "./precio-justo";
 import { rsi } from "./rsi";
@@ -27,6 +28,7 @@ export const INDICADORES: IndicatorDef[] = [
   bollinger,
   rsi,
   cci,
+  emaCruzamiento,
   closePrice,
 ];
 
@@ -59,6 +61,44 @@ export function combineSignals(senales: SignalDirection[]): SignalDirection {
 }
 
 /**
+ * Combina varias senales con umbral de consenso.
+ *
+ * En lugar de exigir que TODOS los indicadores coincidan (AND estricto), se
+ * requiere que al menos `umbral` (0 a 1) de los indicadores con senal no nula
+ * estén de acuerdo. Esto permite usar varios indicadores sin que se maten
+ * entre si: por ejemplo, con 3 indicadores y umbral 0.66, bastan 2 de 3 para
+ * emitir senal.
+ *
+ * Los indicadores que devuelven null (sin senal) no cuentan ni a favor ni en
+ * contra: solo se considera la proporcion de los que tienen opinion.
+ *
+ * @param senales - senales de cada indicador (pueden ser null)
+ * @param umbral - proporcion minima de acuerdo requerida (0.5 = mayoria, 1.0 = unanimidad)
+ * @returns "buy" si el umbral de buy se cumple, "sell" si el de sell, null si ninguno
+ */
+export function combinarSenalesConUmbral(
+  senales: SignalDirection[],
+  umbral: number = 0.66,
+): SignalDirection {
+  if (senales.length === 0) return null;
+  if (umbral <= 0 || umbral > 1) throw new Error("umbral debe estar entre 0 y 1");
+
+  const conSenal = senales.filter((s) => s !== null);
+  if (conSenal.length === 0) return null;
+
+  const buyCount = conSenal.filter((s) => s === "buy").length;
+  const sellCount = conSenal.filter((s) => s === "sell").length;
+  const total = conSenal.length;
+
+  const umbralBuy = Math.ceil(total * umbral);
+  const umbralSell = Math.ceil(total * umbral);
+
+  if (buyCount >= umbralBuy) return "buy";
+  if (sellCount >= umbralSell) return "sell";
+  return null;
+}
+
+/**
  * Tipos presentes en una seleccion, para el aviso del modal.
  *
  * Los de tipo `filtro` (AI Indicator) NO cuentan: no generan senal propia, asi
@@ -78,11 +118,16 @@ export function tiposDe(seleccion: IndicatorDef[]): {
 /**
  * Aplica los indicadores seleccionados a una serie y devuelve la senal combinada.
  * Si la seleccion esta vacia, no hay senal (no se inventa un default en caliente).
+ *
+ * @param umbralConsenso - proporcion minima de indicadores que deben estar de
+ *   acuerdo para emitir senal (0.5 = mayoria simple, 1.0 = unanimidad).
+ *   Si no se indica, se usa unanimidad (comportamiento anterior).
  */
 export function senalDe(
   ids: string[],
   series: PriceSeries,
   paramsPorIndicador: Record<string, Record<string, number>> = {},
+  umbralConsenso?: number,
 ): SignalDirection {
   if (ids.length === 0) return null;
   const senales: SignalDirection[] = [];
@@ -92,6 +137,9 @@ export function senalDe(
     senales.push(def.signal(series, paramsPorIndicador[id] ?? {}));
   }
   if (senales.length === 0) return null;
+  if (umbralConsenso !== undefined) {
+    return combinarSenalesConUmbral(senales, umbralConsenso);
+  }
   return combineSignals(senales);
 }
 
@@ -101,6 +149,7 @@ export {
   bollinger,
   cci,
   closePrice,
+  emaCruzamiento,
   macd,
   precioJusto,
   rsi,

@@ -161,8 +161,8 @@ describe("tipos y aviso del modal", () => {
 
 describe("registro de indicadores", () => {
   test("estan todos y el primero es el AI Indicator", () => {
-    // 7 tecnicos + los 2 de copy trading + el precio justo (multi-mercado).
-    expect(INDICADORES.length).toBe(10);
+    // 7 tecnicos + los 2 de copy trading + el precio justo + EMA cruzamiento.
+    expect(INDICADORES.length).toBe(11);
     expect(INDICADORES[0]?.id).toBe("ai_indicator");
     expect(INDICADORES[INDICADORES.length - 1]?.id).toBe(INDICADOR_POR_DEFECTO);
   });
@@ -176,8 +176,8 @@ describe("registro de indicadores", () => {
     const tendencia = INDICADORES.filter((i) => i.tipo === "tendencia").map((i) => i.id);
     const reversion = INDICADORES.filter((i) => i.tipo === "reversion").map((i) => i.id);
     const filtro = INDICADORES.filter((i) => i.tipo === "filtro").map((i) => i.id);
-    // TENDENCIA: MACD, Precio de cierre y los dos de copy trading.
-    expect(tendencia.sort()).toEqual(["close_price", "macd", "taker_flow", "top_traders"]);
+    // TENDENCIA: MACD, Precio de cierre, EMA Cruzamiento y los dos de copy trading.
+    expect(tendencia.sort()).toEqual(["close_price", "ema_cruzamiento", "macd", "taker_flow", "top_traders"]);
     // REVERSION: RSI, Estocastico, Bollinger, CCI y el precio justo.
     expect(reversion.sort()).toEqual(["bollinger", "cci", "precio_justo", "rsi", "stochastic"]);
     // FILTRO: el AI Indicator, que no genera senal propia.

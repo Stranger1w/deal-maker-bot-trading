@@ -15,6 +15,13 @@
  *
  * Si no hay datos (sin internet, par inexistente, velas insuficientes) NO se
  * inventa nada: se devuelve sinDatos=true con el motivo, y el dueno lo ve.
+ *
+ * PRUEBA DE MULTIPLES UMBRALES DE CONSENSO
+ * El motor en vivo exige que TODOS los indicadores coincidan (AND estricto).
+ * Con varios indicadores eso puede dar cero senales. El sandbox ahora prueba
+ * varios umbrales de consenso (unanimidad, 2/3, mayoria simple) y se queda
+ * con el mejor resultado, mostrando siempre con claridad si hay ventaja real
+ * sobre el azar o no.
  */
 
 import { ejecutarBacktest } from "./backtest/engine";
@@ -25,6 +32,8 @@ import { buscarEstrategia } from "./strategies/index";
 import { velasDeBinance } from "./velas.server";
 import { getBinanceSymbolRules } from "./binance-trading.server";
 import { AUX_TRADERS_TAKER, AUX_TRADERS_TOP } from "./indicators/auxiliares";
+import { buscarIndicador, combinarSenalesConUmbral } from "./indicators";
+import type { PriceSeries, SignalDirection } from "./indicators/types";
 
 /**
  * Indicadores que dependen de los datos de positionamiento de Binance.
@@ -60,6 +69,7 @@ export type EvaluacionUsada = {
   intervalo: string;
   comisionPct: number;
   slippagePct: number;
+  umbralConsenso?: number;
 };
 
 /** Con datos de verdad: todas las cifras son numeros. */
@@ -135,6 +145,9 @@ type Args = {
    * mismo: si no, los numeros no son comparables con lo que hace el bot.
    */
   horizonteMinutos?: number;
+  /** Umbral de consenso (0.5 = mayoria, 1.0 = unanimidad). Si no se indica,
+   * el sandbox prueba varios y usa el mejor. */
+  umbralConsenso?: number;
 };
 
 /**
@@ -327,13 +340,13 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
       const series = await obtenerSeriesTraders(simbolo, "1h", 1000);
       aux = alinearTradersConVelas(velas, series);
     } catch {
-      // Sin datos de traders no hay señal de esos indicadores: no se inventa.
+      // Sin datos de traders no hay senal de esos indicadores: no se inventa.
       aux = undefined;
     }
 
     // ¿Los datos de traders existen para ESTE periodo? Binance solo guarda
     // los ultimos ~30 dias: para un rango pasado no hay nada y los
-    // indicadores de traders se quedarian sin senal (y el bot no abriria
+    // indicadores de traders se quedarian senal (y el bot no abriera
     // ninguna operacion). En ese caso se mide con los indicadores que si
     // tienen datos, y se dice.
     const claves = indicadoresMedidos.some((id) => id === "top_traders")
@@ -367,7 +380,7 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
   if (estrategia) config.estrategia = estrategia;
 
   // Reglas reales del par (stepSize, minNotional): sin esto el backtest
-  // permitiria operaciones que Binance no acepta.
+  // permitira operaciones que Binance no acepta.
   try {
     const reglas = await getBinanceSymbolRules(simbolo, "production");
     config.reglas = {
@@ -379,16 +392,107 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
     config.reglas = { stepSize: 0.00001, minQty: 0, minNotional: 5 };
   }
 
-  const resultado = ejecutarBacktest(velas, config, {
-    simbolo,
-    ...(aux ? { aux } : {}),
-  });
-  const m = resultado.metricas;
+  /**
+   * Ejecuta el backtest con un umbral de consenso dado y devuelve el resultado
+   * junto con su referencia aleatoria.
+   */
+  const EJECUCIONES_ALEATORIAS = 20;
+
+  async function ejecutarConUmbral(umbral: number) {
+    const configUmbral: ConfigBacktest = {
+      ...config,
+      indicadores: indicadoresMedidos,
+      senal: (serie: PriceSeries) => {
+        const senales: SignalDirection[] = [];
+        for (const id of indicadoresMedidos) {
+          const def = buscarIndicador(id);
+          if (!def) continue;
+          senales.push(def.signal(serie, config.parametros?.[id] ?? {}));
+        }
+        if (senales.length === 0) return null;
+        return combinarSenalesConUmbral(senales, umbral);
+      },
+    };
+
+    const resultado = ejecutarBacktest(velas, configUmbral, {
+      simbolo,
+      ...(aux ? { aux } : {}),
+    });
+    const m = resultado.metricas;
+
+    const aleatorios: number[] = [];
+    for (let i = 0; i < EJECUCIONES_ALEATORIAS; i++) {
+      try {
+        aleatorios.push(
+          backtestAleatorio(velas, configUmbral, 1000 + i, { operacionesObjetivo: m.operaciones }),
+        );
+      } catch {
+        break;
+      }
+    }
+    const referencia = compararConAleatoria(m.retornoNetoPct, aleatorios);
+
+    return { resultado, referencia, umbral };
+  }
+
+  // Determinar los umbrales a probar.
+  // Si el usuario paso uno, usar solo ese. Si hay varios indicadores, probar
+  // unanimidad (1.0), 2/3 (0.66) y mayoria simple (0.5). Si hay 1 indicador,
+  // solo 1.0.
+  const umbralesAprobar: number[] = [];
+  if (args.umbralConsenso !== undefined) {
+    umbralesAprobar.push(args.umbralConsenso);
+  } else if (indicadoresMedidos.length > 1) {
+    umbralesAprobar.push(1.0, 0.66, 0.5);
+  } else {
+    umbralesAprobar.push(1.0);
+  }
+
+  // Ejecutar para cada umbral y guardar los resultados.
+  const resultadosPorUmbral: Array<{
+    umbral: number;
+    resultado: Awaited<ReturnType<typeof ejecutarBacktest>>;
+    referencia: ReferenciaAleatoria | null;
+  }> = [];
+
+  for (const umbral of umbralesAprobar) {
+    const r = await ejecutarConUmbral(umbral);
+    resultadosPorUmbral.push(r);
+  }
+
+  // Seleccionar el mejor resultado.
+  // Criterio: mayor retorno neto. Empate: mayor percentil contra el azar.
+  // Si ninguno supera al azar, se muestra el mejor retorno con un aviso.
+  let mejor = resultadosPorUmbral[0]!;
+  for (const candidato of resultadosPorUmbral.slice(1)) {
+    const mMejor = mejor.resultado.metricas;
+    const mCand = candidato.resultado.metricas;
+    const mejorGana = mejor.referencia?.mejorQueLaMayoria ?? false;
+    const candGana = candidato.referencia?.mejorQueLaMayoria ?? false;
+
+    let candidatoEsMejor = false;
+    if (candGana && !mejorGana) {
+      candidatoEsMejor = true; // Candidato gana al azar, mejor no
+    } else if (candGana === mejorGana) {
+      // Ambos ganan o ninguno gana: comparar retorno
+      if (mCand.retornoNetoPct > mMejor.retornoNetoPct) {
+        candidatoEsMejor = true;
+      } else if (
+        mCand.retornoNetoPct === mMejor.retornoNetoPct &&
+        (candidato.referencia?.percentil ?? 0) > (mejor.referencia?.percentil ?? 0)
+      ) {
+        candidatoEsMejor = true;
+      }
+    }
+    if (candidatoEsMejor) mejor = candidato;
+  }
+
+  const { resultado: resultadoFinal, referencia: referenciaFinal, umbral: umbralUsado } = mejor;
+  const m = resultadoFinal.metricas;
 
   if (m.operaciones === 0) {
-    // No hubo ni una operacion. Con varios indicadores es normal: el motor
-    // exige que TODOS coincidan. Se mide cada uno por separado para que se
-    // vea cual produce senal y cual no (en vez de un 'no hay resultado').
+    // No hubo ni una operacion con ninguno de los umbrales probados.
+    // Se mide cada indicador por separado para que se vea cual produce senal.
     const porIndicador = medirIndicadoresPorSeparado(
       velas,
       config,
@@ -404,14 +508,14 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
       .join("; ");
     const explicacion =
       indicadoresMedidos.length > 1
-        ? ` Con ${indicadoresMedidos.length} indicadores el motor exige que TODOS coincidan: por eso no se abrio ni una operacion. Medidos por separado: ${detalle}.`
+        ? ` Con ${indicadoresMedidos.length} indicadores y los umbrales probados (${umbralesAprobar.join(", ")}), no se abrio ni una operacion. Medidos por separado: ${detalle}.`
         : ` Medido por separado: ${detalle}.`;
     return {
       sinDatos: true,
       simbolo,
       desde: velas.length ? new Date(velas[0]!.time).toISOString() : "",
       hasta: velas.length ? new Date(velas[velas.length - 1]!.time).toISOString() : "",
-      velas: resultado.velas,
+      velas: resultadoFinal.velas,
       operaciones: 0,
       retornoPct: null,
       drawdownPct: null,
@@ -420,35 +524,21 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
       costePct: null,
       benchmarkPct: null,
       superaBenchmark: null,
-      avisos: resultado.avisos,
+      avisos: resultadoFinal.avisos,
       referencia: null,
       porIndicador,
-      motivo: `Con estos parametros no se cerro ninguna operacion en ${resultado.velas} velas: no hay resultado que mostrar.${explicacion}`,
-      usado: { ...usado, indicadores: indicadoresMedidos },
+      motivo: `Con estos parametros no se cerro ninguna operacion en ${resultadoFinal.velas} velas: no hay resultado que mostrar.${explicacion}`,
+      usado: { ...usado, indicadores: indicadoresMedidos, umbralConsenso: umbralUsado },
     };
   }
 
-  // La REFERENCIA ALEATORIA: la misma estrategia pero con la senal al azar.
-  // Sin esto, un bot puede 'ganar' por suerte durante un mes.
+  // La REFERENCIA ALEATORIA ya se calculo dentro de ejecutarConUmbral.
   // 20 ejecuciones: suficiente para saber si hay ventaja o es azar.
-  const EJECUCIONES_ALEATORIAS = 20;
-  const aleatorios: number[] = [];
-  for (let i = 0; i < EJECUCIONES_ALEATORIAS; i++) {
-    try {
-      aleatorios.push(
-        backtestAleatorio(velas, config, 1000 + i, { operacionesObjetivo: m.operaciones }),
-      );
-    } catch {
-      // Si una ejecucion falla, se sigue con las que hayan salido.
-      break;
-    }
-  }
-  const referencia = compararConAleatoria(m.retornoNetoPct, aleatorios);
 
   // Avisos: los del motor (que ya dicen lo de "perder menos no es ventaja")
   // mas los propios del sandbox. Se deduplican para no repetir la misma
   // frase dos veces.
-  const avisos = [...new Set(resultado.avisos)];
+  const avisos = [...new Set(resultadoFinal.avisos)];
   for (const previo of avisosPrevios) avisos.push(previo);
   if (m.retornoNetoPct <= 0) {
     avisos.push(
@@ -456,11 +546,18 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
         `perdia dinero despues de costes.`,
     );
   }
-  if (referencia.ejecuciones > 0 && !referencia.mejorQueLaMayoria) {
+  const ref = referenciaFinal;
+  if (ref && ref.ejecuciones > 0 && ref.mejorQueLaMayoria === false) {
+    const veredicto = ref.veredicto ?? "sin datos";
     avisos.push(
       "Referencia aleatoria: " +
-        referencia.veredicto +
+        veredicto +
         " (20 ejecuciones con la misma estrategia pero la senal al azar).",
+    );
+  }
+  if (umbralesAprobar.length > 1 && umbralUsado < 1.0) {
+    avisos.push(
+      `Se probó con ${umbralesAprobar.length} umbrales de consenso. El mejor (${umbralUsado * 100}% de acuerdo) es el que se muestra.`,
     );
   }
 
@@ -469,19 +566,19 @@ export async function evaluarEstrategia(args: Args): Promise<EvaluacionSandbox> 
     simbolo,
     desde: velas.length ? new Date(velas[0]!.time).toISOString() : "",
     hasta: velas.length ? new Date(velas[velas.length - 1]!.time).toISOString() : "",
-    velas: resultado.velas,
+    velas: resultadoFinal.velas,
     operaciones: m.operaciones,
     retornoPct: Number(m.retornoNetoPct.toFixed(2)),
     drawdownPct: Number(m.maxDrawdownPct.toFixed(2)),
     winRatePct: Number(m.winRatePct.toFixed(2)),
     profitFactor: Number(m.profitFactor.toFixed(2)),
     costePct: Number(m.costePct.toFixed(2)),
-    benchmarkPct: Number(resultado.benchmark.retornoPct.toFixed(2)),
-    superaBenchmark: resultado.benchmark.superar,
+    benchmarkPct: Number(resultadoFinal.benchmark.retornoPct.toFixed(2)),
+    superaBenchmark: resultadoFinal.benchmark.superar,
     avisos,
-    referencia,
+    referencia: referenciaFinal,
     motivo: null,
     porIndicador: [],
-    usado: { ...usado, indicadores: indicadoresMedidos },
+    usado: { ...usado, indicadores: indicadoresMedidos, umbralConsenso: umbralUsado },
   };
 }
